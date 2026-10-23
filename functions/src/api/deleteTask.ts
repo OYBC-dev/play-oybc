@@ -4,7 +4,7 @@ import { requireMember, requireUid } from '../lib/auth';
 import { appError } from '../lib/errors';
 import { db, parseGameId, refs } from '../lib/gameRefs';
 import { rebuildViews, toSeats, toTasks } from '../lib/views';
-import { TX_OPTIONS } from './addTask';
+import { TX_OPTIONS } from '../lib/tx';
 
 /** Deletes a pool task in the lobby (author or host) and rebuilds every seat's view. */
 export const deleteTask = onCall<DeleteTaskReq, Promise<Record<string, never>>>(async (req) => {

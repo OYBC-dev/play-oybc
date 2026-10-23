@@ -3,16 +3,14 @@ import { MAX_TASK_LENGTH, parseMentions, type AddTaskReq, type TaskDoc } from 'g
 import { requireMember, requireUid } from '../lib/auth';
 import { appError } from '../lib/errors';
 import { db, parseGameId, refs } from '../lib/gameRefs';
+import { TX_OPTIONS } from '../lib/tx';
 import { rebuildViews, toSeats, toTasks } from '../lib/views';
-
-/** Game-wide transactions conflict under concurrency (every add writes the game doc); allow many retries. */
-export const TX_OPTIONS = { maxAttempts: 25 };
 
 /** Adds a pool task in the lobby: parses @mentions, rejects self-mentions, rebuilds every seat's view. */
 export const addTask = onCall<AddTaskReq, Promise<{ taskId: string }>>(async (req) => {
   const uid = requireUid(req);
   const gameId = parseGameId(req.data?.gameId);
-  const text = String(req.data?.text ?? '').trim();
+  const text = typeof req.data?.text === 'string' ? req.data.text.trim() : '';
   if (!text || text.length > MAX_TASK_LENGTH) throw appError('invalid-argument', 'invalid-text');
 
   return db.runTransaction(async (tx) => {

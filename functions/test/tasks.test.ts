@@ -37,6 +37,9 @@ describe('addTask', () => {
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '' }))).toBe('invalid-text');
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '   ' }))).toBe('invalid-text');
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: 'x'.repeat(121) }))).toBe('invalid-text');
+    for (const text of [{}, 42, ['x'], null]) {
+      expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text }))).toBe('invalid-text');
+    }
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: 'y'.repeat(122).replace(/^y/, ' ') + ' ' }))).toBe('invalid-text');
   });
   it('trims text and accepts exactly 120 chars', async () => {
@@ -69,14 +72,16 @@ describe('addTask', () => {
 
 describe('deleteTask', () => {
   it('author deletes own; non-author non-host denied; host deletes any', async () => {
-    const { gameId, s1, s2, s3 } = await setup();
+    const { gameId, s1 } = await setup();
     const a = await callAs('u2', 'addTask', { gameId, text: 'mine' });
     const b = await callAs('u2', 'addTask', { gameId, text: 'other' });
     expect(await appCodeOf(callAs('u3', 'deleteTask', { gameId, taskId: a.taskId }))).toBe('https:functions/permission-denied');
     await callAs('u2', 'deleteTask', { gameId, taskId: a.taskId });
     expect((await view(gameId, s1)).map((e) => e.taskId)).toEqual([b.taskId]);
     await callAs('u1', 'deleteTask', { gameId, taskId: b.taskId });
-    for (const s of [s1, s2, s3]) expect(await view(gameId, s)).toEqual([]);
+    const views = await admin.collection(`games/${gameId}/views`).get();
+    expect(views.size).toBe(3);
+    for (const d of views.docs) expect(d.data().entries).toEqual([]);
     expect(await appCodeOf(callAs('u1', 'deleteTask', { gameId, taskId: b.taskId }))).toBe('https:functions/not-found');
   });
 });
@@ -102,8 +107,12 @@ describe('leak check', () => {
     const tasks = new Map<string, PoolTask>();
     for (const d of (await admin.collection(`games/${gameId}/tasks`).get()).docs) tasks.set(d.id, { id: d.id, ...(d.data() as any) });
     expect(tasks.size).toBe(5);
-    for (const seat of [s1, s2, s3]) {
-      const entries = await view(gameId, seat);
+    const viewDocs = await admin.collection(`games/${gameId}/views`).get();
+    expect(viewDocs.size).toBe((await admin.collection(`games/${gameId}/seats`).get()).size);
+    expect(viewDocs.docs.map((d) => d.id).sort()).toEqual([s1, s2, s3].sort());
+    for (const vd of viewDocs.docs) {
+      const seat = vd.id;
+      const entries = vd.data().entries as any[];
       expect(entries).toHaveLength(5);
       for (const e of entries) {
         const t = tasks.get(e.taskId)!;
