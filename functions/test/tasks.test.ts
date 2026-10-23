@@ -30,6 +30,12 @@ describe('addTask', () => {
     expect((await view(gameId, s2))[0].text).toBeNull();
     expect((await view(gameId, s3))[0].text).toBe('@someone takes a shot');
   });
+  it('carries the unresolved token on unknown-mention', async () => {
+    const { gameId } = await setup();
+    const err: any = await callAs('u2', 'addTask', { gameId, text: '@Bob sings' }).catch((e) => e);
+    expect(err.details.code).toBe('unknown-mention');
+    expect(err.details.token).toBe('@Bob');
+  });
   it('rejects self-mention, unknown mention and bad text', async () => {
     const { gameId } = await setup();
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '@Cody dances' }))).toBe('self-mention');

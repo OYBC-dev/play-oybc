@@ -21,7 +21,7 @@ export const addTask = onCall<AddTaskReq, Promise<{ taskId: string }>>(async (re
     if (game.stage !== 'lobby') throw appError('failed-precondition', 'wrong-stage');
     const seats = toSeats(seatsSnap.docs);
     const parsed = parseMentions(text, seats);
-    if (!parsed.ok) throw appError('invalid-argument', 'unknown-mention');
+    if (!parsed.ok) throw appError('invalid-argument', 'unknown-mention', undefined, { token: parsed.token });
     if (parsed.mentions.seatIds.includes(seatId)) throw appError('invalid-argument', 'self-mention');
 
     const taskRef = r.tasks.doc();

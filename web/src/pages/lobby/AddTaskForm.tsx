@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { GameClient } from '../../game/GameClient';
-import { appErrorCode, errorMessage } from '../../game/errorMessages';
+import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { MAX_TASK_LENGTH } from './constants';
 import { MentionAutocomplete } from './MentionAutocomplete';
-import { activeMention, findUnknownMention, mentionOptions } from './mentions';
+import { activeMention, mentionOptions } from './mentions';
 import styles from './AddTaskForm.module.css';
 
 /** Task entry with @mention autocomplete; sends through the client and shows server errors inline. */
@@ -26,6 +26,8 @@ export function AddTaskForm({
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
+  const latest = useRef(text);
+  latest.current = text;
 
   const mention = dismissed ? null : activeMention(text, caret);
   const options = mention ? mentionOptions(mention.partial, seatNames) : [];
@@ -58,11 +60,10 @@ export function AddTaskForm({
     setError(null);
     try {
       await client.addTask(gameId, body);
-      setText('');
-      setCaret(0);
+      // Keep anything typed while the call was in flight.
+      if (latest.current === text) { setText(''); setCaret(0); }
     } catch (err) {
-      const token = appErrorCode(err) === 'unknown-mention' ? findUnknownMention(body, seatNames) : null;
-      setError(token ? `No player named ${token}` : errorMessage(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -72,7 +73,7 @@ export function AddTaskForm({
     if (options.length === 0) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setIndex((active + 1) % options.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIndex((active - 1 + options.length) % options.length); }
-    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(options[active]); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(options[active]); }
     else if (e.key === 'Escape') { e.preventDefault(); setDismissed(true); }
   };
 
@@ -95,6 +96,7 @@ export function AddTaskForm({
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
           onKeyDown={onKeyDown}
+          onBlur={() => setDismissed(true)}
         />
       </label>
       <MentionAutocomplete options={options} active={active} onPick={pick} />

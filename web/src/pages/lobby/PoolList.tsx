@@ -6,10 +6,13 @@ export function PoolList({
   entries,
   isHost,
   onDelete,
+  deleting,
 }: {
   entries: PoolViewEntry[];
   isHost: boolean;
   onDelete: (taskId: string) => void;
+  /** Task ids with a delete in flight. */
+  deleting?: ReadonlySet<string>;
 }) {
   return (
     <ul className={styles.list} aria-label="Pool">
@@ -24,7 +27,7 @@ export function PoolList({
             <span className={styles.author}>{e.mine ? 'You' : e.authorName}</span>
           </div>
           {(e.mine || isHost) && (
-            <button type="button" className={styles.delete} aria-label="Delete task" onClick={() => onDelete(e.taskId)}>
+            <button type="button" className={styles.delete} aria-label={e.text === null ? `Delete hidden task by ${e.authorName}` : `Delete task: ${e.text}`} disabled={deleting?.has(e.taskId)} onClick={() => onDelete(e.taskId)}>
               ×
             </button>
           )}

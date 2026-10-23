@@ -24,5 +24,9 @@ export function appErrorCode(e: unknown): string | null {
 /** User-facing copy for any error thrown by a callable. */
 export function errorMessage(e: unknown): string {
   const code = appErrorCode(e);
+  if (code === 'unknown-mention') {
+    const token = (e as { details?: { token?: unknown } }).details?.token;
+    if (typeof token === 'string' && token) return `No player named ${token}`;
+  }
   return (code && MESSAGES[code]) || FALLBACK;
 }

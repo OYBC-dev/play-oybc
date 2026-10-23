@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GameSnapshot } from '../../game/GameClient';
 import { appError, FakeGameClient } from '../../game/fakeGameClient';
@@ -45,12 +45,12 @@ describe('LobbyScreen', () => {
 
   it('shows delete on own entries, and on every entry for the host only', () => {
     setup(snap({ host: false }));
-    expect(screen.getAllByRole('button', { name: 'Delete task' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Delete/ })).toHaveLength(1);
   });
 
   it('host sees delete on every entry and deleting calls the client', async () => {
     const { client } = setup(snap());
-    const buttons = screen.getAllByRole('button', { name: 'Delete task' });
+    const buttons = screen.getAllByRole('button', { name: /^Delete/ });
     expect(buttons).toHaveLength(3);
     await userEvent.click(buttons[0]);
     expect(client.calls).toContainEqual(['deleteTask', 'g1', 't1']);
@@ -80,14 +80,47 @@ describe('LobbyScreen', () => {
 
   it('shows server mention errors', async () => {
     const { client } = setup(snap());
-    client.addTask = () => Promise.reject(appError('unknown-mention'));
+    client.addTask = () => Promise.reject(Object.assign(appError('unknown-mention'), { details: { code: 'unknown-mention', token: '@Bob' } }));
     await userEvent.type(screen.getByLabelText('Task'), 'Hey @Bob');
-    await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(await screen.findByText('No player named @Bob')).toBeInTheDocument();
     client.addTask = () => Promise.reject(appError('self-mention'));
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(await screen.findByText("You can't mention yourself")).toBeInTheDocument();
+  });
+
+  it('surfaces a failed delete and disables the row while in flight', async () => {
+    const { client } = setup(snap());
+    let reject!: (e: Error) => void;
+    client.deleteTask = (() => new Promise<void>((_, r) => { reject = r; })) as never;
+    const btn = screen.getByRole('button', { name: 'Delete task: Someone spills wine' });
+    await userEvent.click(btn);
+    expect(btn).toBeDisabled();
+    await act(async () => reject(appError('not-host')));
+    expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();
+    expect(btn).toBeEnabled();
+  });
+
+  it('closes the autocomplete on blur and leaves Tab alone', async () => {
+    setup(snap());
+    const input = screen.getByLabelText('Task');
+    await userEvent.type(input, '@co');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    await userEvent.tab();
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(input).toHaveValue('@co');
+  });
+
+  it('keeps text typed while a submit is in flight', async () => {
+    const { client } = setup(snap());
+    let resolve!: () => void;
+    client.addTask = (() => new Promise<void>((r) => { resolve = r; })) as never;
+    const input = screen.getByLabelText('Task');
+    await userEvent.type(input, 'one');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await userEvent.type(input, ' two');
+    await act(async () => resolve());
+    expect(input).toHaveValue('one two');
   });
 
   it('lists every player and marks the host', () => {
