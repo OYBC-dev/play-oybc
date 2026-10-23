@@ -25,11 +25,14 @@ final class FakeGameService: GameService, @unchecked Sendable {
     private var reclaimContinuation: AsyncThrowingStream<ReclaimStatus, Error>.Continuation?
     private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
 
+    /// toggleMark runs off the main actor and concurrently with itself; guards its shared state.
+    private let lock = NSLock()
+
     enum FakeError: Error { case unset, failed }
 
     func emit(_ s: GameSnapshot) { continuation?.yield(s) }
     func fail(_ e: Error) { continuation?.finish(throwing: e) }
-    func releaseToggle(cell: Int) { gates.removeValue(forKey: cell)?.resume() }
+    func releaseToggle(cell: Int) { lock.withLock { gates.removeValue(forKey: cell) }?.resume() }
     func emitReclaim(_ s: ReclaimStatus) { reclaimContinuation?.yield(s) }
     func failReclaim(_ e: Error) { reclaimContinuation?.finish(throwing: e) }
 
@@ -57,9 +60,9 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
     func launch(gameId: String) async throws { try void("launch") }
     func toggleMark(gameId: String, cellIndex: Int) async throws -> ToggleMarkRes {
-        toggledCells.append(cellIndex)
-        if gateToggle { await withCheckedContinuation { gates[cellIndex] = $0 } }
-        return try (toggleResultByCell[cellIndex] ?? toggleResult).get()
+        let gated = lock.withLock { toggledCells.append(cellIndex); return gateToggle }
+        if gated { await withCheckedContinuation { c in lock.withLock { gates[cellIndex] = c } } }
+        return try lock.withLock { toggleResultByCell[cellIndex] ?? toggleResult }.get()
     }
     func end(gameId: String) async throws { try void("end") }
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws { try void("resolveReclaim:\(reclaimId):\(approve)") }
