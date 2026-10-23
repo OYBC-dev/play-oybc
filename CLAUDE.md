@@ -57,6 +57,7 @@ pnpm test                          # pnpm -r test
 pnpm --filter game-core test       # pure game logic (Jest)
 pnpm --filter functions test       # needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
 pnpm --filter web dev              # web dev server
+pnpm --filter web e2e              # full-game Playwright test against the emulators (needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)
 # iOS (from ios/, after xcodegen generate):
 xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.3.1' -derivedDataPath /Volumes/Stephen/play-oybc-derived
 ```

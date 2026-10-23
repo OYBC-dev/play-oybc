@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { errorMessage } from '../../game/errorMessages';
 import type { GameClient, GameSnapshot } from '../../game/GameClient';
+import { HostMenu } from '../host/HostMenu';
+import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { BingoBanner } from './BingoBanner';
 import { BoardGrid } from './BoardGrid';
 import { Leaderboard } from './Leaderboard';
@@ -34,8 +36,10 @@ export function PlayScreen({ client, snapshot, gameId }: { client: GameClient; s
   return (
     <div className="page" data-testid="stage-playing">
       <BingoBanner bingo={banner.current} onDismiss={banner.dismiss} />
+      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
       <div className={styles.header}>
         <RisoButton size="small" onClick={() => setSheet('leaderboard')}>Leaderboard</RisoButton>
+        <HostMenu client={client} gameId={gameId} snapshot={snapshot} />
         {isHost && <RisoButton size="small" kind="primary" onClick={() => { setEndError(null); setSheet('end'); }}>End game</RisoButton>}
       </div>
       {board ? (

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint src && tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e": "pnpm --filter functions build && cd .. && firebase emulators:exec --project demo-play-oybc --only auth,firestore,functions \"pnpm --filter web exec playwright test -c e2e/playwright.config.ts\""
   },
   "dependencies": {
     "firebase": "^12.16.0",

@@ -1,0 +1,7 @@
+.reclaims { display: flex; flex-direction: column; gap: 8px; }
+.reclaim, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.who { font-weight: 600; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 8px; }
+.actions > * { flex: 1; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.body { margin: 0; }

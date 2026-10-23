@@ -71,9 +71,18 @@ describe('addTask', () => {
   it('10 concurrent adds from 3 users all land in every view', async () => {
     const { gameId, s1, s2, s3 } = await setup();
     const users = ['u1', 'u2', 'u3'];
-    await Promise.all(Array.from({ length: 10 }, (_, i) => callAs(users[i % 3], 'addTask', { gameId, text: `t${i}` })));
+    // The emulator occasionally answers a contended transaction with INTERNAL ("Transaction is invalid or closed"),
+    // which the Admin SDK does not retry. The failed call wrote nothing, so a client-side retry is faithful to the app.
+    const add = async (user: string, text: string) => {
+      for (let attempt = 1; ; attempt++) {
+        try { return await callAs(user, 'addTask', { gameId, text }); }
+        catch (e) { if (attempt >= 4 || (e as { code?: string }).code !== 'functions/internal') throw e; }
+      }
+    };
+    await Promise.all(Array.from({ length: 10 }, (_, i) => add(users[i % 3], `t${i}`)));
     for (const s of [s1, s2, s3]) expect((await view(gameId, s)).map((e) => e.text).sort()).toEqual(Array.from({ length: 10 }, (_, i) => `t${i}`).sort());
-  });
+    // 10 transactions contend on one game doc and retry; takes 7-12 s unloaded, so the 20 s default flakes under load.
+  }, 60_000);
 });
 
 describe('deleteTask', () => {

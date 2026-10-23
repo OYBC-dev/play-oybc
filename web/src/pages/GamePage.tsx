@@ -15,6 +15,6 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   switch (snapshot.game.stage) {
     case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} />;
     case 'playing': return <PlayScreen client={client} snapshot={snapshot} gameId={gameId} />;
-    case 'ended': return <EndedScreen snapshot={snapshot} />;
+    case 'ended': return <EndedScreen client={client} snapshot={snapshot} gameId={gameId} />;
   }
 }

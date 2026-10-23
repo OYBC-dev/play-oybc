@@ -65,7 +65,7 @@ describe('PlayScreen', () => {
 
 describe('EndedScreen', () => {
   it('shows the leaderboard and a read-only final board', () => {
-    render(<EndedScreen snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')] })} />);
+    render(<EndedScreen client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')] })} />);
     expect(screen.getByText('Cody')).toBeInTheDocument();
     const cells = screen.getAllByRole('button', { name: /Task|Free/ });
     expect(cells).toHaveLength(25);

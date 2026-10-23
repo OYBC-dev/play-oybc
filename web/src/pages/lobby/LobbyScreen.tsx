@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { errorMessage } from '../../game/errorMessages';
 import type { GameClient, GameSnapshot } from '../../game/GameClient';
 import { RisoSectionLabel } from '../../components/riso/RisoSectionLabel';
+import { HostMenu } from '../host/HostMenu';
+import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { AddTaskForm } from './AddTaskForm';
 import { LaunchBar } from './LaunchBar';
 import { PlayerList } from './PlayerList';
@@ -30,6 +32,7 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
 
   return (
     <div className="page" data-testid="stage-lobby">
+      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
       <ShareCard code={game.code} isHost={isHost} />
       <section className={styles.section}>
         <RisoSectionLabel>Players</RisoSectionLabel>
@@ -41,6 +44,7 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
         {deleteError && <p className="error" role="alert">{deleteError}</p>}
         <AddTaskForm client={client} gameId={gameId} seatNames={others} />
       </section>
+      <HostMenu client={client} gameId={gameId} snapshot={snapshot} />
       {isHost && <LaunchBar snapshot={snapshot} onLaunch={() => client.launch(gameId)} />}
     </div>
   );
