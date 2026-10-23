@@ -46,3 +46,12 @@ export function parseCode(raw: unknown): string {
   if (!CODE_RE.test(code)) throw appError('not-found', 'game-not-found');
   return code;
 }
+
+/**
+ * Validates a client-supplied game id before a doc ref is built.
+ * @throws game-not-found (not-found) when empty, non-string or containing '/'.
+ */
+export function parseGameId(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw || raw.includes('/')) throw appError('not-found', 'game-not-found');
+  return raw;
+}

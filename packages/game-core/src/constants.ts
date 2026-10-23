@@ -20,3 +20,6 @@ export const TASKS_PER_BOARD = 24;
 export const CENTER_INDEX = 12;
 /** Game-code length. */
 export const GAME_CODE_LENGTH = 5;
+
+/** Maximum length of a pool task's text (after trimming). */
+export const MAX_TASK_LENGTH = 120;
