@@ -74,7 +74,7 @@ export function JoinPage() {
 
   switch (phase.kind) {
     case 'seated':
-      return <GamePage gameId={phase.gameId} seatId={phase.seatId} />;
+      return <GamePage key={`${phase.gameId}:${phase.seatId}`} gameId={phase.gameId} seatId={phase.seatId} />;
     case 'checking':
       return <main className="page"><p className="muted">Loading</p></main>;
     case 'waiting':
