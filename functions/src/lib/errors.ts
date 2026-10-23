@@ -10,7 +10,8 @@ export type AppErrorCode =
  * @param httpsCode standard Firebase functions error code
  * @param appCode app error code clients switch on
  * @param message optional human message (defaults to the app code)
+ * @param extra optional extra fields merged into `details` (code stays authoritative)
  */
-export function appError(httpsCode: FunctionsErrorCode, appCode: AppErrorCode, message?: string): HttpsError {
-  return new HttpsError(httpsCode, message ?? appCode, { code: appCode });
+export function appError(httpsCode: FunctionsErrorCode, appCode: AppErrorCode, message?: string, extra?: Record<string, unknown>): HttpsError {
+  return new HttpsError(httpsCode, message ?? appCode, { ...extra, code: appCode });
 }
