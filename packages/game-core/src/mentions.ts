@@ -80,3 +80,22 @@ export function parseMentions(text: string, seats: readonly Seat[]): ParseMentio
   }
   return { ok: true, mentions: { seatIds, someone, anyone } };
 }
+
+/**
+ * Replaces every `@someone` token (same boundary rules as {@link parseMentions})
+ * with `replacement`. Other text, `@anyone` and seat mentions are untouched.
+ */
+export function replaceSomeone(text: string, replacement: string): string {
+  let out = '';
+  let last = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '@' || isWordChar(text[i - 1]) || !isWordChar(text[i + 1])) continue;
+    const end = matchKey(text, i + 1, 'someone');
+    if (end >= 0 && endsCleanly(text, end)) {
+      out += text.slice(last, i) + replacement;
+      last = end;
+      i = end - 1;
+    }
+  }
+  return out + text.slice(last);
+}
