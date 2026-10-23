@@ -98,10 +98,11 @@ test('three phones play a full game', async ({ browser }) => {
   expect(await eCells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(bLabels);
   expect(await marks(E.page)).toEqual(bMarks);
 
-  // 8. A ends the game: everyone sees the leaderboard with Stephen first.
+  // 8. A ends the game: everyone still seated sees the leaderboard with Stephen first.
+  // B was displaced by E's approved reclaim (the server deletes the old member doc), so B has no read access any more.
   await A.page.getByRole('button', { name: 'End game' }).click();
   await A.page.getByRole('dialog').getByRole('button', { name: 'End game' }).click();
-  for (const p of [A, B, C, D, E]) {
+  for (const p of [A, C, D, E]) {
     await expect(p.page.getByTestId('stage-ended')).toBeVisible();
     await expect(p.page.locator('ol li').first()).toContainText('Stephen');
   }
