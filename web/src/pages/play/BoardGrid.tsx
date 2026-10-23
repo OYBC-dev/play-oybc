@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { BoardDoc, ToggleMarkRes } from 'game-core';
 import { errorMessage } from '../../game/errorMessages';
 import { cellsInLines } from './cellsInLines';
+import { Sheet } from './Sheet';
 import styles from './BoardGrid.module.css';
 
 const PENDING_DIM_MS = 250;
+const LONG_PRESS_MS = 450;
+const MOVE_CANCEL_PX = 10;
 
 export interface BoardGridProps {
   board: BoardDoc;
@@ -23,6 +26,9 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
   const [inFlight, setInFlight] = useState<ReadonlySet<number>>(new Set());
   const [slow, setSlow] = useState<ReadonlySet<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+  const longPressed = useRef(false);
   const inFlightRef = useRef(inFlight);
   inFlightRef.current = inFlight;
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
@@ -35,7 +41,29 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
       return next.size === o.size ? o : next;
     });
   }, [board]);
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => () => {
+    timers.current.forEach(clearTimeout);
+    if (press.current) clearTimeout(press.current.timer);
+  }, []);
+
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  const startPress = (e: React.PointerEvent, text: string) => {
+    cancelPress();
+    longPressed.current = false;
+    const timer = setTimeout(() => {
+      longPressed.current = true;
+      press.current = null;
+      setDetail(text);
+    }, LONG_PRESS_MS);
+    press.current = { timer, x: e.clientX, y: e.clientY };
+  };
+  const movePress = (e: React.PointerEvent) => {
+    const p = press.current;
+    if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > MOVE_CANCEL_PX) cancelPress();
+  };
 
   const cleared = (set: ReadonlySet<number>, i: number) => { const n = new Set(set); n.delete(i); return n; };
 
@@ -77,8 +105,18 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
               data-highlight={String(highlighted.has(i))}
               data-pending={String(slow.has(i))}
               data-free={String(free)}
-              disabled={readOnly || free || inFlight.has(i)}
-              onClick={() => void tap(i)}
+              aria-disabled={readOnly && !free ? true : undefined}
+              disabled={free || (!readOnly && inFlight.has(i))}
+              onPointerDown={free ? undefined : (e) => startPress(e, label)}
+              onPointerMove={movePress}
+              onPointerUp={cancelPress}
+              onPointerCancel={cancelPress}
+              onPointerLeave={cancelPress}
+              onContextMenu={(e) => e.preventDefault()}
+              onClick={() => {
+                if (longPressed.current) { longPressed.current = false; return; }
+                if (!readOnly) void tap(i);
+              }}
             >
               <span className={styles.text}>{label}</span>
             </button>
@@ -86,6 +124,11 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
         })}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      {detail !== null && (
+        <Sheet title="Task" onClose={() => setDetail(null)}>
+          <p className={styles.detail}>{detail}</p>
+        </Sheet>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BoardDoc, ToggleMarkRes } from 'game-core';
 import { appError } from '../../game/fakeGameClient';
@@ -75,8 +75,64 @@ describe('BoardGrid', () => {
     expect(cell).toHaveAttribute('data-marked', 'false');
   });
 
-  it('readOnly cells are not tappable', () => {
-    render(<BoardGrid board={board()} readOnly onToggle={async () => ok} />);
-    screen.getAllByRole('button').forEach((b) => expect(b).toBeDisabled());
+  it('readOnly cells do not toggle', async () => {
+    const onToggle = vi.fn(async () => ok);
+    render(<BoardGrid board={board()} readOnly onToggle={onToggle} />);
+    await user().click(screen.getByRole('button', { name: 'Task 3' }));
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Task 3' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  describe('long press', () => {
+    const long = 'x'.repeat(100) + ' full task text';
+    const withLong = () => {
+      const b = board();
+      b.cells[3] = { kind: 'task', taskId: 't3', text: long };
+      return b;
+    };
+    it('opens a detail sheet with the full text and does not toggle', () => {
+      const onToggle = vi.fn(async () => ok);
+      render(<BoardGrid board={withLong()} onToggle={onToggle} />);
+      const cell = screen.getByRole('button', { name: long });
+      fireEvent.pointerDown(cell, { clientX: 5, clientY: 5 });
+      act(() => { vi.advanceTimersByTime(460); });
+      fireEvent.pointerUp(cell);
+      fireEvent.click(cell);
+      expect(screen.getByRole('dialog')).toHaveTextContent(long);
+      expect(onToggle).not.toHaveBeenCalled();
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    it('a short press toggles once and opens nothing', () => {
+      const onToggle = vi.fn(async () => ok);
+      render(<BoardGrid board={board()} onToggle={onToggle} />);
+      const cell = screen.getByRole('button', { name: 'Task 3' });
+      fireEvent.pointerDown(cell, { clientX: 5, clientY: 5 });
+      act(() => { vi.advanceTimersByTime(200); });
+      fireEvent.pointerUp(cell);
+      fireEvent.click(cell);
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(onToggle).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    it('moving more than 10px cancels the long press', () => {
+      render(<BoardGrid board={board()} onToggle={async () => ok} />);
+      const cell = screen.getByRole('button', { name: 'Task 3' });
+      fireEvent.pointerDown(cell, { clientX: 5, clientY: 5 });
+      fireEvent.pointerMove(cell, { clientX: 30, clientY: 5 });
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    it('works on a read-only board; Free has no detail', () => {
+      render(<BoardGrid board={board()} readOnly onToggle={async () => ok} />);
+      const cell = screen.getByRole('button', { name: 'Task 3' });
+      fireEvent.pointerDown(cell, { clientX: 5, clientY: 5 });
+      act(() => { vi.advanceTimersByTime(460); });
+      expect(screen.getByRole('dialog')).toHaveTextContent('Task 3');
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Free' }));
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

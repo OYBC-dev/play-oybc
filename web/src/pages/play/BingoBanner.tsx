@@ -6,9 +6,9 @@ export function BingoBanner({ bingo, onDismiss }: { bingo: BingoDoc | null; onDi
   return (
     <div role="status" aria-live="polite">
       {bingo && (
-        <div key={bingo.seq} className={styles.banner} onClick={onDismiss}>
+        <button type="button" key={bingo.seq} className={styles.banner} onClick={onDismiss} onKeyDown={(e) => { if (e.key === "Escape") onDismiss(); }}>
           {bingo.name} got a bingo!
-        </div>
+        </button>
       )}
     </div>
   );

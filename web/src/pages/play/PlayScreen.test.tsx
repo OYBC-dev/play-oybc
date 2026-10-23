@@ -69,6 +69,6 @@ describe('EndedScreen', () => {
     expect(screen.getByText('Cody')).toBeInTheDocument();
     const cells = screen.getAllByRole('button', { name: /Task|Free/ });
     expect(cells).toHaveLength(25);
-    cells.forEach((c) => expect(c).toBeDisabled());
+    cells.forEach((c) => expect(c.hasAttribute('disabled') || c.getAttribute('aria-disabled') === 'true').toBe(true));
   });
 });

@@ -5,6 +5,7 @@
   font-family: var(--riso-font-head); font-weight: 800; font-size: 20px; letter-spacing: -0.01em;
   color: var(--riso-ink-static); background: var(--riso-gold);
   border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card); box-shadow: 4px 4px 0 var(--riso-shadow-ink);
+  min-height: 44px; font-family: var(--riso-font-head);
   animation: drop var(--riso-anim-toast-drop);
 }
 .banner::before, .banner::after { content: '★'; color: var(--riso-red); margin: 0 10px; }

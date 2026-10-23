@@ -3,14 +3,15 @@
 .cell {
   box-sizing: border-box; aspect-ratio: 1; min-width: 44px; min-height: 44px; padding: 2px;
   display: flex; align-items: center; justify-content: center; text-align: center;
-  font-family: var(--riso-font-body); font-weight: 600; font-size: 10px; line-height: 1.1;
+  font-family: var(--riso-font-body); font-weight: 600; font-size: 12px; line-height: 1.15;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
   color: var(--riso-ink); background: var(--riso-paper-2);
   border: 2px solid var(--riso-ink); border-radius: var(--riso-r-cell);
   cursor: pointer; overflow: hidden; overflow-wrap: anywhere; hyphens: auto;
   transition: opacity 0.15s;
 }
 .text {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
 }
 .cell:disabled { cursor: default; }
 .cell[data-marked='true'] { background: var(--riso-red); color: var(--riso-on-color); animation: pop var(--riso-anim-cell-pop); }
@@ -19,4 +20,8 @@
 .cell[data-pending='true'] { opacity: 0.45; }
 @keyframes pop { 0% { transform: scale(0.88); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .cell[data-marked='true'] { animation: none; } }
-@media (min-width: 400px) { .cell { font-size: 11px; } }
+/* Lines that fit the content box (grid width / 5 - 8px) at each width, so nothing clips mid-line. */
+@media (min-width: 375px) { .text { -webkit-line-clamp: 4; line-clamp: 4; } }
+@media (min-width: 400px) { .cell { font-size: 13px; } }
+@media (min-width: 470px) { .text { -webkit-line-clamp: 5; line-clamp: 5; } }
+.detail { margin: 0; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
