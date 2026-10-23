@@ -8,3 +8,5 @@ export { deleteTask } from './api/deleteTask';
 export { launchGame } from './api/launchGame';
 export { toggleMark } from './api/toggleMark';
 export { endGame } from './api/endGame';
+export { resolveReclaim } from './api/resolveReclaim';
+export { transferHost } from './api/transferHost';

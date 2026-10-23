@@ -2,6 +2,7 @@ import { initializeApp as initAdmin, getApps as getAdminApps } from 'firebase-ad
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore as getClientFirestore } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
 
 export const PROJECT = 'demo-play-oybc';
@@ -56,4 +57,12 @@ export async function clearFirestore(): Promise<void> {
 export async function appCodeOf(p: Promise<unknown>): Promise<string | undefined> {
   try { await p; } catch (e: any) { return e?.details?.code ?? `https:${e?.code}`; }
   throw new Error('expected call to fail');
+}
+
+/** A client-SDK Firestore handle authenticated as the named test user (for rules checks). */
+export async function firestoreAs(user: string) {
+  const { app } = await client(user);
+  const fs = getClientFirestore(app);
+  try { connectFirestoreEmulator(fs, '127.0.0.1', 8080); } catch { /* already connected */ }
+  return fs;
 }
