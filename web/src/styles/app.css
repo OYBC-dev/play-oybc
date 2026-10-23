@@ -1,0 +1,9 @@
+body { margin: 0; background: var(--riso-paper); color: var(--riso-ink); font-family: var(--riso-font-body); }
+.page { box-sizing: border-box; max-width: 480px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; min-height: 100vh; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.field input { box-sizing: border-box; min-height: 48px; padding: 0 12px; font: inherit; font-size: 16px; color: var(--riso-ink); background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: 8px; }
+.error { color: var(--riso-red); font-weight: 600; margin: 0; }
+.muted { color: var(--riso-muted); margin: 0; }
+.brand { display: flex; align-items: center; gap: 12px; font-family: var(--riso-font-head); font-weight: 800; font-size: 28px; }
+.page button { min-height: 44px; }

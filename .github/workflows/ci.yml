@@ -18,6 +18,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm --filter game-core test
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web test
+      - run: pnpm --filter web build
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
