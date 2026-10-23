@@ -1,0 +1,69 @@
+import XCTest
+@testable import PlayOYBC
+
+/// Fixtures are hand-written to match game-core/src/schema.ts (no saved emulator output exists).
+final class SchemaDecodingTests: XCTestCase {
+    private func load<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "json"), "missing fixture \(name)")
+        return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
+    }
+
+    func testGameDoc() throws {
+        let g = try load(GameDoc.self, "game")
+        XCTAssertEqual(g.stage, .playing)
+        XCTAssertEqual(g.launchedAt, 1700000100000)
+        XCTAssertNil(g.endedAt)
+        XCTAssertEqual(g.shortfalls["s2"], 3)
+        XCTAssertFalse(g.reviewGate)
+    }
+
+    func testLobbyGameHasNoLaunchedAt() throws {
+        let g = try load(GameDoc.self, "game-lobby")
+        XCTAssertEqual(g.stage, .lobby)
+        XCTAssertNil(g.launchedAt)
+    }
+
+    func testSeatAndView() throws {
+        XCTAssertEqual(try load(SeatDoc.self, "seat").name, "Ann")
+        let v = try load(ViewDoc.self, "view")
+        XCTAssertEqual(v.entries[0].text, "Someone sings")
+        XCTAssertNil(v.entries[1].text)
+        XCTAssertFalse(v.entries[1].mine)
+    }
+
+    func testBoardCellsDecodeKind() throws {
+        let b = try load(BoardDoc.self, "board")
+        XCTAssertEqual(b.cells.count, 25)
+        XCTAssertEqual(b.cells[12], .free)
+        XCTAssertEqual(b.cells[0], .task(taskId: "t0", text: "Task 0"))
+        XCTAssertTrue(b.marks[12])
+        XCTAssertEqual(b.marks.filter { $0 }.count, 1)
+    }
+
+    func testUnknownCellKindThrows() {
+        XCTAssertThrowsError(try JSONDecoder().decode(BoardCell.self, from: Data(#"{"kind":"wild"}"#.utf8)))
+    }
+
+    func testBingoAndReclaim() throws {
+        let b = try load(BingoDoc.self, "bingo")
+        XCTAssertEqual(b.status, .announced)
+        XCTAssertEqual(b.name, "Cody")
+        XCTAssertEqual(try load(ReclaimDoc.self, "reclaim").status, .pending)
+    }
+
+    func testJoinResponses() throws {
+        XCTAssertEqual(try load(JoinGameRes.self, "join-joined"), .joined(gameId: "g1", seatId: "s2"))
+        XCTAssertEqual(try load(JoinGameRes.self, "join-reclaim"), .reclaimPending(gameId: "g1", reclaimId: "r1"))
+    }
+
+    func testToggleResponse() throws {
+        let r = try load(ToggleMarkRes.self, "toggle-res")
+        XCTAssertEqual(r.completedLines, ["row_2"])
+        XCTAssertEqual(r.newBingoSeqs, [4])
+    }
+
+    func testRoundTrip() throws {
+        let b = try load(BoardDoc.self, "board")
+        XCTAssertEqual(try JSONDecoder().decode(BoardDoc.self, from: JSONEncoder().encode(b)), b)
+    }
+}

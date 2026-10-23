@@ -61,3 +61,7 @@ pnpm --filter web e2e              # full-game Playwright test against the emula
 # iOS (from ios/, after xcodegen generate):
 xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.3.1' -derivedDataPath /Volumes/Stephen/play-oybc-derived
 ```
+
+## iOS notes
+
+Swift `Task` is not shadowed here (there is no Do model), but name any game-task model `GameTask`, never `Task`; the iOS code still writes `_Concurrency.Task` defensively. `ios/PlayOYBC/Riso/` files are copies from the oybc repo (the Do-only `RisoTaskKind` / `RisoTypeBadge` block was removed); never reference the oybc repo at build time. `ios/PlayOYBC/GoogleService-Info.plist` is gitignored; CI copies `GoogleService-Info.template.plist` (fake values) over it.

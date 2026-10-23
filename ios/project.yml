@@ -1,0 +1,57 @@
+name: PlayOYBC
+options:
+  bundleIdPrefix: com.oybc
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 11.0.0
+targets:
+  PlayOYBC:
+    type: application
+    platform: iOS
+    sources:
+      - path: PlayOYBC
+        excludes:
+          - "GoogleService-Info.template.plist"
+    dependencies:
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseFunctions
+    info:
+      path: PlayOYBC/Info.plist
+      properties:
+        CFBundleDisplayName: Play OYBC
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBC
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGNING_ALLOWED: NO
+  PlayOYBCTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PlayOYBCTests
+    dependencies:
+      - target: PlayOYBC
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBCTests
+schemes:
+  PlayOYBC:
+    build:
+      targets:
+        PlayOYBC: all
+        PlayOYBCTests: [test]
+    test:
+      targets:
+        - PlayOYBCTests

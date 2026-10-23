@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, mvp]
+    branches: [main, mvp, ios/mvp]
 
 jobs:
   ts:
@@ -53,3 +53,17 @@ jobs:
             web/playwright-report
             web/test-results
           retention-days: 7
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Dummy GoogleService-Info.plist
+        run: cp ios/PlayOYBC/GoogleService-Info.template.plist ios/PlayOYBC/GoogleService-Info.plist
+      - run: cd ios && xcodegen generate
+      - name: Test
+        run: |
+          cd ios
+          xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'
