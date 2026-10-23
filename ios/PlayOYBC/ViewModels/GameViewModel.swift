@@ -25,7 +25,10 @@ final class GameViewModel: ObservableObject {
     @Published private(set) var snapshot: GameSnapshot?
     @Published private(set) var banner: BingoDoc?
     @Published private(set) var pendingCells: Set<Int> = []
+    /// The last failed toggle (shown under the board); cleared by the next toggle.
     @Published private(set) var error: AppError?
+    /// The listener failed; the game can no longer be shown (permission-denied = seat lost).
+    @Published private(set) var streamError: AppError?
 
     let gameId: String
     let seatId: String
@@ -49,7 +52,7 @@ final class GameViewModel: ObservableObject {
 
     /// Injectable delay so banner timing is testable without real sleeps.
     typealias Sleeper = @Sendable (Double) async throws -> Void
-    static let realSleep: Sleeper = { try await _Concurrency.Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
+    nonisolated static let realSleep: Sleeper = { try await _Concurrency.Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
 
     deinit {
         streamTask?.cancel()
@@ -65,7 +68,7 @@ final class GameViewModel: ObservableObject {
                     self?.apply(snap)
                 }
             } catch {
-                self?.error = AppError.from(error)
+                self?.streamError = AppError.from(error)
             }
         }
     }
@@ -89,6 +92,7 @@ final class GameViewModel: ObservableObject {
               let server = serverSnapshot?.board, server.marks.indices.contains(cell),
               server.cells[cell] != .free, !pendingCells.contains(cell) else { return }
         overlay[cell] = !effectiveBoard(server).marks[cell]
+        error = nil
         pendingCells.insert(cell)
         publish()
         do {
@@ -103,9 +107,12 @@ final class GameViewModel: ObservableObject {
     }
 
     private func apply(_ snap: GameSnapshot) {
+        let boardChanged = snap.board != serverSnapshot?.board
         serverSnapshot = snap
-        // The snapshot is authoritative for every cell with no call in flight.
-        overlay = overlay.filter { pendingCells.contains($0.key) }
+        // A new board is authoritative for every cell with no call in flight. A snapshot that
+        // only changed other parts (e.g. someone else's bingo bumped the game doc) keeps the
+        // optimistic marks, so they do not flicker back before the board update lands.
+        if boardChanged { overlay = overlay.filter { pendingCells.contains($0.key) } }
         queue.observe(snap.bingos, mySeatId: snap.mySeatId)
         refreshBanner()
         publish()

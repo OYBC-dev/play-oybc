@@ -1,3 +1,4 @@
+import FirebaseFirestore
 import XCTest
 @testable import PlayOYBC
 
@@ -126,6 +127,43 @@ final class GameViewModelTests: XCTestCase {
         XCTAssertEqual(vm.snapshot?.board?.marks[3], true)
         fake.releaseToggle(cell: 3)
         await t.value
+    }
+
+    func testGameOnlySnapshotKeepsSettledOptimisticMark() async {
+        let fake = FakeGameService()
+        fake.toggleResult = .success(ToggleMarkRes(marks: serverMarks(3), completedLines: [], newBingoSeqs: []))
+        let vm = await started(fake)
+        await vm.toggle(cell: 3)
+        XCTAssertEqual(vm.snapshot?.board?.marks[3], true)
+        // Someone else's bingo changes the game doc; the board is unchanged.
+        var other = snapshot()
+        other.game.bingoCount = 1
+        fake.emit(other)
+        await settle()
+        XCTAssertEqual(vm.snapshot?.game.bingoCount, 1)
+        XCTAssertEqual(vm.snapshot?.board?.marks[3], true, "optimistic mark must not flicker off")
+        // The board update lands and wins.
+        var updated = other
+        updated.board?.marks = serverMarks(3)
+        fake.emit(updated)
+        await settle()
+        XCTAssertEqual(vm.snapshot, updated)
+        // A later board that disagrees still reconciles.
+        var later = updated
+        later.board?.marks = serverMarks()
+        fake.emit(later)
+        await settle()
+        XCTAssertEqual(vm.snapshot?.board?.marks[3], false)
+    }
+
+    func testListenerPermissionDeniedSetsStreamErrorOnly() async {
+        let fake = FakeGameService()
+        let vm = await started(fake)
+        fake.fail(NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.permissionDenied.rawValue))
+        await settle()
+        XCTAssertEqual(vm.streamError?.code, "permission-denied")
+        XCTAssertNil(vm.error)
+        XCTAssertNotNil(vm.snapshot, "the last snapshot is kept so the view knows the seat existed")
     }
 
     func testPendingCellIgnoresSecondToggle() async {

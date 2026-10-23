@@ -75,3 +75,12 @@ jobs:
           xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"
+      - name: Snapshot tests
+        env:
+          # A missing baseline fails instead of silently recording on the runner.
+          SNAPSHOT_TESTING_RECORD: never
+        run: |
+          cd ios
+          xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBCSnapshotTests \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"

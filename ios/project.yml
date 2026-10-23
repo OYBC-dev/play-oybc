@@ -8,6 +8,9 @@ packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     exactVersion: 11.15.0
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    exactVersion: 1.19.2
 targets:
   PlayOYBC:
     type: application
@@ -29,12 +32,21 @@ targets:
         CFBundleDisplayName: Play OYBC
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIAppFonts:
+          - BricolageGrotesque-Bold.ttf
+          - BricolageGrotesque-ExtraBold.ttf
+          - Archivo-Regular.ttf
+          - Archivo-Medium.ttf
+          - Archivo-SemiBold.ttf
+          - Archivo-Bold.ttf
+          - Archivo-ExtraBold.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBC
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGNING_ALLOWED: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
   PlayOYBCTests:
     type: bundle.unit-test
     platform: iOS
@@ -46,6 +58,22 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBCTests
+  # Snapshot tests. Baselines are found via #file (source-relative), never the bundle,
+  # so the PNG tree is excluded from the target's sources.
+  PlayOYBCSnapshotTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PlayOYBCSnapshotTests
+        excludes:
+          - "**/__Snapshots__/**"
+    dependencies:
+      - target: PlayOYBC
+      - package: SnapshotTesting
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBCSnapshotTests
 schemes:
   PlayOYBC:
     build:
@@ -55,3 +83,11 @@ schemes:
     test:
       targets:
         - PlayOYBCTests
+  PlayOYBCSnapshotTests:
+    build:
+      targets:
+        PlayOYBC: all
+        PlayOYBCSnapshotTests: [test]
+    test:
+      targets:
+        - PlayOYBCSnapshotTests

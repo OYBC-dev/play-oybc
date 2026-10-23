@@ -1,3 +1,4 @@
+import FirebaseFirestore
 import FirebaseFunctions
 import Foundation
 
@@ -10,7 +11,8 @@ struct AppError: Error, Equatable {
     static func == (a: AppError, b: AppError) -> Bool { a.code == b.code && a.token == b.token }
 
     /// Maps a callable failure: `FunctionsErrorDetailsKey` details `{code, token}` win; otherwise
-    /// the Functions error code name; anything else becomes `unknown`.
+    /// the Functions error code name; a Firestore permission denial (a listener on a game this
+    /// uid no longer sits in) becomes `permission-denied`; anything else becomes `unknown`.
     static func from(_ error: Error) -> AppError {
         if let e = error as? AppError { return e }
         let ns = error as NSError
@@ -19,6 +21,9 @@ struct AppError: Error, Equatable {
                 return AppError(code: code, token: d["token"] as? String, underlying: error)
             }
             return AppError(code: "functions/\(ns.code)", token: nil, underlying: error)
+        }
+        if ns.domain == FirestoreErrorDomain, ns.code == FirestoreErrorCode.permissionDenied.rawValue {
+            return AppError(code: "permission-denied", token: nil, underlying: error)
         }
         return AppError(code: "unknown", token: nil, underlying: error)
     }

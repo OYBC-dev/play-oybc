@@ -74,6 +74,34 @@ Run on the hosted URL with the host plus at least 2 other phones.
 | 13 | The displaced original phone shows "You've been replaced in this game." with a Home link | |
 | 14 | Host ends the game; every phone shows the leaderboard | |
 
+## iOS manual test
+
+iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (real `GoogleService-Info.plist`), or a simulator with `-useEmulators YES` against `firebase emulators:start`.
+
+| # | Step | Expect |
+| --- | --- | --- |
+| 1 | iOS: launch, enter a name, tap Host a game | Lobby: code, QR, `https://play-oybc.web.app/g/<CODE>`, Copy link; you are listed with Host and You badges |
+| 2 | iOS: tap Copy link, paste into Notes | The link above |
+| 3 | Phone A scans the QR, joins as "Cody"; phone B types the code on the web home page, joins as "Pat" | Both appear in the iOS player list live; the iOS host sees "Cody needs 24 more tasks" / "Pat needs 24 more tasks" lines and the pool counter |
+| 4 | iOS: type `@co`, tap Cody in the suggestions, finish "@Cody does the Monster Mash", tap Add | Pool updates on all three; on phone A the entry is a redacted bar with no text; iOS and B see the text |
+| 5 | iOS: add tasks with `@someone` and `@anyone`; type a 121-character task | Blurring matches the web rules on each phone; the field stops at 120 characters |
+| 6 | iOS: delete one of your tasks with ×, and (host) delete one of Pat's | Both disappear everywhere |
+| 7 | Everyone adds tasks until the shortfall lines are gone and the counter reads at least 24 / 24 | Launch turns on (iOS only) |
+| 8 | iOS: tap Launch | All three switch to a 5x5 board with Free in the center |
+| 9 | iOS: tap a square, then tap it again | It turns red at once and back; no flicker, no error |
+| 10 | iOS: press and hold a square with long text | A "Task" sheet shows the full text; Close dismisses it and the square is not toggled |
+| 11 | Phone A completes a line | iOS shows "Cody got a bingo!" for about 4 s (tap dismisses it early); A sees no banner for its own bingo |
+| 12 | iOS: complete a line | The five squares turn gold; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
+| 13 | iOS: tap Leaderboard | Sheet lists the bingos in order with #n and h:mm times |
+| 14 | iOS: force-quit and relaunch the app | It returns to the same seat, board and marks without asking for a name |
+| 15 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Cody wants back in" with Allow / Deny; tap Deny: B shows "The host said no" |
+| 16 | Phone B: join as "Cody" again; iOS taps Allow | B gets Cody's board; phone A shows "You've been replaced in this game." with a Home link |
+| 17 | iOS: tap Host menu, tap Make host next to Pat, then Make host in the confirm sheet | Pat (B) now has End game and the Host menu; iOS loses them and the reclaim prompt |
+| 18 | Phone B (new host): Host menu, make the iOS player host again | iOS gets End game and the Host menu back |
+| 19 | iOS: tap End game, then End game in the confirm sheet | All three show the leaderboard and their final board; nothing is tappable |
+| 20 | iOS: tap Home, relaunch the app | The home screen shows (the ended game is forgotten) |
+| 21 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
+
 ## Known deploy issue: callables return 403
 
 If calls fail with `403 Forbidden` before reaching the function, the Cloud Run services lack the public invoker binding (an org policy such as domain-restricted sharing blocks `allUsers`). Fix once per function: grant `allUsers` the `roles/run.invoker` role (Console: Cloud Run > service > Security > Allow unauthenticated invocations), or lift the org policy for project `play-oybc`.

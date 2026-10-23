@@ -125,7 +125,7 @@ final class FirebaseGameService: GameService {
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error> {
         AsyncThrowingStream { continuation in
             let setup = _Concurrency.Task { @MainActor [weak self] in
-                guard let self, !_Concurrency.Task.isCancelled else { return }
+                guard let self, !_Concurrency.Task.isCancelled else { continuation.finish(); return }
                 let hub = SubscriptionHub(db: self.db, gameId: gameId, seatId: seatId, continuation: continuation)
                 continuation.onTermination = { _ in _Concurrency.Task { @MainActor in hub.stop() } }
                 // Terminated before the handler above was installed: nothing will call it.
@@ -144,7 +144,7 @@ final class FirebaseGameService: GameService {
     func watchReclaim(gameId: String, reclaimId: String) -> AsyncThrowingStream<ReclaimStatus, Error> {
         AsyncThrowingStream { continuation in
             let setup = _Concurrency.Task { @MainActor [weak self] in
-                guard let self, !_Concurrency.Task.isCancelled else { return }
+                guard let self, !_Concurrency.Task.isCancelled else { continuation.finish(); return }
                 let watcher = ReclaimWatcher(db: self.db, gameId: gameId, reclaimId: reclaimId, continuation: continuation)
                 continuation.onTermination = { _ in _Concurrency.Task { @MainActor in watcher.stop() } }
                 if _Concurrency.Task.isCancelled { watcher.stop(); return }

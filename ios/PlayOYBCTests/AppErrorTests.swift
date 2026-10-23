@@ -1,3 +1,4 @@
+import FirebaseFirestore
 import FirebaseFunctions
 import XCTest
 @testable import PlayOYBC
@@ -25,5 +26,11 @@ final class AppErrorTests: XCTestCase {
     func testOtherErrorsAreUnknownAndAppErrorPassesThrough() {
         XCTAssertEqual(AppError.from(NSError(domain: "x", code: 1)).code, "unknown")
         XCTAssertEqual(AppError.from(AppError.gameNotFound).code, "game-not-found")
+    }
+
+    func testFirestorePermissionDeniedMapsToPermissionDenied() {
+        let ns = NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.permissionDenied.rawValue)
+        XCTAssertEqual(AppError.from(ns).code, "permission-denied")
+        XCTAssertEqual(AppError.from(NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.unavailable.rawValue)).code, "unknown")
     }
 }
