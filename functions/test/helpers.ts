@@ -63,6 +63,9 @@ export async function appCodeOf(p: Promise<unknown>): Promise<string | undefined
 export async function firestoreAs(user: string) {
   const { app } = await client(user);
   const fs = getClientFirestore(app);
-  try { connectFirestoreEmulator(fs, '127.0.0.1', 8080); } catch { /* already connected */ }
+  try {
+    const [h, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':');
+    connectFirestoreEmulator(fs, h, Number(port));
+  } catch { /* already connected */ }
   return fs;
 }

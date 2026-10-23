@@ -31,6 +31,7 @@ describe('resolveReclaim', () => {
     const path = `games/${gameId}/boards/${codySeat}`;
     expect((await getDoc(doc(await firestoreAs('u9'), path))).exists()).toBe(true);
     await expect(getDoc(doc(await firestoreAs('u2'), path))).rejects.toThrow();
+    expect((await getDoc(doc(await firestoreAs('u9'), `games/${gameId}/views/${codySeat}`))).exists()).toBe(true);
   });
   it('deny marks denied without touching members', async () => {
     const { gameId, codySeat, reclaimId } = await withReclaim();
@@ -46,8 +47,8 @@ describe('resolveReclaim', () => {
   });
   it('validates input', async () => {
     const { gameId, reclaimId } = await withReclaim();
-    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: 'nope', approve: true }))).toBe('https:functions/not-found');
-    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: 'a/b', approve: true }))).toBe('https:functions/not-found');
+    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: 'nope', approve: true }))).toBe('reclaim-not-found');
+    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: 'a/b', approve: true }))).toBe('reclaim-not-found');
     expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId, approve: 'yes' }))).toBe('https:functions/invalid-argument');
   });
   it('works in the lobby too', async () => {
@@ -75,6 +76,28 @@ describe('resolveReclaim', () => {
     await callAs('u2', 'resolveReclaim', { gameId, reclaimId: j.reclaimId, approve: true });
     expect(await readAdmin(`games/${gameId}/members/${await uidOf('u9')}`)).toEqual({ seatId: g.seatId });
     expect((await readAdmin(`games/${gameId}`)).hostSeatId).toBe(c.seatId);
+    expect(await readAdmin(`games/${gameId}/members/${await uidOf('u1')}`)).toBeUndefined();
+  });
+  it('approving one of two competing reclaims denies the other', async () => {
+    const { gameId, codySeat, reclaimId } = await withReclaim();
+    const code = (await readAdmin(`games/${gameId}`)).code;
+    const j10 = await callAs('u10', 'joinGame', { code, name: 'cody' });
+    await callAs('u1', 'resolveReclaim', { gameId, reclaimId, approve: true });
+    expect((await readAdmin(`games/${gameId}/reclaims/${j10.reclaimId}`)).status).toBe('denied');
+    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: j10.reclaimId, approve: true }))).toBe('wrong-stage');
+    expect(await readAdmin(`games/${gameId}/members/${await uidOf('u9')}`)).toEqual({ seatId: codySeat });
+    expect(await readAdmin(`games/${gameId}/members/${await uidOf('u10')}`)).toBeUndefined();
+  });
+  it('approving a claim on the caller\'s own seat is refused and denied; deny still works', async () => {
+    const g = await callAs('u1', 'createGame', { name: 'Stephen' });
+    const gameId = g.gameId as string;
+    const j = await callAs('u9', 'joinGame', { code: g.code, name: 'stephen' });
+    expect(await appCodeOf(callAs('u1', 'resolveReclaim', { gameId, reclaimId: j.reclaimId, approve: true }))).toBe('wrong-stage');
+    expect((await readAdmin(`games/${gameId}/reclaims/${j.reclaimId}`)).status).toBe('denied');
+    expect(await readAdmin(`games/${gameId}/members/${await uidOf('u1')}`)).toEqual({ seatId: g.seatId });
+    const j2 = await callAs('u10', 'joinGame', { code: g.code, name: 'stephen' });
+    await callAs('u1', 'resolveReclaim', { gameId, reclaimId: j2.reclaimId, approve: false });
+    expect((await readAdmin(`games/${gameId}/reclaims/${j2.reclaimId}`)).status).toBe('denied');
   });
 });
 
