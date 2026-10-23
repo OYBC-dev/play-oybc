@@ -1,2 +1,12 @@
 .setup-secrets/
 .superpowers/
+node_modules
+dist
+lib
+.env.local
+ios/PlayOYBC/GoogleService-Info.plist
+ios/*.xcodeproj
+.firebase
+*-debug.log
+playwright-report
+test-results

@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Deny-all placeholder. Task 5 replaces this with read-only member rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
