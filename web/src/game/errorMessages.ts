@@ -23,8 +23,6 @@ export function appErrorCode(e: unknown): string | null {
 
 /** User-facing copy for any error thrown by a callable. */
 export function errorMessage(e: unknown): string {
-  // A seated player's listeners lose read access when their seat is reclaimed by someone else.
-  if ((e as { code?: unknown } | null)?.code === 'permission-denied') return "You've been replaced in this game.";
   const code = appErrorCode(e);
   if (code === 'unknown-mention') {
     const token = (e as { details?: { token?: unknown } }).details?.token;

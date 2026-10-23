@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { collection, getDocs, getFirestore, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, getFirestore, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const SEATS = 20;
@@ -85,12 +85,6 @@ await Promise.all(Array.from({ length: TASKS }, (_, i) =>
 const launched = await timed('launchGame', () => host.call('launchGame', { gameId }));
 if (!launched) { console.error('launch failed', failures); }
 
-// Pre-read each seat's board so toggles hit real cells.
-const boards = new Map<string, boolean[]>();
-for (const p of seated) {
-  const b = await getDoc(doc(p.db, 'games', gameId, 'boards', p.seatId));
-  if (b.exists()) boards.set(p.seatId, b.data().marks as boolean[]);
-}
 const rand = (n: number) => Math.floor(Math.random() * n);
 const plan = Array.from({ length: TOGGLES }, () => ({ p: seated[rand(seated.length)], cell: rand(25) }));
 await Promise.all(plan.map(({ p, cell }) => timed('toggleMark', () => p.call('toggleMark', { gameId, cellIndex: cell }))));
@@ -98,9 +92,9 @@ await Promise.all(plan.map(({ p, cell }) => timed('toggleMark', () => p.call('to
 // Verify.
 const gameSnap = await getDoc(doc(host.db, 'games', gameId));
 const bingoCount = gameSnap.data()?.bingoCount as number;
-const bingos = (await getDocs(collection(host.db, 'games', gameId, 'bingos'))).docs.map((d) => d.data() as { seq: number });
+const bingos = (await getDocs(query(collection(host.db, 'games', gameId, 'bingos'), where('status', '==', 'announced'), orderBy('seq')))).docs.map((d) => d.data() as { seq: number });
 const seqs = bingos.map((b) => b.seq).sort((a, b) => a - b);
-const gaps = seqs.some((s, i) => s !== i + 1);
+const gaps = seqs.some((s, i) => s !== i + 1) || seqs.at(-1) !== bingoCount;
 
 console.log('---');
 console.log(`calls ok=${ok} failed=${failed}`);
@@ -110,5 +104,6 @@ for (const [k, xs] of Object.entries(latencies)) console.log(`${k}: n=${xs.lengt
 console.log(`bingoCount=${bingoCount} bingoDocs=${bingos.length} seqs=${seqs.length ? `${seqs[0]}..${seqs[seqs.length - 1]}` : 'none'} gaps=${gaps}`);
 const p50 = pct(latencies.toggleMark ?? [], 0.5);
 const pass = failed === 0 && bingoCount === bingos.length && !gaps && p50 < 800;
-console.log(pass ? 'PASS' : 'FAIL');
+if (bingoCount === 0) console.log('WARNING: bingoCount is 0, so bingo consistency was not exercised; this is not a full pass');
+console.log(pass ? (bingoCount === 0 ? 'PASS (unexercised bingo check)' : 'PASS') : 'FAIL');
 process.exit(pass ? 0 : 1);

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
@@ -10,7 +11,13 @@ import { PlayScreen } from './play/PlayScreen';
 export function GamePage({ gameId, seatId }: { gameId: string; seatId: string }) {
   const client = useClient();
   const { snapshot, error } = useGame(client, gameId, seatId);
-  if (error) return <div className="page"><p className="error" role="alert">{errorMessage(error)}</p><Link to="/">Home</Link></div>;
+  const wasSeated = useRef(false);
+  if (snapshot) wasSeated.current = true;
+  if (error) {
+    const denied = (error as { code?: unknown }).code === 'permission-denied';
+    const text = denied ? (wasSeated.current ? "You've been replaced in this game." : "You're not in this game.") : errorMessage(error);
+    return <div className="page"><p className="error" role="alert">{text}</p><Link to="/">Home</Link></div>;
+  }
   if (!snapshot) return <div className="page"><p className="muted">Loading</p></div>;
   switch (snapshot.game.stage) {
     case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} />;
