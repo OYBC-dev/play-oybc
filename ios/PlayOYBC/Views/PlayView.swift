@@ -10,6 +10,7 @@ struct PlayView: View {
     let gameId: String
     var banner: BingoDoc?
     var pendingCells: Set<Int> = []
+    var slowCells: Set<Int> = []
     var toggleError: String?
     var onToggle: (Int) -> Void = { _ in }
     var onDismissBanner: () -> Void = {}
@@ -35,7 +36,7 @@ struct PlayView: View {
                     }
                 }
                 if let board = snapshot.board {
-                    BoardGridView(board: board, pending: pendingCells, error: toggleError, onToggle: onToggle)
+                    BoardGridView(board: board, pending: pendingCells, slow: slowCells, error: toggleError, onToggle: onToggle)
                 } else {
                     MutedText("Loading")
                 }

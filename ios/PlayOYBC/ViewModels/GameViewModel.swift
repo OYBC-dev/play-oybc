@@ -25,6 +25,8 @@ final class GameViewModel: ObservableObject {
     @Published private(set) var snapshot: GameSnapshot?
     @Published private(set) var banner: BingoDoc?
     @Published private(set) var pendingCells: Set<Int> = []
+    /// In-flight cells whose call has taken longer than `pendingDimSeconds`; these render dimmed.
+    @Published private(set) var slowCells: Set<Int> = []
     /// The last failed toggle (shown under the board); cleared by the next toggle.
     @Published private(set) var error: AppError?
     /// The listener failed; the game can no longer be shown (permission-denied = seat lost).
@@ -41,6 +43,9 @@ final class GameViewModel: ObservableObject {
     private var queue = BingoBannerQueue()
     private var streamTask: _Concurrency.Task<Void, Never>?
     private var bannerTask: _Concurrency.Task<Void, Never>?
+    private var dimTasks: [Int: _Concurrency.Task<Void, Never>] = [:]
+    /// A square in flight only looks dimmed once its call has taken this long.
+    static let pendingDimSeconds = 0.25
 
     init(service: GameService, gameId: String, seatId: String, bannerSeconds: Double = 4, sleeper: @escaping Sleeper = GameViewModel.realSleep) {
         self.service = service
@@ -62,14 +67,18 @@ final class GameViewModel: ObservableObject {
     /// Starts consuming the service's snapshot stream.
     func start() {
         guard streamTask == nil else { return }
-        streamTask = _Concurrency.Task { [weak self, service, gameId, seatId] in
-            do {
-                for try await snap in service.subscribe(gameId: gameId, seatId: seatId) {
-                    self?.apply(snap)
-                }
-            } catch {
-                self?.streamError = AppError.from(error)
+        streamTask = _Concurrency.Task { [weak self] in await self?.run() }
+    }
+
+    /// Consumes the snapshot stream until it ends or the calling task is cancelled (the view
+    /// drives this from `.task`, so it lives exactly as long as the screen).
+    func run() async {
+        do {
+            for try await snap in service.subscribe(gameId: gameId, seatId: seatId) {
+                apply(snap)
             }
+        } catch {
+            if !_Concurrency.Task.isCancelled { streamError = AppError.from(error) }
         }
     }
 
@@ -94,6 +103,11 @@ final class GameViewModel: ObservableObject {
         overlay[cell] = !effectiveBoard(server).marks[cell]
         error = nil
         pendingCells.insert(cell)
+        dimTasks[cell] = _Concurrency.Task { [weak self, sleeper] in
+            try? await sleeper(Self.pendingDimSeconds)
+            guard !_Concurrency.Task.isCancelled, let self, self.pendingCells.contains(cell) else { return }
+            self.slowCells.insert(cell)
+        }
         publish()
         do {
             _ = try await service.toggleMark(gameId: gameId, cellIndex: cell)
@@ -103,6 +117,8 @@ final class GameViewModel: ObservableObject {
             self.error = AppError.from(error)
         }
         pendingCells.remove(cell)
+        dimTasks.removeValue(forKey: cell)?.cancel()
+        slowCells.remove(cell)
         publish()
     }
 
@@ -144,6 +160,13 @@ final class GameViewModel: ObservableObject {
     }
 }
 
+/// Where the app is: home, a join flow for a code, or seated in a game.
+enum AppRoute: Equatable {
+    case home
+    case join(code: String)
+    case game(code: String, gameId: String, seatId: String)
+}
+
 /// A game the launch check found this device still seated in.
 struct ResumedGame: Equatable { var code: String; var gameId: String; var seatId: String }
 
@@ -152,6 +175,7 @@ struct ResumedGame: Equatable { var code: String; var gameId: String; var seatId
 final class AppModel: ObservableObject {
     @Published private(set) var resumed: ResumedGame?
     @Published private(set) var launched = false
+    @Published private(set) var route: AppRoute = .home
     let service: GameService
     private let store: ResumeStore
 
@@ -168,6 +192,7 @@ final class AppModel: ObservableObject {
         do {
             if let me = try await service.whoAmI(code: code) {
                 resumed = ResumedGame(code: code, gameId: me.gameId, seatId: me.seatId)
+                route = .game(code: code, gameId: me.gameId, seatId: me.seatId)
             } else {
                 store.clear()
             }
@@ -181,4 +206,19 @@ final class AppModel: ObservableObject {
 
     /// Forgets the game (left or ended).
     func forget() { store.clear(); resumed = nil }
+
+    /// Shows the join flow for a code.
+    func openJoin(code: String) { route = .join(code: code) }
+
+    /// Seats this device in a game and remembers it for resume.
+    func seat(code: String, gameId: String, seatId: String) {
+        remember(code: code)
+        route = .game(code: code, gameId: gameId, seatId: seatId)
+    }
+
+    /// Leaves for Home and forgets the game.
+    func goHome() {
+        forget()
+        route = .home
+    }
 }

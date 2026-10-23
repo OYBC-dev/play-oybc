@@ -7,16 +7,16 @@ struct BoardGridView: View {
     let board: BoardDoc
     /// Cells with a toggle call in flight.
     var pending: Set<Int> = []
+    /// Cells in flight past the 250 ms threshold (`GameViewModel.slowCells`); drawn dimmed.
+    var slow: Set<Int> = []
     /// Final boards: nothing is tappable.
     var readOnly = false
     /// The last failed toggle's message.
     var error: String?
     var onToggle: (Int) -> Void = { _ in }
 
-    @State var slow: Set<Int> = []
     @State var detail: String?
 
-    static let pendingDimSeconds = 0.25
     static let longPressSeconds = 0.45
 
     var body: some View {
@@ -27,16 +27,8 @@ struct BoardGridView: View {
                     cell(i, highlighted: highlighted.contains(i))
                 }
             }
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
             if let error { ErrorText(error) }
-        }
-        .onChange(of: pending) { old, new in
-            slow = slow.intersection(new)
-            for i in new.subtracting(old) {
-                _Concurrency.Task {
-                    try? await _Concurrency.Task.sleep(nanoseconds: UInt64(Self.pendingDimSeconds * 1_000_000_000))
-                    if pending.contains(i) { slow.insert(i) }
-                }
-            }
         }
         .sheet(isPresented: Binding(get: { detail != nil }, set: { if !$0 { detail = nil } })) {
             RisoSheet(title: "Task", onClose: { detail = nil }) {
@@ -79,8 +71,11 @@ struct BoardGridView: View {
             }
             .accessibilityElement()
             .accessibilityLabel(text)
-            .accessibilityAddTraits(free ? [] : .isButton)
+            .accessibilityAddTraits(free || readOnly ? [] : .isButton)
             .accessibilityAddTraits(marked && !free ? .isSelected : [])
+            .accessibilityAction {
+                if !readOnly, !free, !pending.contains(i) { onToggle(i) }
+            }
             .accessibilityAction(named: "Details") { if !free { detail = text } }
     }
 }

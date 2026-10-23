@@ -31,6 +31,7 @@ targets:
       properties:
         CFBundleDisplayName: Play OYBC
         UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIAppFonts:
           - BricolageGrotesque-Bold.ttf
@@ -46,7 +47,7 @@ targets:
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGNING_ALLOWED: NO
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   PlayOYBCTests:
     type: bundle.unit-test
     platform: iOS

@@ -166,6 +166,36 @@ final class GameViewModelTests: XCTestCase {
         XCTAssertNotNil(vm.snapshot, "the last snapshot is kept so the view knows the seat existed")
     }
 
+    func testSlowCallDimsAfterThresholdAndClearsOnSettle() async {
+        let fake = FakeGameService()
+        fake.gateToggle = true
+        fake.toggleResult = .success(ToggleMarkRes(marks: serverMarks(3), completedLines: [], newBingoSeqs: []))
+        let sleeper = ManualSleeper()
+        let vm = await started(fake, sleeper: sleeper.sleep)
+        let t = _Concurrency.Task { await vm.toggle(cell: 3) }
+        await settle()
+        XCTAssertEqual(vm.pendingCells, [3])
+        XCTAssertTrue(vm.slowCells.isEmpty, "not dimmed before 250 ms")
+        sleeper.fire()
+        await settle()
+        XCTAssertEqual(vm.slowCells, [3])
+        fake.releaseToggle(cell: 3)
+        await t.value
+        XCTAssertTrue(vm.slowCells.isEmpty)
+    }
+
+    func testFastCallNeverDims() async {
+        let fake = FakeGameService()
+        fake.toggleResult = .success(ToggleMarkRes(marks: serverMarks(3), completedLines: [], newBingoSeqs: []))
+        let sleeper = ManualSleeper()
+        let vm = await started(fake, sleeper: sleeper.sleep)
+        await vm.toggle(cell: 3)
+        sleeper.fire()   // the 250 ms timer fires after the call already settled
+        await settle()
+        XCTAssertTrue(vm.slowCells.isEmpty)
+        XCTAssertTrue(vm.pendingCells.isEmpty)
+    }
+
     func testPendingCellIgnoresSecondToggle() async {
         let fake = FakeGameService()
         fake.gateToggle = true
@@ -249,6 +279,23 @@ final class GameViewModelTests: XCTestCase {
         await model.launch()
         XCTAssertEqual(fake.whoAmICodes, ["ABCDE"])
         XCTAssertEqual(model.resumed, ResumedGame(code: "ABCDE", gameId: "g9", seatId: "s9"))
+        XCTAssertEqual(model.route, .game(code: "ABCDE", gameId: "g9", seatId: "s9"))
+        XCTAssertTrue(model.launched)
+    }
+
+    func testRouteSeatAndHome() async {
+        let st = store("r9")
+        let model = AppModel(service: FakeGameService(), store: st)
+        await model.launch()
+        XCTAssertEqual(model.route, .home)
+        model.openJoin(code: "ABCDE")
+        XCTAssertEqual(model.route, .join(code: "ABCDE"))
+        model.seat(code: "ABCDE", gameId: "g1", seatId: "s2")
+        XCTAssertEqual(model.route, .game(code: "ABCDE", gameId: "g1", seatId: "s2"))
+        XCTAssertEqual(st.load(), "ABCDE")
+        model.goHome()
+        XCTAssertEqual(model.route, .home)
+        XCTAssertNil(st.load())
     }
 
     func testLaunchClearsPointerWhenNoSeat() async {

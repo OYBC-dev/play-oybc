@@ -90,17 +90,18 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | 8 | iOS: tap Launch | All three switch to a 5x5 board with Free in the center |
 | 9 | iOS: tap a square, then tap it again | It turns red at once and back; no flicker, no error |
 | 10 | iOS: press and hold a square with long text | A "Task" sheet shows the full text; Close dismisses it and the square is not toggled |
-| 11 | Phone A completes a line | iOS shows "Cody got a bingo!" for about 4 s (tap dismisses it early); A sees no banner for its own bingo |
-| 12 | iOS: complete a line | The five squares turn gold; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
-| 13 | iOS: tap Leaderboard | Sheet lists the bingos in order with #n and h:mm times |
-| 14 | iOS: force-quit and relaunch the app | It returns to the same seat, board and marks without asking for a name |
-| 15 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Cody wants back in" with Allow / Deny; tap Deny: B shows "The host said no" |
-| 16 | Phone B: join as "Cody" again; iOS taps Allow | B gets Cody's board; phone A shows "You've been replaced in this game." with a Home link |
-| 17 | iOS: tap Host menu, tap Make host next to Pat, then Make host in the confirm sheet | Pat (B) now has End game and the Host menu; iOS loses them and the reclaim prompt |
-| 18 | Phone B (new host): Host menu, make the iOS player host again | iOS gets End game and the Host menu back |
-| 19 | iOS: tap End game, then End game in the confirm sheet | All three show the leaderboard and their final board; nothing is tappable |
-| 20 | iOS: tap Home, relaunch the app | The home screen shows (the ended game is forgotten) |
-| 21 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
+| 11 | iOS: start a drag on a square and scroll the page up and down | The page scrolls; the square neither toggles nor opens the Task sheet (long-press vs scroll) |
+| 12 | Phone A completes a line | iOS shows "Cody got a bingo!" for about 4 s (tap dismisses it early); A sees no banner for its own bingo |
+| 13 | iOS: complete a line | The five squares turn gold; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
+| 14 | iOS: tap Leaderboard | Sheet lists the bingos in order with #n and h:mm times |
+| 15 | iOS: force-quit and relaunch the app | It returns to the same seat, board and marks without asking for a name |
+| 16 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Cody wants back in" with Allow / Deny; tap Deny: B shows "The host said no" |
+| 17 | Phone B: join as "Cody" again; iOS taps Allow | B gets Cody's board; phone A shows "You've been replaced in this game." with a Home link |
+| 18 | iOS: tap Host menu, tap Make host next to Pat, then Make host in the confirm sheet | Pat (B) now has End game and the Host menu; iOS loses them and the reclaim prompt |
+| 19 | Phone B (new host): Host menu, make the iOS player host again | iOS gets End game and the Host menu back |
+| 20 | iOS: tap End game, then End game in the confirm sheet | All three show the leaderboard and their final board; nothing is tappable |
+| 21 | iOS: tap Home, relaunch the app | The home screen shows (the ended game is forgotten) |
+| 22 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
 
 ## Known deploy issue: callables return 403
 

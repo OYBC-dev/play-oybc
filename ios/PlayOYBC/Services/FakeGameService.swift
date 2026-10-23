@@ -1,7 +1,8 @@
+#if DEBUG
 import Foundation
 
 /// In-memory GameService for tests, previews and snapshot tests. Drive it with `emit` / `finish`.
-final class FakeGameService: GameService {
+final class FakeGameService: GameService, @unchecked Sendable {
     var toggleResult: Result<ToggleMarkRes, Error> = .failure(FakeError.unset)
     /// Per-cell results override `toggleResult`.
     var toggleResultByCell: [Int: Result<ToggleMarkRes, Error>] = [:]
@@ -17,6 +18,9 @@ final class FakeGameService: GameService {
     private(set) var whoAmICodes: [String] = []
     private(set) var joins: [(code: String, name: String)] = []
     private(set) var calls: [String] = []
+    /// How many times `subscribe` was called, and how many of those streams are still open.
+    private(set) var subscribeCount = 0
+    private(set) var activeSubscriptions = 0
     private var continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation?
     private var reclaimContinuation: AsyncThrowingStream<ReclaimStatus, Error>.Continuation?
     private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
@@ -42,7 +46,12 @@ final class FakeGameService: GameService {
         return whoAmIResult
     }
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error> {
-        AsyncThrowingStream { self.continuation = $0 }
+        subscribeCount += 1
+        activeSubscriptions += 1
+        return AsyncThrowingStream { c in
+            c.onTermination = { [weak self] _ in DispatchQueue.main.async { self?.activeSubscriptions -= 1 } }
+            self.continuation = c
+        }
     }
     func addTask(gameId: String, text: String) async throws { try void("addTask:\(text)") }
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
@@ -59,3 +68,4 @@ final class FakeGameService: GameService {
         AsyncThrowingStream { self.reclaimContinuation = $0 }
     }
 }
+#endif

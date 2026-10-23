@@ -6,6 +6,13 @@ struct BingoBannerView: View {
     let onDismiss: () -> Void
 
     var body: some View {
+        ZStack { banner }
+            .onChange(of: bingo?.seq, initial: true) { _, _ in
+                if let bingo { AccessibilityNotification.Announcement("\(bingo.name) got a bingo!").post() }
+            }
+    }
+
+    @ViewBuilder private var banner: some View {
         if let bingo {
             Button(action: onDismiss) {
                 HStack(spacing: 10) {

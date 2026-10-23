@@ -8,15 +8,21 @@ struct GameView: View {
     let onHome: () -> Void
 
     init(service: GameService, gameId: String, seatId: String, onHome: @escaping () -> Void) {
-        _vm = StateObject(wrappedValue: GameViewModel(service: service, gameId: gameId, seatId: seatId))
+        self.init(vm: GameViewModel(service: service, gameId: gameId, seatId: seatId), service: service, onHome: onHome)
+    }
+
+    /// Injects the view model (hosting tests).
+    init(vm: @autoclosure @escaping () -> GameViewModel, service: GameService, onHome: @escaping () -> Void) {
+        _vm = StateObject(wrappedValue: vm())
         self.service = service
         self.onHome = onHome
     }
 
     var body: some View {
-        content
-            .onAppear { vm.start() }
-            .onDisappear { vm.stop() }
+        // The subscription hangs off this unary wrapper, not the stage branches below, so a
+        // stage switch never restarts or stops it; `.task` cancels it when the screen goes away.
+        ZStack { content }
+            .task { await vm.run() }
     }
 
     @ViewBuilder private var content: some View {
@@ -28,7 +34,7 @@ struct GameView: View {
                 LobbyView(service: service, snapshot: snap, gameId: vm.gameId)
             case .playing:
                 PlayView(service: service, snapshot: snap, gameId: vm.gameId,
-                         banner: vm.banner, pendingCells: vm.pendingCells,
+                         banner: vm.banner, pendingCells: vm.pendingCells, slowCells: vm.slowCells,
                          toggleError: vm.error.map(ErrorMessages.message(for:)),
                          onToggle: { i in _Concurrency.Task { await vm.toggle(cell: i) } },
                          onDismissBanner: { vm.dismissBanner() })
@@ -54,17 +60,9 @@ struct GameErrorView: View {
     }
 }
 
-/// Where the app is: home, a join flow for a code, or seated in a game.
-enum AppRoute: Equatable {
-    case home
-    case join(code: String)
-    case game(code: String, gameId: String, seatId: String)
-}
-
 /// App root: waits for the launch resume check, then routes between Home, Join and Game.
 struct RootView: View {
     @ObservedObject var model: AppModel
-    @State private var route: AppRoute = .home
     @State private var joinModel: JoinViewModel?
 
     var body: some View {
@@ -72,7 +70,7 @@ struct RootView: View {
             if !model.launched {
                 RisoPage { MutedText("Loading") }
             } else {
-                switch route {
+                switch model.route {
                 case .home:
                     HomeView(service: model.service,
                              onHosted: { code, g, s in seat(code: code, gameId: g, seatId: s) },
@@ -87,9 +85,8 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: model.launched) { _, launched in
-            if launched, let r = model.resumed { route = .game(code: r.code, gameId: r.gameId, seatId: r.seatId) }
-        }
+        // Launch (and the resume route it sets) runs once here, before anything is shown.
+        .task { if !model.launched { await model.launch() } }
         .onOpenURL { url in
             if let code = JoinCode.parse(url.absoluteString), url.path.contains("/g/") { openJoin(code: code) }
         }
@@ -98,19 +95,17 @@ struct RootView: View {
     private func openJoin(code: String) {
         let m = JoinViewModel(service: model.service, code: code)
         joinModel = m
-        route = .join(code: code)
+        model.openJoin(code: code)
         _Concurrency.Task { await m.check() }
     }
 
     private func seat(code: String, gameId: String, seatId: String) {
-        model.remember(code: code)
         joinModel = nil
-        route = .game(code: code, gameId: gameId, seatId: seatId)
+        model.seat(code: code, gameId: gameId, seatId: seatId)
     }
 
     private func goHome() {
-        model.forget()
         joinModel = nil
-        route = .home
+        model.goHome()
     }
 }
