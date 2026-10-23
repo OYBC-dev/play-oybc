@@ -25,7 +25,8 @@ describe('parseMentions', () => {
   it('unknown mention', () => {
     expect(parseMentions('@Bob sings', seats)).toEqual({ ok: false, error: 'unknown-mention', token: '@Bob' });
     expect(parseMentions('@Joshua', seats)).toEqual({ ok: false, error: 'unknown-mention', token: '@Joshua' });
-    expect(parseMentions('trailing @', seats)).toEqual({ ok: false, error: 'unknown-mention', token: '@' });
+    expect(parseMentions('@someoneelse', seats)).toEqual({ ok: false, error: 'unknown-mention', token: '@someoneelse' });
+    expect(parseMentions('@Jo-Ann', seats)).toEqual({ ok: false, error: 'unknown-mention', token: '@Jo-Ann' });
   });
   it('dedupes', () => {
     const r = parseMentions('@Josh @Josh', seats);
@@ -34,5 +35,35 @@ describe('parseMentions', () => {
   it('matches at end of text', () => {
     const r = parseMentions('hi @Jo', seats);
     expect(r.ok && r.mentions.seatIds).toEqual(['s1']);
+  });
+  it('lone @ is plain text', () => {
+    expect(parseMentions('meet @ 5pm', seats)).toEqual({ ok: true, mentions: none });
+    expect(parseMentions('trailing @', seats)).toEqual({ ok: true, mentions: none });
+  });
+  it('tolerates odd whitespace inside multi-word names', () => {
+    const r = parseMentions('@Mary  Jane dances', seats);
+    expect(r.ok && r.mentions.seatIds).toEqual(['s3']);
+    const t = parseMentions('@mary\tjane', seats);
+    expect(t.ok && t.mentions.seatIds).toEqual(['s3']);
+  });
+  it('hyphen/apostrophe continuations', () => {
+    const p = parseMentions("@Josh's turn", seats);
+    expect(p.ok && p.mentions.seatIds).toEqual(['s2']);
+    const q = parseMentions('@Josh’s turn', seats);
+    expect(q.ok && q.mentions.seatIds).toEqual(['s2']);
+    const both = [seat('a', 'Jo'), seat('b', 'Jo-Ann')];
+    const r = parseMentions('@Jo-Ann waves', both);
+    expect(r.ok && r.mentions.seatIds).toEqual(['b']);
+    const h = parseMentions('@Jo- waves', both);
+    expect(h.ok && h.mentions.seatIds).toEqual(['a']);
+    expect(parseMentions("@Josh'x", seats).ok).toBe(false);
+  });
+  it('punctuation boundaries', () => {
+    const a = parseMentions('hey @Josh, go', seats);
+    expect(a.ok && a.mentions.seatIds).toEqual(['s2']);
+    const b = parseMentions('(@Jo)', seats);
+    expect(b.ok && b.mentions.seatIds).toEqual(['s1']);
+    const c = parseMentions('@someone.', seats);
+    expect(c.ok && c.mentions.someone).toBe(true);
   });
 });

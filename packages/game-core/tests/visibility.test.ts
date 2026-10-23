@@ -32,6 +32,12 @@ describe('visibility', () => {
       ['s1', 's2', 's3'].forEach((s) => expect(canBeDealt(t, s)).toBe(true));
     }
   });
+  it('named mention plus @someone: only author sees text', () => {
+    const t = task('a', { seatIds: ['s2'], someone: true });
+    expect(canSeeText(t, 's1')).toBe(true);
+    expect(canSeeText(t, 's2')).toBe(false);
+    expect(canSeeText(t, 's3')).toBe(false);
+  });
   it('buildPoolView hides, flags mine, sorts, names authors', () => {
     const tasks = [task('late', {}, 5), task('hid', { seatIds: ['s2'] }, 1)];
     const v = buildPoolView(tasks, seats, 's2');
