@@ -46,7 +46,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.oybc.PlayOYBC
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 5RMV2ZMUHV
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   PlayOYBCTests:
     type: bundle.unit-test
