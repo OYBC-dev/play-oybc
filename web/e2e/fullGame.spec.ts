@@ -37,7 +37,7 @@ test('three phones play a full game', async ({ browser }) => {
   await expect(C.page.getByTestId('stage-lobby')).toBeVisible();
 
   // 2. B mentions Stephen: A sees it blurred, C sees the text.
-  await B.page.getByLabel('Task').fill('@Stephen falls asleep');
+  await B.page.getByLabel('Task', { exact: true }).fill('@Stephen falls asleep');
   await B.page.getByRole('button', { name: 'Add' }).click();
   await expect(C.page.getByText('@Stephen falls asleep')).toBeVisible();
   await expect(A.page.getByTestId('redacted')).toHaveCount(1);
@@ -45,9 +45,9 @@ test('three phones play a full game', async ({ browser }) => {
 
   // 3. Seed the pool to 30 through the UI, then A launches.
   for (let i = 2; i <= 30; i++) {
-    await A.page.getByLabel('Task').fill(`Task ${i}`);
+    await A.page.getByLabel('Task', { exact: true }).fill(`Task ${i}`);
     await A.page.getByRole('button', { name: 'Add' }).click();
-    await expect(A.page.getByLabel('Task')).toHaveValue('');
+    await expect(A.page.getByLabel('Task', { exact: true })).toHaveValue('');
   }
   const launch = A.page.getByRole('button', { name: 'Launch' });
   await expect(launch).toBeEnabled();
