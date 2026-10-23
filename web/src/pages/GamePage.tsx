@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
 import { useGame } from '../game/useGame';
-import { EndedView } from './game/EndedView';
+import { EndedScreen } from './play/EndedScreen';
 import { LobbyScreen } from './lobby/LobbyScreen';
-import { PlayView } from './game/PlayView';
+import { PlayScreen } from './play/PlayScreen';
 
 /** Renders the live game for a seated player, switching on stage. */
 export function GamePage({ gameId, seatId }: { gameId: string; seatId: string }) {
@@ -14,7 +14,7 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   if (!snapshot) return <div className="page"><p className="muted">Loading</p></div>;
   switch (snapshot.game.stage) {
     case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} />;
-    case 'playing': return <PlayView snapshot={snapshot} />;
-    case 'ended': return <EndedView snapshot={snapshot} />;
+    case 'playing': return <PlayScreen client={client} snapshot={snapshot} gameId={gameId} />;
+    case 'ended': return <EndedScreen snapshot={snapshot} />;
   }
 }

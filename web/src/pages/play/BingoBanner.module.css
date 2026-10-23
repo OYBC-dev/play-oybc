@@ -1,0 +1,12 @@
+.banner {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 20;
+  width: min(calc(100vw - 32px), 440px); box-sizing: border-box; min-height: 44px;
+  padding: 14px 16px; text-align: center; cursor: pointer;
+  font-family: var(--riso-font-head); font-weight: 800; font-size: 20px; letter-spacing: -0.01em;
+  color: var(--riso-ink-static); background: var(--riso-gold);
+  border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card); box-shadow: 4px 4px 0 var(--riso-shadow-ink);
+  animation: drop var(--riso-anim-toast-drop);
+}
+.banner::before, .banner::after { content: '★'; color: var(--riso-red); margin: 0 10px; }
+@keyframes drop { 0% { opacity: 0; transform: translate(-50%, -140%) rotate(-3deg); } 100% { opacity: 1; transform: translate(-50%, 0) rotate(0); } }
+@media (prefers-reduced-motion: reduce) { .banner { animation: none; } }

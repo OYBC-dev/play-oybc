@@ -1,0 +1,9 @@
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.row {
+  display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 10px; min-height: 44px; box-sizing: border-box; padding: 6px 12px;
+  background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card);
+}
+.rank { font-family: var(--riso-font-head); font-weight: 800; font-size: 18px; }
+.name { font-weight: 700; overflow-wrap: anywhere; }
+.num { font-family: var(--riso-font-head); font-weight: 800; color: var(--riso-blue); }
+.time { color: var(--riso-muted); font-variant-numeric: tabular-nums; }

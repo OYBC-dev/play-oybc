@@ -1,0 +1,5 @@
+.header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.actions { display: flex; gap: 8px; }
+.confirmBody { margin: 0; }
+.confirmActions { display: flex; gap: 8px; }
+.confirmActions > * { flex: 1; }
