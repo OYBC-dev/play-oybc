@@ -18,3 +18,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm --filter game-core test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm i -g firebase-tools
+      - run: pnpm --filter functions test

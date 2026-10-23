@@ -1,9 +1,64 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Deny-all placeholder. Task 5 replaces this with read-only member rules.
-    match /{document=**} {
+
+    function memberPath(g) {
+      return /databases/$(database)/documents/games/$(g)/members/$(request.auth.uid);
+    }
+    function isMember(g) {
+      return request.auth != null && exists(memberPath(g));
+    }
+    function memberSeat(g) {
+      return get(memberPath(g)).data.seatId;
+    }
+    function isHost(g) {
+      return isMember(g)
+        && memberSeat(g) == get(/databases/$(database)/documents/games/$(g)).data.hostSeatId;
+    }
+
+    // Server only (Cloud Functions via Admin SDK bypass rules).
+    match /codes/{code} {
       allow read, write: if false;
+    }
+
+    match /games/{g} {
+      allow read: if isMember(g);
+      allow write: if false;
+
+      match /members/{uid} {
+        allow read: if request.auth != null && uid == request.auth.uid;
+        allow write: if false;
+      }
+
+      match /seats/{seatId} {
+        allow read: if isMember(g);
+        allow write: if false;
+      }
+
+      match /tasks/{taskId} {
+        allow read, write: if false;
+      }
+
+      match /views/{seatId} {
+        allow read: if isMember(g) && memberSeat(g) == seatId;
+        allow write: if false;
+      }
+
+      match /boards/{seatId} {
+        allow read: if isMember(g) && memberSeat(g) == seatId;
+        allow write: if false;
+      }
+
+      match /bingos/{bingoId} {
+        allow read: if isMember(g) && resource.data.status == 'announced';
+        allow write: if false;
+      }
+
+      match /reclaims/{reclaimId} {
+        allow read: if request.auth != null
+          && (resource.data.requesterUid == request.auth.uid || isHost(g));
+        allow write: if false;
+      }
     }
   }
 }
