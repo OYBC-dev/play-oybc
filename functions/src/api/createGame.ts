@@ -1,4 +1,4 @@
-import { onCall } from 'firebase-functions/v2/https';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { generateGameCode, normalizeName, nameKey, type CreateGameReq, type CreateGameRes, type GameDoc } from 'game-core';
 import { requireUid } from '../lib/auth';
 import { appError } from '../lib/errors';
@@ -33,5 +33,5 @@ export const createGame = onCall<CreateGameReq, Promise<CreateGameRes>>(async (r
     });
     if (res) return res;
   }
-  throw appError('internal', 'game-not-found', 'Could not allocate a game code');
+  throw new HttpsError('resource-exhausted', 'Could not allocate a game code');
 });

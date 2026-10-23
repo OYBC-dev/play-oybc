@@ -48,7 +48,8 @@ export async function readAdmin(path: string): Promise<any> {
 /** Wipes the Firestore emulator and forgets cached clients' state (auth users persist, which is fine). */
 export async function clearFirestore(): Promise<void> {
   const host = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080';
-  await fetch(`http://${host}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
+  const res = await fetch(`http://${host}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`clearFirestore failed: ${res.status}`);
 }
 
 /** Resolves with the HttpsError `details.code` of a failing callable, or throws if it succeeds. */

@@ -34,12 +34,35 @@ describe('joinGame', () => {
   it('creates a reclaim request on a name clash', async () => {
     const { gameId, code } = await newGame();
     const cody = await callAs('u2', 'joinGame', { code, name: 'Cody' });
+    for (const [i, variant] of ['CODY', 'Cody'].entries()) {
+      const v = await callAs(`v${i}`, 'joinGame', { code, name: variant });
+      expect(v.status).toBe('reclaim-pending');
+    }
     const r = await callAs('u3', 'joinGame', { code, name: ' cody ' });
     expect(r.status).toBe('reclaim-pending');
     expect(await readAdmin(`games/${gameId}/reclaims/${r.reclaimId}`)).toMatchObject({
       requesterUid: await uidOf('u3'), seatId: cody.seatId, status: 'pending',
     });
     expect((await admin.collection(`games/${gameId}/seats`).get()).size).toBe(2);
+  });
+  it('returns the same pending reclaim on repeat requests', async () => {
+    const { gameId, code } = await newGame();
+    await callAs('u2', 'joinGame', { code, name: 'Cody' });
+    const a = await callAs('u3', 'joinGame', { code, name: 'Cody' });
+    const b = await callAs('u3', 'joinGame', { code, name: 'cody' });
+    expect(b.reclaimId).toBe(a.reclaimId);
+    expect((await admin.collection(`games/${gameId}/reclaims`).get()).size).toBe(1);
+  });
+  it('member of an ended game resumes', async () => {
+    const { gameId, code, seatId } = await newGame();
+    await admin.doc(`games/${gameId}`).update({ stage: 'ended' });
+    expect(await callAs('u1', 'joinGame', { code, name: 'x' })).toMatchObject({ status: 'resumed', seatId });
+  });
+  it('malformed codes are game-not-found', async () => {
+    for (const code of ['', 'a/b', 'ABCD', 'A/B/C']) {
+      expect(await appCodeOf(callAs('u3', 'joinGame', { code, name: 'X' }))).toBe('game-not-found');
+      expect(await appCodeOf(callAs('u3', 'whoAmI', { code }))).toBe('game-not-found');
+    }
   });
   it('accepts a lowercase code; unknown code and empty name fail', async () => {
     const { code } = await newGame();

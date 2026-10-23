@@ -1,5 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { GAME_CODE_ALPHABET, GAME_CODE_LENGTH } from 'game-core';
+import { appError } from './errors';
 
 if (getApps().length === 0) initializeApp();
 
@@ -31,4 +33,16 @@ export function refs(gameId: string) {
 /** codes/{code} reference (code must already be uppercased). */
 export function codeRef(code: string) {
   return db.doc(`codes/${code}`);
+}
+
+const CODE_RE = new RegExp(`^[${GAME_CODE_ALPHABET}]{${GAME_CODE_LENGTH}}$`);
+
+/**
+ * Normalizes a raw join code (trim, uppercase) and validates its shape.
+ * @throws game-not-found (not-found) when malformed, before any doc ref is built.
+ */
+export function parseCode(raw: unknown): string {
+  const code = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  if (!CODE_RE.test(code)) throw appError('not-found', 'game-not-found');
+  return code;
 }

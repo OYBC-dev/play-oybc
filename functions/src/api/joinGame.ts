@@ -5,13 +5,13 @@ import {
 } from 'game-core';
 import { requireUid } from '../lib/auth';
 import { appError } from '../lib/errors';
-import { codeRef, db, refs } from '../lib/gameRefs';
+import { codeRef, db, parseCode, refs } from '../lib/gameRefs';
 import { rebuildViews, toSeats, toTasks } from '../lib/views';
 
 /** Joins a game by code: resumes an existing member, requests reclaim on a name clash, else seats the caller (dealing a board if playing). */
 export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) => {
   const uid = requireUid(req);
-  const code = String(req.data?.code ?? '').trim().toUpperCase();
+  const code = parseCode(req.data?.code);
   const name = normalizeName(String(req.data?.name ?? ''));
 
   return db.runTransaction(async (tx): Promise<JoinGameRes> => {
@@ -19,8 +19,9 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     if (!codeSnap.exists) throw appError('not-found', 'game-not-found');
     const gameId = (codeSnap.data() as { gameId: string }).gameId;
     const r = refs(gameId);
-    const [gameSnap, memberSnap, seatsSnap, tasksSnap] = await Promise.all([
+    const [gameSnap, memberSnap, seatsSnap, tasksSnap, pendingSnap] = await Promise.all([
       tx.get(r.game), tx.get(r.member(uid)), tx.get(r.seats), tx.get(r.tasks),
+      tx.get(r.reclaims.where('requesterUid', '==', uid).where('status', '==', 'pending')),
     ]);
     if (!gameSnap.exists) throw appError('not-found', 'game-not-found');
     const game = gameSnap.data() as GameDoc;
@@ -33,6 +34,8 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     const key = nameKey(name);
     const taken = seatsSnap.docs.find((d) => (d.data() as { nameKey: string }).nameKey === key);
     if (taken) {
+      const existing = pendingSnap.docs.find((d) => (d.data() as ReclaimDoc).seatId === taken.id);
+      if (existing) return { status: 'reclaim-pending', gameId, reclaimId: existing.id };
       const reclaimRef = r.reclaims.doc();
       const reclaim: ReclaimDoc = {
         requesterUid: uid, name, seatId: taken.id, status: 'pending', createdAt: Date.now(),
@@ -46,7 +49,12 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     const seats = [...toSeats(seatsSnap.docs), { seatId, name, joinedAt: now }];
     const tasks = toTasks(tasksSnap.docs);
     if (game.stage === 'playing') {
-      const cells = dealBoard(tasks, seats, seatId);
+      let cells;
+      try {
+        cells = dealBoard(tasks, seats, seatId);
+      } catch {
+        throw appError('failed-precondition', 'not-ready');
+      }
       const marks = Array<boolean>(25).fill(false);
       marks[CENTER_INDEX] = true;
       const board: BoardDoc = { cells, marks, completedLines: [], announcedLines: [] };
