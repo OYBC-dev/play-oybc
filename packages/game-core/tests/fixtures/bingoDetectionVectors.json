@@ -1,0 +1,890 @@
+{
+  "_note": "Hand-authored fixture for src/bingoDetection.ts, run by tests/bingoDetection.test.ts. `detectBingos` includes vectors where the caller pre-marks the center index true before calling detectBingos (the FREE center auto-fill itself is the caller's job; these vectors prove detectBingos treats a pre-filled center like any other true cell).",
+  "detectBingos": [
+    {
+      "name": "5x5-empty-board-no-bingos",
+      "gridSize": 5,
+      "completedIndices": [],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 0,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-first-row",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-last-row",
+      "gridSize": 5,
+      "completedIndices": [
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "row_4"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-middle-row",
+      "gridSize": 5,
+      "completedIndices": [
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "expected": {
+        "completedLines": [
+          "row_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-first-column",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "expected": {
+        "completedLines": [
+          "col_0"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-last-column",
+      "gridSize": 5,
+      "completedIndices": [
+        4,
+        9,
+        14,
+        19,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "col_4"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-main-diagonal",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        6,
+        12,
+        18,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-anti-diagonal",
+      "gridSize": 5,
+      "completedIndices": [
+        4,
+        8,
+        12,
+        16,
+        20
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_anti"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-multiple-simultaneous-bingos",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        10,
+        15,
+        20
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "col_0"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 9,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-both-diagonals-simultaneously",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        4,
+        6,
+        8,
+        12,
+        16,
+        18,
+        20,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 9,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-full-greenlog",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "row_3",
+          "row_4",
+          "col_0",
+          "col_1",
+          "col_2",
+          "col_3",
+          "col_4",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 25,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-incomplete-row-not-detected",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-incomplete-column-not-detected",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-incomplete-diagonal-not-detected",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        6,
+        12,
+        18
+      ],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-scattered-total-completed-count",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        7,
+        12,
+        19
+      ],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "3x3-empty-board-no-bingos",
+      "gridSize": 3,
+      "completedIndices": [],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 0,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-row",
+      "gridSize": 3,
+      "completedIndices": [
+        3,
+        4,
+        5
+      ],
+      "expected": {
+        "completedLines": [
+          "row_1"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-column",
+      "gridSize": 3,
+      "completedIndices": [
+        1,
+        4,
+        7
+      ],
+      "expected": {
+        "completedLines": [
+          "col_1"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-main-diagonal",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        4,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-anti-diagonal",
+      "gridSize": 3,
+      "completedIndices": [
+        2,
+        4,
+        6
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_anti"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-full-greenlog",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "col_0",
+          "col_1",
+          "col_2",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 9,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-row-col-diag-intersection",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        7,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "row_1",
+          "col_1",
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 7,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "4x4-empty-board-no-bingos",
+      "gridSize": 4,
+      "completedIndices": [],
+      "expected": {
+        "completedLines": [],
+        "isGreenlog": false,
+        "totalCompleted": 0,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "4x4-row",
+      "gridSize": 4,
+      "completedIndices": [
+        8,
+        9,
+        10,
+        11
+      ],
+      "expected": {
+        "completedLines": [
+          "row_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "4x4-column",
+      "gridSize": 4,
+      "completedIndices": [
+        3,
+        7,
+        11,
+        15
+      ],
+      "expected": {
+        "completedLines": [
+          "col_3"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "4x4-main-diagonal",
+      "gridSize": 4,
+      "completedIndices": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "4x4-anti-diagonal",
+      "gridSize": 4,
+      "completedIndices": [
+        3,
+        6,
+        9,
+        12
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_anti"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 4,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "4x4-full-greenlog",
+      "gridSize": 4,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "row_3",
+          "col_0",
+          "col_1",
+          "col_2",
+          "col_3",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 16,
+        "totalSquares": 16
+      }
+    },
+    {
+      "name": "line-id-row-format",
+      "gridSize": 3,
+      "completedIndices": [
+        6,
+        7,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "row_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "line-id-column-format",
+      "gridSize": 3,
+      "completedIndices": [
+        2,
+        5,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "col_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "line-id-order-rows-cols-diags",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "col_0",
+          "col_1",
+          "col_2",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 9,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "5x5-center-autofilled-detects-center-row",
+      "gridSize": 5,
+      "completedIndices": [
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "expected": {
+        "completedLines": [
+          "row_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-center-autofilled-detects-center-column",
+      "gridSize": 5,
+      "completedIndices": [
+        2,
+        7,
+        12,
+        17,
+        22
+      ],
+      "expected": {
+        "completedLines": [
+          "col_2"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-center-autofilled-detects-main-diagonal",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        6,
+        12,
+        18,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-center-autofilled-detects-anti-diagonal",
+      "gridSize": 5,
+      "completedIndices": [
+        4,
+        8,
+        12,
+        16,
+        20
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_anti"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 5,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "5x5-center-autofilled-detects-greenlog",
+      "gridSize": 5,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "row_3",
+          "row_4",
+          "col_0",
+          "col_1",
+          "col_2",
+          "col_3",
+          "col_4",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 25,
+        "totalSquares": 25
+      }
+    },
+    {
+      "name": "3x3-center-autofilled-detects-center-row",
+      "gridSize": 3,
+      "completedIndices": [
+        3,
+        4,
+        5
+      ],
+      "expected": {
+        "completedLines": [
+          "row_1"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-center-autofilled-detects-center-column",
+      "gridSize": 3,
+      "completedIndices": [
+        1,
+        4,
+        7
+      ],
+      "expected": {
+        "completedLines": [
+          "col_1"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-center-autofilled-detects-main-diagonal",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        4,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "diag_main"
+        ],
+        "isGreenlog": false,
+        "totalCompleted": 3,
+        "totalSquares": 9
+      }
+    },
+    {
+      "name": "3x3-center-autofilled-detects-greenlog",
+      "gridSize": 3,
+      "completedIndices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "expected": {
+        "completedLines": [
+          "row_0",
+          "row_1",
+          "row_2",
+          "col_0",
+          "col_1",
+          "col_2",
+          "diag_main",
+          "diag_anti"
+        ],
+        "isGreenlog": true,
+        "totalCompleted": 9,
+        "totalSquares": 9
+      }
+    }
+  ],
+  "errorHandling": [
+    {
+      "name": "throws-grid-too-short",
+      "completionGrid": [
+        true,
+        false
+      ],
+      "gridSize": 3,
+      "expectedError": "completionGrid length (2) does not match gridSize * gridSize (9)"
+    },
+    {
+      "name": "throws-grid-empty",
+      "completionGrid": [],
+      "gridSize": 3,
+      "expectedError": "completionGrid length (0) does not match gridSize * gridSize (9)"
+    },
+    {
+      "name": "throws-grid-too-large",
+      "completionGrid": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "gridSize": 5,
+      "expectedError": "completionGrid length (30) does not match gridSize * gridSize (25)"
+    }
+  ]
+}
