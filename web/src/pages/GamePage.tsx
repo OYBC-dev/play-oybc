@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
 import { useGame } from '../game/useGame';
@@ -9,7 +10,7 @@ import { PlayView } from './game/PlayView';
 export function GamePage({ gameId, seatId }: { gameId: string; seatId: string }) {
   const client = useClient();
   const { snapshot, error } = useGame(client, gameId, seatId);
-  if (error) return <div className="page"><p className="error" role="alert">{errorMessage(error)}</p></div>;
+  if (error) return <div className="page"><p className="error" role="alert">{errorMessage(error)}</p><Link to="/">Home</Link></div>;
   if (!snapshot) return <div className="page"><p className="muted">Loading</p></div>;
   switch (snapshot.game.stage) {
     case 'lobby': return <LobbyView snapshot={snapshot} />;

@@ -37,6 +37,11 @@ export function JoinPage() {
   useEffect(() => {
     if (!waitingFor) return;
     let live = true;
+    const backToName = (e: unknown) => {
+      if (!live) return;
+      setError(errorMessage(e));
+      setPhase({ kind: 'name' });
+    };
     const stop = client.watchReclaim(waitingFor.gameId, waitingFor.reclaimId, (status) => {
       if (!live || status === 'pending') return;
       if (status === 'denied') {
@@ -45,10 +50,10 @@ export function JoinPage() {
         return;
       }
       client.whoAmI(code).then(
-        (me) => { if (live) setPhase(me ? { kind: 'seated', ...me } : { kind: 'name' }); },
-        (e) => { if (live) setPhase({ kind: 'failed', message: errorMessage(e) }); },
+        (me) => { if (me) { if (live) setPhase({ kind: 'seated', ...me }); } else backToName(null); },
+        backToName,
       );
-    });
+    }, backToName);
     return () => { live = false; stop(); };
   }, [client, code, waitingFor?.gameId, waitingFor?.reclaimId]);
 

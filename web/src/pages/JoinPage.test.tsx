@@ -90,3 +90,45 @@ describe('JoinPage', () => {
     expect(screen.getByLabelText('Your name')).toBeInTheDocument();
   });
 });
+
+describe('JoinPage failures', () => {
+  async function toWaiting(client: FakeGameClient) {
+    client.joinResult = { status: 'reclaim-pending', gameId: 'g1', reclaimId: 'r1' };
+    setup(client);
+    await userEvent.type(await nameField(), 'Pat');
+    await submit();
+    await screen.findByText('Waiting for the host');
+  }
+
+  it('returns to the name form with an error when watching the reclaim fails', async () => {
+    const client = new FakeGameClient();
+    await toWaiting(client);
+    await act(async () => client.emitReclaimError(new Error('boom')));
+    expect(await screen.findByLabelText('Your name')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
+  });
+
+  it('shows an error when approved but no seat resolves', async () => {
+    const client = new FakeGameClient();
+    await toWaiting(client);
+    await act(async () => client.emitReclaim('approved'));
+    expect(await screen.findByLabelText('Your name')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
+  });
+
+  it('surfaces a missing game with a link home', async () => {
+    const client = new FakeGameClient();
+    client.whoAmIResult = { gameId: 'g1', seatId: 's2' };
+    render(
+      <ClientProvider value={client}>
+        <MemoryRouter initialEntries={['/g/abcde']}>
+          <Routes><Route path="/g/:code" element={<JoinPage />} /></Routes>
+        </MemoryRouter>
+      </ClientProvider>,
+    );
+    await screen.findByText('Loading');
+    await act(async () => client.emitError(appError('game-not-found')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No game');
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+  });
+});

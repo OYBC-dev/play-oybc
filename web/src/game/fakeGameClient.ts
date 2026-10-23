@@ -14,7 +14,9 @@ export class FakeGameClient implements GameClient {
   whoAmIResult: WhoAmIRes | Error = null;
   snapshot: GameSnapshot | null = null;
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
+  private snapshotErrorListeners = new Set<(e: Error) => void>();
   private reclaimListeners = new Set<(s: ReclaimDoc['status']) => void>();
+  private reclaimErrorListeners = new Set<(e: Error) => void>();
 
   private async result<T>(name: string, args: unknown[], value: T | Error): Promise<T> {
     this.calls.push([name, ...args]);
@@ -26,14 +28,23 @@ export class FakeGameClient implements GameClient {
   joinGame(code: string, name: string) { return this.result('joinGame', [code, name], this.joinResult); }
   whoAmI(code: string) { return this.result('whoAmI', [code], this.whoAmIResult); }
 
-  subscribe(gameId: string, seatId: string, onChange: (s: GameSnapshot) => void): () => void {
+  subscribe(gameId: string, seatId: string, onChange: (s: GameSnapshot) => void, onError?: (e: Error) => void): () => void {
     this.calls.push(['subscribe', gameId, seatId]);
     this.snapshotListeners.add(onChange);
+    if (onError) this.snapshotErrorListeners.add(onError);
     if (this.snapshot) {
       const s = this.snapshot;
       queueMicrotask(() => onChange(s));
     }
-    return () => this.snapshotListeners.delete(onChange);
+    return () => {
+      this.snapshotListeners.delete(onChange);
+      if (onError) this.snapshotErrorListeners.delete(onError);
+    };
+  }
+
+  /** Fail every subscriber. */
+  emitError(e: Error): void {
+    this.snapshotErrorListeners.forEach((l) => l(e));
   }
 
   /** Push a snapshot to every active subscriber. */
@@ -54,11 +65,21 @@ export class FakeGameClient implements GameClient {
   }
   transferHost(gameId: string, toSeatId: string) { return this.result('transferHost', [gameId, toSeatId], undefined); }
 
-  watchReclaim(gameId: string, reclaimId: string, onStatus: (s: ReclaimDoc['status']) => void): () => void {
+  watchReclaim(gameId: string, reclaimId: string, onStatus: (s: ReclaimDoc['status']) => void, onError?: (e: Error) => void): () => void {
     this.calls.push(['watchReclaim', gameId, reclaimId]);
     this.reclaimListeners.add(onStatus);
-    return () => this.reclaimListeners.delete(onStatus);
+    if (onError) this.reclaimErrorListeners.add(onError);
+    return () => {
+      this.reclaimListeners.delete(onStatus);
+      if (onError) this.reclaimErrorListeners.delete(onError);
+    };
   }
+
+  /** Fail every reclaim watcher. */
+  emitReclaimError(e: Error): void {
+    this.reclaimErrorListeners.forEach((l) => l(e));
+  }
+
 
   /** Report a reclaim status change to watchers. */
   emitReclaim(status: ReclaimDoc['status']): void {

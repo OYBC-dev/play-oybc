@@ -56,7 +56,10 @@ export const firebaseGameClient: GameClient = {
       const { db } = firebase();
       unsubs.push(
         onSnapshot(doc(db, 'games', gameId), (s) => {
-          if (!s.exists()) return;
+          if (!s.exists()) {
+            fail(Object.assign(new Error('game-not-found'), { details: { code: 'game-not-found' } }));
+            return;
+          }
           state.game = s.data() as GameDoc;
           setReclaimListener(state.game.hostSeatId === seatId, db);
           emit();
@@ -91,15 +94,17 @@ export const firebaseGameClient: GameClient = {
     };
   },
 
-  watchReclaim(gameId, reclaimId, onStatus) {
+  watchReclaim(gameId, reclaimId, onStatus, onError) {
     let unsub: (() => void) | null = null;
     let closed = false;
     void ensureSignedIn().then(() => {
       if (closed) return;
-      unsub = onSnapshot(doc(firebase().db, 'games', gameId, 'reclaims', reclaimId), (s) => {
-        if (s.exists()) onStatus((s.data() as ReclaimDoc).status);
-      });
-    });
+      unsub = onSnapshot(
+        doc(firebase().db, 'games', gameId, 'reclaims', reclaimId),
+        (s) => { if (s.exists()) onStatus((s.data() as ReclaimDoc).status); },
+        (e) => { if (!closed) onError?.(e); },
+      );
+    }).catch((e) => { if (!closed) onError?.(e as Error); });
     return () => { closed = true; unsub?.(); };
   },
 };
