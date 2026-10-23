@@ -3,19 +3,21 @@ import Foundation
 /// In-memory GameService for tests and previews. Drive it with `emit` / `finish`.
 final class FakeGameService: GameService {
     var toggleResult: Result<ToggleMarkRes, Error> = .failure(FakeError.unset)
-    /// When set, toggleMark suspends until `releaseToggle()` is called.
+    /// Per-cell results override `toggleResult`.
+    var toggleResultByCell: [Int: Result<ToggleMarkRes, Error>] = [:]
+    /// When set, toggleMark suspends until `releaseToggle(cell:)` is called for that cell.
     var gateToggle = false
     var whoAmIResult: WhoAmIRes?
     private(set) var toggledCells: [Int] = []
     private(set) var whoAmICodes: [String] = []
     private var continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation?
-    private var gate: CheckedContinuation<Void, Never>?
+    private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
 
     enum FakeError: Error { case unset, failed }
 
     func emit(_ s: GameSnapshot) { continuation?.yield(s) }
     func fail(_ e: Error) { continuation?.finish(throwing: e) }
-    func releaseToggle() { gate?.resume(); gate = nil }
+    func releaseToggle(cell: Int) { gates.removeValue(forKey: cell)?.resume() }
 
     func createGame(name: String) async throws -> CreateGameRes { CreateGameRes(gameId: "g1", code: "ABCDE", seatId: "s1") }
     func joinGame(code: String, name: String) async throws -> JoinGameRes { .joined(gameId: "g1", seatId: "s2") }
@@ -28,8 +30,8 @@ final class FakeGameService: GameService {
     func launch(gameId: String) async throws {}
     func toggleMark(gameId: String, cellIndex: Int) async throws -> ToggleMarkRes {
         toggledCells.append(cellIndex)
-        if gateToggle { await withCheckedContinuation { gate = $0 } }
-        return try toggleResult.get()
+        if gateToggle { await withCheckedContinuation { gates[cellIndex] = $0 } }
+        return try (toggleResultByCell[cellIndex] ?? toggleResult).get()
     }
     func end(gameId: String) async throws {}
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws {}

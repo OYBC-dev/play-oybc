@@ -66,4 +66,23 @@ final class SchemaDecodingTests: XCTestCase {
         let b = try load(BoardDoc.self, "board")
         XCTAssertEqual(try JSONDecoder().decode(BoardDoc.self, from: JSONEncoder().encode(b)), b)
     }
+
+    /// Production path: Firestore hands back [String: Any] with NSNumber / NSNull values.
+    func testDecodeFromFoundationDictionary() throws {
+        let dict: [String: Any] = [
+            "code": "ABCDE", "stage": "lobby", "hostSeatId": "s1",
+            "createdAt": NSNumber(value: 1_700_000_000_000.0), "launchedAt": NSNull(),
+            "bingoCount": NSNumber(value: 0), "shortfalls": ["s2": NSNumber(value: 2)], "reviewGate": NSNumber(value: false),
+        ]
+        let g = try FirebaseCoding.decode(GameDoc.self, from: dict)
+        XCTAssertEqual(g.createdAt, 1_700_000_000_000)
+        XCTAssertNil(g.launchedAt)
+        XCTAssertEqual(g.shortfalls["s2"], 2)
+        XCTAssertFalse(g.reviewGate)
+    }
+
+    func testInvalidPayloadThrowsInsteadOfCrashing() {
+        XCTAssertThrowsError(try FirebaseCoding.decode(GameDoc.self, from: ["createdAt": Date()]))
+        XCTAssertThrowsError(try FirebaseCoding.decode(GameDoc.self, from: "nope"))
+    }
 }

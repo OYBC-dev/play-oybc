@@ -25,12 +25,13 @@ final class GameViewModel: ObservableObject {
     @Published private(set) var snapshot: GameSnapshot?
     @Published private(set) var banner: BingoDoc?
     @Published private(set) var pendingCells: Set<Int> = []
-    @Published private(set) var error: Error?
+    @Published private(set) var error: AppError?
 
     let gameId: String
     let seatId: String
     private let service: GameService
     private let bannerSeconds: Double
+    private let sleeper: Sleeper
     private var serverSnapshot: GameSnapshot?
     /// Optimistic mark values per cell, overlaid on the server board until the call settles.
     private var overlay: [Int: Bool] = [:]
@@ -38,12 +39,17 @@ final class GameViewModel: ObservableObject {
     private var streamTask: _Concurrency.Task<Void, Never>?
     private var bannerTask: _Concurrency.Task<Void, Never>?
 
-    init(service: GameService, gameId: String, seatId: String, bannerSeconds: Double = 4) {
+    init(service: GameService, gameId: String, seatId: String, bannerSeconds: Double = 4, sleeper: @escaping Sleeper = GameViewModel.realSleep) {
         self.service = service
         self.gameId = gameId
         self.seatId = seatId
         self.bannerSeconds = bannerSeconds
+        self.sleeper = sleeper
     }
+
+    /// Injectable delay so banner timing is testable without real sleeps.
+    typealias Sleeper = @Sendable (Double) async throws -> Void
+    static let realSleep: Sleeper = { try await _Concurrency.Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
 
     deinit {
         streamTask?.cancel()
@@ -59,7 +65,7 @@ final class GameViewModel: ObservableObject {
                     self?.apply(snap)
                 }
             } catch {
-                self?.error = error
+                self?.error = AppError.from(error)
             }
         }
     }
@@ -76,25 +82,21 @@ final class GameViewModel: ObservableObject {
         refreshBanner()
     }
 
-    /// Optimistically flips a cell, then reconciles with the server; rolls back on failure.
+    /// Optimistically flips a cell, then calls the server. The optimistic mark stays until the
+    /// next snapshot arrives (the snapshot wins); a failed call rolls it back.
     func toggle(cell: Int) async {
-        guard var board = serverSnapshot?.board, board.marks.indices.contains(cell),
-              board.cells[cell] != .free, !pendingCells.contains(cell) else { return }
-        board = effectiveBoard(board)
-        overlay[cell] = !board.marks[cell]
+        guard serverSnapshot?.game.stage == .playing,
+              let server = serverSnapshot?.board, server.marks.indices.contains(cell),
+              server.cells[cell] != .free, !pendingCells.contains(cell) else { return }
+        overlay[cell] = !effectiveBoard(server).marks[cell]
         pendingCells.insert(cell)
         publish()
         do {
-            let res = try await service.toggleMark(gameId: gameId, cellIndex: cell)
-            overlay[cell] = nil
-            if var b = serverSnapshot?.board {
-                b.marks = res.marks
-                b.completedLines = res.completedLines
-                serverSnapshot?.board = b
-            }
+            _ = try await service.toggleMark(gameId: gameId, cellIndex: cell)
+            error = nil
         } catch {
             overlay[cell] = nil
-            self.error = error
+            self.error = AppError.from(error)
         }
         pendingCells.remove(cell)
         publish()
@@ -102,6 +104,8 @@ final class GameViewModel: ObservableObject {
 
     private func apply(_ snap: GameSnapshot) {
         serverSnapshot = snap
+        // The snapshot is authoritative for every cell with no call in flight.
+        overlay = overlay.filter { pendingCells.contains($0.key) }
         queue.observe(snap.bingos, mySeatId: snap.mySeatId)
         refreshBanner()
         publish()
@@ -125,10 +129,49 @@ final class GameViewModel: ObservableObject {
         banner = next
         bannerTask?.cancel()
         guard next != nil else { return }
-        bannerTask = _Concurrency.Task { [weak self, bannerSeconds] in
-            try? await _Concurrency.Task.sleep(nanoseconds: UInt64(bannerSeconds * 1_000_000_000))
+        bannerTask = _Concurrency.Task { [weak self, bannerSeconds, sleeper] in
+            try? await sleeper(bannerSeconds)
             guard !_Concurrency.Task.isCancelled else { return }
             self?.dismissBanner()
         }
     }
+}
+
+/// A game the launch check found this device still seated in.
+struct ResumedGame: Equatable { var code: String; var gameId: String; var seatId: String }
+
+/// App-level state the UI layer drives: launch warm-up, resume, remembering the joined game.
+@MainActor
+final class AppModel: ObservableObject {
+    @Published private(set) var resumed: ResumedGame?
+    @Published private(set) var launched = false
+    let service: GameService
+    private let store: ResumeStore
+
+    init(service: GameService, store: ResumeStore = ResumeStore()) {
+        self.service = service
+        self.store = store
+    }
+
+    /// At launch: if `lastGame` holds a code, ask the server where this uid sits.
+    /// No seat clears the pointer; a network failure keeps it for the next launch.
+    func launch() async {
+        defer { launched = true }
+        guard let code = store.load() else { return }
+        do {
+            if let me = try await service.whoAmI(code: code) {
+                resumed = ResumedGame(code: code, gameId: me.gameId, seatId: me.seatId)
+            } else {
+                store.clear()
+            }
+        } catch {
+            resumed = nil
+        }
+    }
+
+    /// Records the joined game for resume on the next launch.
+    func remember(code: String) { store.save(code: code) }
+
+    /// Forgets the game (left or ended).
+    func forget() { store.clear(); resumed = nil }
 }

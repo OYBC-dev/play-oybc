@@ -3,11 +3,18 @@ import FirebaseCore
 import FirebaseFirestore
 import FirebaseFunctions
 import Foundation
+import os
+
+private let log = Logger(subsystem: "com.oybc.PlayOYBC", category: "firebase")
 
 /// Bridges Firebase's `Any`-typed payloads to the Codable schema.
 enum FirebaseCoding {
+    /// Throws (never crashes) on a payload that is not valid JSON, e.g. one holding a Timestamp.
     static func decode<T: Decodable>(_ type: T.Type, from any: Any) throws -> T {
-        let data = try JSONSerialization.data(withJSONObject: any, options: [.fragmentsAllowed])
+        guard JSONSerialization.isValidJSONObject(any) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "payload is not a JSON object"))
+        }
+        let data = try JSONSerialization.data(withJSONObject: any)
         return try JSONDecoder().decode(T.self, from: data)
     }
 
@@ -17,11 +24,43 @@ enum FirebaseCoding {
     }
 }
 
+/// Single-flight anonymous sign-in: waits for Auth's first state callback before deciding.
+actor AuthGate {
+    private var inFlight: _Concurrency.Task<Void, Error>?
+
+    func ensureSignedIn() async throws {
+        if let inFlight { return try await inFlight.value }
+        let t = _Concurrency.Task<Void, Error> {
+            try await Self.restoreOrSignIn()
+        }
+        inFlight = t
+        do { try await t.value } catch { inFlight = nil; throw error }
+    }
+
+    private static func restoreOrSignIn() async throws {
+        let auth = Auth.auth()
+        // The first listener callback reports the restored session (or nil).
+        let existing: User? = await withCheckedContinuation { cont in
+            var handle: AuthStateDidChangeListenerHandle?
+            var done = false
+            handle = auth.addStateDidChangeListener { _, user in
+                guard !done else { return }
+                done = true
+                if let handle { auth.removeStateDidChangeListener(handle) }
+                cont.resume(returning: user)
+            }
+        }
+        if existing == nil { _ = try await auth.signInAnonymously() }
+    }
+}
+
 /// Real GameService: callables for writes, Firestore listeners for reads.
 final class FirebaseGameService: GameService {
     static let region = "us-central1"
+    static let shared = FirebaseGameService()
     private let db: Firestore
     private let fns: Functions
+    private let gate = AuthGate()
 
     /// Configures Firebase once. `-useEmulators YES` points auth/firestore/functions at localhost.
     static func configure(useEmulators: Bool = UserDefaults.standard.bool(forKey: "useEmulators")) {
@@ -42,31 +81,29 @@ final class FirebaseGameService: GameService {
         fns = Functions.functions(region: Self.region)
     }
 
-    /// Anonymous sign-in at launch; a no-op once a user exists.
-    func ensureSignedIn() async throws {
-        if Auth.auth().currentUser != nil { return }
-        _ = try await Auth.auth().signInAnonymously()
+    /// Anonymous sign-in; concurrent callers share one flight.
+    func ensureSignedIn() async throws { try await gate.ensureSignedIn() }
+
+    private func invoke(_ name: String, _ payload: Any) async throws -> Any {
+        try await ensureSignedIn()
+        do { return try await fns.httpsCallable(name).call(payload).data } catch { throw AppError.from(error) }
     }
 
     private func call<Req: Encodable, Res: Decodable>(_ name: String, _ req: Req, as: Res.Type) async throws -> Res {
-        try await ensureSignedIn()
-        let result = try await fns.httpsCallable(name).call(try FirebaseCoding.encode(req))
-        return try FirebaseCoding.decode(Res.self, from: result.data)
+        try FirebaseCoding.decode(Res.self, from: try await invoke(name, try FirebaseCoding.encode(req)))
     }
 
     private func callVoid<Req: Encodable>(_ name: String, _ req: Req) async throws {
-        try await ensureSignedIn()
-        _ = try await fns.httpsCallable(name).call(try FirebaseCoding.encode(req))
+        _ = try await invoke(name, try FirebaseCoding.encode(req))
     }
 
     func createGame(name: String) async throws -> CreateGameRes { try await call("createGame", CreateGameReq(name: name), as: CreateGameRes.self) }
     func joinGame(code: String, name: String) async throws -> JoinGameRes { try await call("joinGame", JoinGameReq(code: code, name: name), as: JoinGameRes.self) }
 
     func whoAmI(code: String) async throws -> WhoAmIRes? {
-        try await ensureSignedIn()
-        let result = try await fns.httpsCallable("whoAmI").call(try FirebaseCoding.encode(WhoAmIReq(code: code)))
-        if result.data is NSNull { return nil }
-        return try FirebaseCoding.decode(WhoAmIRes.self, from: result.data)
+        let data = try await invoke("whoAmI", try FirebaseCoding.encode(WhoAmIReq(code: code)))
+        if data is NSNull { return nil }
+        return try FirebaseCoding.decode(WhoAmIRes.self, from: data)
     }
 
     func addTask(gameId: String, text: String) async throws { try await callVoid("addTask", AddTaskReq(gameId: gameId, text: text)) }
@@ -87,46 +124,85 @@ final class FirebaseGameService: GameService {
 
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error> {
         AsyncThrowingStream { continuation in
-            let hub = SubscriptionHub(db: db, gameId: gameId, seatId: seatId, continuation: continuation)
-            startWhenSignedIn(hub)
-            continuation.onTermination = { _ in hub.stop() }
-        }
-    }
-
-    private func startWhenSignedIn(_ hub: SubscriptionHub) {
-        _Concurrency.Task { [weak self] in
-            do {
-                try await self?.ensureSignedIn()
-                hub.start()
-            } catch {
-                hub.fail(error)
+            let setup = _Concurrency.Task { @MainActor [weak self] in
+                guard let self, !_Concurrency.Task.isCancelled else { return }
+                let hub = SubscriptionHub(db: self.db, gameId: gameId, seatId: seatId, continuation: continuation)
+                continuation.onTermination = { _ in _Concurrency.Task { @MainActor in hub.stop() } }
+                // Terminated before the handler above was installed: nothing will call it.
+                if _Concurrency.Task.isCancelled { hub.stop(); return }
+                do {
+                    try await self.ensureSignedIn()
+                    hub.start()
+                } catch {
+                    hub.fail(AppError.from(error))
+                }
             }
+            continuation.onTermination = { _ in setup.cancel() }
         }
     }
 
     func watchReclaim(gameId: String, reclaimId: String) -> AsyncThrowingStream<ReclaimStatus, Error> {
         AsyncThrowingStream { continuation in
-            var reg: ListenerRegistration?
-            let task = _Concurrency.Task { [weak self] in
+            let setup = _Concurrency.Task { @MainActor [weak self] in
+                guard let self, !_Concurrency.Task.isCancelled else { return }
+                let watcher = ReclaimWatcher(db: self.db, gameId: gameId, reclaimId: reclaimId, continuation: continuation)
+                continuation.onTermination = { _ in _Concurrency.Task { @MainActor in watcher.stop() } }
+                if _Concurrency.Task.isCancelled { watcher.stop(); return }
                 do {
-                    try await self?.ensureSignedIn()
-                    guard let db = self?.db else { return }
-                    reg = db.collection("games").document(gameId).collection("reclaims").document(reclaimId)
-                        .addSnapshotListener { snap, error in
-                            if let error { continuation.finish(throwing: error); return }
-                            guard let data = snap?.data(), let doc = try? FirebaseCoding.decode(ReclaimDoc.self, from: data) else { return }
-                            continuation.yield(doc.status)
-                        }
-                } catch { continuation.finish(throwing: error) }
+                    try await self.ensureSignedIn()
+                    watcher.start()
+                } catch { watcher.fail(AppError.from(error)) }
             }
-            continuation.onTermination = { _ in task.cancel(); reg?.remove() }
+            continuation.onTermination = { _ in setup.cancel() }
         }
     }
 }
 
+/// Listens to one reclaim doc. Main-actor confined; attaches nothing if stopped before sign-in finished.
+@MainActor
+private final class ReclaimWatcher {
+    private let db: Firestore
+    private let gameId: String
+    private let reclaimId: String
+    private let continuation: AsyncThrowingStream<ReclaimStatus, Error>.Continuation
+    private var reg: ListenerRegistration?
+    private var closed = false
+
+    init(db: Firestore, gameId: String, reclaimId: String, continuation: AsyncThrowingStream<ReclaimStatus, Error>.Continuation) {
+        self.db = db; self.gameId = gameId; self.reclaimId = reclaimId; self.continuation = continuation
+    }
+
+    func start() {
+        guard !closed else { return }
+        reg = db.collection("games").document(gameId).collection("reclaims").document(reclaimId)
+            .addSnapshotListener { [self] snap, error in
+                MainActor.assumeIsolated {
+                    if let error { return fail(AppError.from(error)) }
+                    guard !closed, let data = snap?.data() else { return }
+                    do { continuation.yield(try FirebaseCoding.decode(ReclaimDoc.self, from: data).status) }
+                    catch { log.error("malformed reclaim doc: \(error.localizedDescription)") }
+                }
+            }
+    }
+
+    func fail(_ e: Error) {
+        guard !closed else { return }
+        stop()
+        continuation.finish(throwing: e)
+    }
+
+    func stop() {
+        closed = true
+        reg?.remove()
+        reg = nil
+    }
+}
+
 /// Merges the five game listeners (plus the host-only reclaims listener) into snapshots,
-/// emitting once every part has reported — the same rule as the web `subscribe`.
-private final class SubscriptionHub: @unchecked Sendable {
+/// emitting once every part has reported (the web `subscribe` rule). Main-actor confined;
+/// Firestore delivers listener callbacks on the main queue.
+@MainActor
+private final class SubscriptionHub {
     private let db: Firestore
     private let gameId: String
     private let seatId: String
@@ -151,14 +227,16 @@ private final class SubscriptionHub: @unchecked Sendable {
 
     func fail(_ e: Error) {
         guard !closed else { return }
-        closed = true
+        stop()
         continuation.finish(throwing: e)
     }
 
     func stop() {
         closed = true
         regs.forEach { $0.remove() }
+        regs = []
         reclaimReg?.remove()
+        reclaimReg = nil
     }
 
     private func emit() {
@@ -166,65 +244,61 @@ private final class SubscriptionHub: @unchecked Sendable {
         continuation.yield(GameSnapshot(game: game, mySeatId: seatId, seats: seats, view: view, board: board, bingos: bingos, reclaims: reclaims))
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, _ data: [String: Any]) -> T? {
-        do { return try FirebaseCoding.decode(T.self, from: data) } catch { fail(error); return nil }
+    /// Decodes one doc of a collection; a malformed doc is skipped and logged, not fatal.
+    private func decodeLenient<T: Decodable>(_ type: T.Type, _ d: QueryDocumentSnapshot) -> T? {
+        do { return try FirebaseCoding.decode(T.self, from: d.data()) } catch {
+            log.error("skipping malformed \(d.reference.path): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Wraps a listener so errors fail the stream and callbacks run main-isolated.
+    private func listen<S>(_ handler: @escaping (S) -> Void) -> (S?, Error?) -> Void {
+        { [self] value, error in
+            MainActor.assumeIsolated {
+                if let error { return fail(AppError.from(error)) }
+                guard !closed, let value else { return }
+                handler(value)
+            }
+        }
     }
 
     func start() {
-        regs.append(gameRef.addSnapshotListener { [self] snap, error in
-            if let error { return fail(error) }
-            guard let snap else { return }
+        guard !closed else { return }
+        regs.append(gameRef.addSnapshotListener(listen { [self] (snap: DocumentSnapshot) in
             guard snap.exists, let data = snap.data() else {
                 // A cache miss is not a missing game; only a server-confirmed absence is.
                 if snap.metadata.isFromCache { return }
-                return fail(GameServiceError.gameNotFound)
+                return fail(AppError.gameNotFound)
             }
-            guard let g = decode(GameDoc.self, data) else { return }
-            game = g
-            setReclaimListener(isHost: g.hostSeatId == seatId)
+            do {
+                let g = try FirebaseCoding.decode(GameDoc.self, from: data)
+                game = g
+                setReclaimListener(isHost: g.hostSeatId == seatId)
+                emit()
+            } catch { fail(error) }
+        }))
+        regs.append(gameRef.collection("seats").addSnapshotListener(listen { [self] (snap: QuerySnapshot) in
+            seats = snap.documents.compactMap { d in decodeLenient(SeatDoc.self, d).map { Seat(seatId: d.documentID, doc: $0) } }
             emit()
-        })
-        regs.append(gameRef.collection("seats").addSnapshotListener { [self] snap, error in
-            if let error { return fail(error) }
-            guard let snap else { return }
-            var out: [Seat] = []
-            for d in snap.documents {
-                guard let doc = decode(SeatDoc.self, d.data()) else { return }
-                out.append(Seat(seatId: d.documentID, doc: doc))
-            }
-            seats = out
-            emit()
-        })
-        regs.append(gameRef.collection("views").document(seatId).addSnapshotListener { [self] snap, error in
-            if let error { return fail(error) }
-            guard let snap else { return }
+        }))
+        regs.append(gameRef.collection("views").document(seatId).addSnapshotListener(listen { [self] (snap: DocumentSnapshot) in
             if snap.exists, let data = snap.data() {
-                guard let v = decode(ViewDoc.self, data) else { return }
-                view = v.entries
+                do { view = try FirebaseCoding.decode(ViewDoc.self, from: data).entries } catch { return fail(error) }
             } else { view = [] }
             emit()
-        })
-        regs.append(gameRef.collection("boards").document(seatId).addSnapshotListener { [self] snap, error in
-            if let error { return fail(error) }
-            guard let snap else { return }
+        }))
+        regs.append(gameRef.collection("boards").document(seatId).addSnapshotListener(listen { [self] (snap: DocumentSnapshot) in
             if snap.exists, let data = snap.data() {
-                guard let b = decode(BoardDoc.self, data) else { return }
-                board = .some(b)
+                do { board = .some(try FirebaseCoding.decode(BoardDoc.self, from: data)) } catch { return fail(error) }
             } else { board = .some(nil) }
             emit()
-        })
+        }))
         regs.append(gameRef.collection("bingos").whereField("status", isEqualTo: "announced").order(by: "seq")
-            .addSnapshotListener { [self] snap, error in
-                if let error { return fail(error) }
-                guard let snap else { return }
-                var out: [BingoDoc] = []
-                for d in snap.documents {
-                    guard let b = decode(BingoDoc.self, d.data()) else { return }
-                    out.append(b)
-                }
-                bingos = out
+            .addSnapshotListener(listen { [self] (snap: QuerySnapshot) in
+                bingos = snap.documents.compactMap { decodeLenient(BingoDoc.self, $0) }
                 emit()
-            })
+            }))
     }
 
     private func setReclaimListener(isHost: Bool) {
@@ -234,18 +308,9 @@ private final class SubscriptionHub: @unchecked Sendable {
         reclaimReg = nil
         guard isHost else { reclaims = []; return }
         reclaimReg = gameRef.collection("reclaims").whereField("status", isEqualTo: "pending")
-            .addSnapshotListener { [self] snap, error in
-                if let error { return fail(error) }
-                guard let snap else { return }
-                var out: [Reclaim] = []
-                for d in snap.documents {
-                    guard let doc = decode(ReclaimDoc.self, d.data()) else { return }
-                    out.append(Reclaim(id: d.documentID, doc: doc))
-                }
-                reclaims = out
+            .addSnapshotListener(listen { [self] (snap: QuerySnapshot) in
+                reclaims = snap.documents.compactMap { d in decodeLenient(ReclaimDoc.self, d).map { Reclaim(id: d.documentID, doc: $0) } }
                 emit()
-            }
+            })
     }
 }
-
-enum GameServiceError: Error, Equatable { case gameNotFound }

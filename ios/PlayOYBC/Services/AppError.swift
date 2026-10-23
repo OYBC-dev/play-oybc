@@ -1,0 +1,27 @@
+import FirebaseFunctions
+import Foundation
+
+/// A backend failure with the server's machine-readable `code` (and optional `token`).
+struct AppError: Error, Equatable {
+    var code: String
+    var token: String?
+    var underlying: Error?
+
+    static func == (a: AppError, b: AppError) -> Bool { a.code == b.code && a.token == b.token }
+
+    /// Maps a callable failure: `FunctionsErrorDetailsKey` details `{code, token}` win; otherwise
+    /// the Functions error code name; anything else becomes `unknown`.
+    static func from(_ error: Error) -> AppError {
+        if let e = error as? AppError { return e }
+        let ns = error as NSError
+        if ns.domain == FunctionsErrorDomain {
+            if let d = ns.userInfo[FunctionsErrorDetailsKey] as? [String: Any], let code = d["code"] as? String {
+                return AppError(code: code, token: d["token"] as? String, underlying: error)
+            }
+            return AppError(code: "functions/\(ns.code)", token: nil, underlying: error)
+        }
+        return AppError(code: "unknown", token: nil, underlying: error)
+    }
+
+    static let gameNotFound = AppError(code: "game-not-found", token: nil, underlying: nil)
+}

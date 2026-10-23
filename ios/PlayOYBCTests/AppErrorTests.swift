@@ -1,0 +1,29 @@
+import FirebaseFunctions
+import XCTest
+@testable import PlayOYBC
+
+final class AppErrorTests: XCTestCase {
+    func testDetailsCodeAndToken() {
+        let ns = NSError(domain: FunctionsErrorDomain, code: FunctionsErrorCode.failedPrecondition.rawValue,
+                         userInfo: [FunctionsErrorDetailsKey: ["code": "name-taken", "token": "tok"]])
+        let e = AppError.from(ns)
+        XCTAssertEqual(e.code, "name-taken")
+        XCTAssertEqual(e.token, "tok")
+        XCTAssertNotNil(e.underlying)
+    }
+
+    func testDetailsWithoutToken() {
+        let ns = NSError(domain: FunctionsErrorDomain, code: 9, userInfo: [FunctionsErrorDetailsKey: ["code": "game-full"]])
+        XCTAssertEqual(AppError.from(ns), AppError(code: "game-full", token: nil, underlying: nil))
+    }
+
+    func testFunctionsErrorWithoutDetailsFallsBackToCodeName() {
+        let ns = NSError(domain: FunctionsErrorDomain, code: FunctionsErrorCode.unavailable.rawValue, userInfo: [:])
+        XCTAssertEqual(AppError.from(ns).code, "functions/\(FunctionsErrorCode.unavailable.rawValue)")
+    }
+
+    func testOtherErrorsAreUnknownAndAppErrorPassesThrough() {
+        XCTAssertEqual(AppError.from(NSError(domain: "x", code: 1)).code, "unknown")
+        XCTAssertEqual(AppError.from(AppError.gameNotFound).code, "game-not-found")
+    }
+}
