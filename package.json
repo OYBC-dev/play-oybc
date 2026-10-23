@@ -6,5 +6,14 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "firebase": "^12.0.0",
+    "game-core": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^3.0.0"
   }
 }
