@@ -18,10 +18,16 @@ describe('applyMark', () => {
     expect(r.completedLines).toEqual(['row_0']);
     expect(marks).toEqual(copy);
   });
-  it('reports two lines at once', () => {
-    const marks2 = base(); [2, 7, 17, 22, 10, 11, 13].forEach((i) => (marks2[i] = true));
-    const r2 = applyMark({ marks: marks2, announcedLines: [] }, 14);
-    expect(r2.newLines).toEqual(['row_2', 'col_2']);
+  const intersect = () => { const m = base(); [1, 2, 3, 4, 5, 10, 15, 20].forEach((i) => (m[i] = true)); return m; };
+  it('reports two lines completed by one toggle at an intersection', () => {
+    const r = applyMark({ marks: intersect(), announcedLines: [] }, 0);
+    expect(r.newLines).toEqual(['row_0', 'col_0']);
+    expect(r.newLines).not.toContain('diag_main');
+  });
+  it('excludes already-announced lines from the intersection result', () => {
+    const r = applyMark({ marks: intersect(), announcedLines: ['col_0'] }, 0);
+    expect(r.newLines).toEqual(['row_0']);
+    expect(r.completedLines).toEqual(['row_0', 'col_0']);
   });
   it('re-marking an announced line yields no new lines', () => {
     const marks = base(); [0, 1, 2, 3, 4].forEach((i) => (marks[i] = true));
