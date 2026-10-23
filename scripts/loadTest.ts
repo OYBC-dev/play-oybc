@@ -1,6 +1,7 @@
 /**
  * Load check against the DEPLOYED project: 20 anonymous seats join one game, add 60 tasks
- * concurrently, the host launches, then 200 random toggleMark calls fire across seats.
+ * concurrently, the host launches, then 200 random toggleMark calls fire across seats
+ * (all seats at once, each seat's taps in sequence).
  * Failures are counted and reported, never retried.
  *
  * Usage: node --experimental-strip-types scripts/loadTest.ts   (reads web/.env.local)
@@ -97,7 +98,12 @@ const randomPlan = Array.from({ length: TOGGLES - forced.length }, () => {
   return { p, cell };
 });
 const plan = [...forced, ...randomPlan].sort(() => Math.random() - 0.5);
-await Promise.all(plan.map(({ p, cell }) => timed('toggleMark', () => p.call('toggleMark', { gameId, cellIndex: cell }))));
+// Every seat plays at once, but each seat taps one square after another, as a person does.
+const bySeat = new Map<Player, number[]>();
+for (const { p, cell } of plan) bySeat.set(p, [...(bySeat.get(p) ?? []), cell]);
+await Promise.all([...bySeat].map(async ([p, cells]) => {
+  for (const cell of cells) await timed('toggleMark', () => p.call('toggleMark', { gameId, cellIndex: cell }));
+}));
 
 // Verify.
 const gameSnap = await getDoc(doc(host.db, 'games', gameId));
