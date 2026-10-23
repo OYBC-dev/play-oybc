@@ -3,7 +3,7 @@ import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
 import { useGame } from '../game/useGame';
 import { EndedView } from './game/EndedView';
-import { LobbyView } from './game/LobbyView';
+import { LobbyScreen } from './lobby/LobbyScreen';
 import { PlayView } from './game/PlayView';
 
 /** Renders the live game for a seated player, switching on stage. */
@@ -13,7 +13,7 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   if (error) return <div className="page"><p className="error" role="alert">{errorMessage(error)}</p><Link to="/">Home</Link></div>;
   if (!snapshot) return <div className="page"><p className="muted">Loading</p></div>;
   switch (snapshot.game.stage) {
-    case 'lobby': return <LobbyView snapshot={snapshot} />;
+    case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} />;
     case 'playing': return <PlayView snapshot={snapshot} />;
     case 'ended': return <EndedView snapshot={snapshot} />;
   }

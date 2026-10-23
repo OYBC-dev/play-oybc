@@ -1,0 +1,4 @@
+.card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.code { font-family: var(--riso-font-head); font-weight: 800; font-size: 40px; letter-spacing: 0.12em; }
+.qr { background: #fff; padding: 4px; border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card); line-height: 0; }
+.link { font-size: 14px; font-weight: 600; color: var(--riso-blue); overflow-wrap: anywhere; text-align: center; }

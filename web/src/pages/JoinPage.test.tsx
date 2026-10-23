@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { GameSnapshot } from '../game/GameClient';
@@ -126,7 +126,7 @@ describe('JoinPage failures', () => {
         </MemoryRouter>
       </ClientProvider>,
     );
-    await screen.findByText('Loading');
+    await waitFor(() => expect(client.calls).toContainEqual(['subscribe', 'g1', 's2']));
     await act(async () => client.emitError(appError('game-not-found')));
     expect(await screen.findByRole('alert')).toHaveTextContent('No game');
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');

@@ -1,0 +1,4 @@
+.form { display: flex; flex-direction: column; gap: 10px; }
+.label { display: block; }
+.input { box-sizing: border-box; width: 100%; min-height: 48px; padding: 0 12px; font: inherit; font-size: 16px; color: var(--riso-ink); background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card); }
+.visually { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -57,6 +57,8 @@ export const firebaseGameClient: GameClient = {
       unsubs.push(
         onSnapshot(doc(db, 'games', gameId), (s) => {
           if (!s.exists()) {
+            // An offline cache miss is not a missing game; only a server-confirmed absence is.
+            if (s.metadata.fromCache) return;
             fail(Object.assign(new Error('game-not-found'), { details: { code: 'game-not-found' } }));
             return;
           }
