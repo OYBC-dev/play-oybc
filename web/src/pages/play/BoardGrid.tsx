@@ -110,7 +110,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
               onPointerDown={free ? undefined : (e) => startPress(e, label)}
               onPointerMove={movePress}
               onPointerUp={cancelPress}
-              onPointerCancel={cancelPress}
+              onPointerCancel={() => { cancelPress(); longPressed.current = false; }}
               onPointerLeave={cancelPress}
               onContextMenu={(e) => e.preventDefault()}
               onClick={() => {
