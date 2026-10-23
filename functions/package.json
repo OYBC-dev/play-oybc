@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "main": "lib/index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
-    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --external:firebase-admin --external:firebase-functions",
-    "test": "firebase emulators:exec --project demo-play-oybc --only auth,firestore \"vitest run\"",
+    "build": "pnpm --filter game-core build && tsc --noEmit && esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=lib/index.js --external:firebase-admin --external:firebase-functions",
+    "test": "pnpm run build && firebase emulators:exec --project demo-play-oybc --only auth,firestore,functions \"vitest run\"",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

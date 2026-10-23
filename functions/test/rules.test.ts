@@ -50,6 +50,10 @@ describe('member u1 (host seat s1)', () => {
   it.each(deniedForU1)('cannot read %s', async (p) => {
     await assertFails(getDoc(doc(env.authenticatedContext('u1').firestore(), p)));
   });
+  it.each(['views', 'boards', 'members', 'tasks'])('cannot list games/g1/%s', async (c) => {
+    const db = env.authenticatedContext('u1').firestore();
+    await assertFails(getDocs(collection(db, `games/g1/${c}`)));
+  });
   it('can query announced bingos', async () => {
     const db = env.authenticatedContext('u1').firestore();
     await assertSucceeds(getDocs(query(collection(db, 'games/g1/bingos'), where('status', '==', 'announced'))));
