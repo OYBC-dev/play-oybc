@@ -42,4 +42,12 @@ describe('useBingoBanners', () => {
     rerender({ bingos: [b(1, 'a', 'Ann')] });
     expect(result.current.current).toBeNull();
   });
+
+  it('exposes the ordered visible queue, front first', () => {
+    const { result, rerender } = renderHook(({ bingos }) => useBingoBanners(bingos, 'me'), { initialProps: { bingos: [] as BingoDoc[] } });
+    rerender({ bingos: [b(3, 'd', 'Dee'), b(1, 'a', 'Ann'), b(2, 'me', 'Me'), b(4, 'c', 'Cody')] });
+    expect(result.current.queue.map((x) => x.name)).toEqual(['Ann', 'Dee', 'Cody']);
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(result.current.queue.map((x) => x.name)).toEqual(['Dee', 'Cody']);
+  });
 });

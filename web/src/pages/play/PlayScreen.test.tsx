@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BingoDoc } from 'game-core';
 import type { GameSnapshot } from '../../game/GameClient';
@@ -34,9 +34,10 @@ describe('PlayScreen', () => {
     const client = new FakeGameClient();
     const { rerender } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
     rerender(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" />);
-    const banner = await screen.findByText('Cody got a bingo!');
+    const banner = await screen.findByRole('button', { name: 'Cody got a bingo!' });
+    expect(screen.getByTestId('bingo-announce')).toHaveTextContent('Cody got a bingo!');
     await userEvent.click(banner);
-    expect(screen.queryByText('Cody got a bingo!')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('bingo-banner')).not.toBeInTheDocument());
   });
 
   it('opens the leaderboard as a dialog; Escape closes', async () => {
