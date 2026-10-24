@@ -79,29 +79,31 @@ export function AddTaskForm({
 
   return (
     <form className={styles.form} onSubmit={submit}>
-      <label className={styles.label}>
-        <span className={styles.visually}>Task</span>
-        <input
-          ref={input}
-          className={styles.input}
-          value={text}
-          maxLength={MAX_TASK_LENGTH}
-          placeholder="Something that might happen"
-          autoComplete="off"
-          onChange={(e) => {
-            setText(e.target.value);
-            setCaret(e.target.selectionStart ?? e.target.value.length);
-            setIndex(0);
-            setDismissed(false);
-          }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-          onKeyDown={onKeyDown}
-          onBlur={() => setDismissed(true)}
-        />
-      </label>
-      <MentionAutocomplete options={options} active={active} onPick={pick} />
+      <div className={styles.composer}>
+        <div className={styles.row}>
+          <input
+            ref={input}
+            className={styles.input}
+            aria-label="Task"
+            value={text}
+            maxLength={MAX_TASK_LENGTH}
+            placeholder="Add to the pool"
+            autoComplete="off"
+            onChange={(e) => {
+              setText(e.target.value);
+              setCaret(e.target.selectionStart ?? e.target.value.length);
+              setIndex(0);
+              setDismissed(false);
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+            onKeyDown={onKeyDown}
+            onBlur={() => setDismissed(true)}
+          />
+          <RisoButton type="submit" disabled={busy || !text.trim()}>Add</RisoButton>
+        </div>
+        <MentionAutocomplete options={options} active={active} onPick={pick} />
+      </div>
       {error && <p className="error" role="alert">{error}</p>}
-      <RisoButton type="submit" kind="primary" disabled={busy || !text.trim()} fullWidth>Add</RisoButton>
     </form>
   );
 }

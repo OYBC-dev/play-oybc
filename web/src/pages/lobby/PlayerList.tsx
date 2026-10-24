@@ -1,18 +1,22 @@
+import type { ReactNode } from 'react';
 import type { GameSnapshot } from '../../game/GameClient';
+import { RisoBadge } from '../../components/riso/RisoBadge';
 import styles from './PlayerList.module.css';
 
-/** Everyone in the lobby, host marked, you marked. */
-export function PlayerList({ snapshot }: { snapshot: GameSnapshot }) {
+/** Every player as a pill in join order; the host's pill carries the Host badge. */
+export function PlayerList({ snapshot, children }: { snapshot: GameSnapshot; children?: ReactNode }) {
   const seats = [...snapshot.seats].sort((a, b) => a.joinedAt - b.joinedAt);
   return (
-    <ul className={styles.list} aria-label="Players">
-      {seats.map((s) => (
-        <li key={s.seatId} className={styles.player}>
-          <span className={styles.name}>{s.name}</span>
-          {s.seatId === snapshot.game.hostSeatId && <span className={styles.badge}>Host</span>}
-          {s.seatId === snapshot.mySeatId && <span className={styles.badge}>You</span>}
-        </li>
-      ))}
-    </ul>
+    <div className={styles.wrap}>
+      <ul className={styles.list} aria-label="Players">
+        {seats.map((s) => (
+          <li key={s.seatId} className={styles.player}>
+            <span className={styles.name}>{s.name}</span>
+            {s.seatId === snapshot.game.hostSeatId && <RisoBadge kind="expiring">Host</RisoBadge>}
+          </li>
+        ))}
+      </ul>
+      {children}
+    </div>
   );
 }

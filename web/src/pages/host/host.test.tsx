@@ -89,9 +89,11 @@ describe('HostMenu', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Only the host can do that');
   });
 
-  it('host-only controls disappear for the old host after a transfer', () => {
+  it('host-only controls disappear for the old host after a transfer', async () => {
     const client = new FakeGameClient();
     const { rerender } = render(<LobbyScreen client={client} snapshot={snap()} gameId="g1" />);
+    // The lobby's Host menu sits in the player chip list the header avatar stack opens.
+    await userEvent.click(screen.getByRole('button', { name: /players?$/ }));
     expect(screen.getByRole('button', { name: 'Host menu' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Launch' })).toBeInTheDocument();
     rerender(<LobbyScreen client={client} snapshot={snap({ host: false })} gameId="g1" />);

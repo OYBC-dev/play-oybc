@@ -1,3 +1,8 @@
-.list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.player { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: 999px; font-weight: 700; }
-.badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 999px; background: var(--riso-gold); color: var(--riso-ink-static); }
+.wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.list { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; list-style: none; margin: 0; padding: 0; }
+.player {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; box-sizing: border-box; height: 38px; padding: 0 12px;
+  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700;
+  background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: 999px;
+}
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
