@@ -19,5 +19,11 @@ describe('Leaderboard', () => {
   it('has an empty state', () => {
     render(<Leaderboard bingos={[]} />);
     expect(screen.getByText('No bingos yet')).toBeInTheDocument();
+    expect(document.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+  it('marks #2 and later as repeat (gold) pills, #1 plain', () => {
+    render(<Leaderboard bingos={[b(1, 'Ann', 1), b(2, 'Ann', 2)]} />);
+    expect(screen.getByText('#1')).toHaveAttribute('data-repeat', 'false');
+    expect(screen.getByText('#2')).toHaveAttribute('data-repeat', 'true');
   });
 });

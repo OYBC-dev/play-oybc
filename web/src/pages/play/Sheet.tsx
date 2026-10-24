@@ -18,7 +18,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
       <div ref={ref} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={onKeyDown}>
         <div className={styles.head}>
           <h2 id={titleId} className={styles.title}>{title}</h2>
-          <RisoButton size="small" onClick={onClose}>Close</RisoButton>
+          <RisoButton kind="ghost" size="small" onClick={onClose}>Done</RisoButton>
         </div>
         {children}
       </div>

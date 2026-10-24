@@ -83,7 +83,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
   const highlighted = cellsInLines(board.completedLines);
   return (
     <div className={styles.wrap}>
-      <div className={styles.grid}>
+      <div className={styles.grid} data-readonly={readOnly ? 'true' : undefined}>
         {board.cells.map((cell, i) => {
           const free = cell.kind === 'free';
           const marked = free || (overrides.get(i) ?? board.marks[i]);

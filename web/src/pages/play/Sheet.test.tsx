@@ -15,11 +15,11 @@ describe('Sheet scrim', () => {
     fireEvent.click(scrim);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
-  it('Escape and Close work immediately', () => {
+  it('Escape and Done work immediately', () => {
     const onClose = vi.fn();
     render(<Sheet title="T" onClose={onClose}>body</Sheet>);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GameSnapshot } from '../../game/GameClient';
@@ -41,6 +42,15 @@ describe('ReclaimPrompt', () => {
     expect(client.calls).toContainEqual(['resolveReclaim', 'g1', 'r1', false]);
   });
 
+  it('disables both buttons for the reclaim in flight', async () => {
+    const client = new FakeGameClient();
+    client.resolveReclaim = () => new Promise(() => {});
+    render(<ReclaimPrompt client={client} gameId="g1" reclaims={[reclaim]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Allow' }));
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
+  });
+
   it('renders nothing without reclaims and shows the mapped error on failure', async () => {
     const client = new FakeGameClient();
     const { container, rerender } = render(<ReclaimPrompt client={client} gameId="g1" reclaims={[]} />);
@@ -60,7 +70,7 @@ describe('ReclaimPrompt', () => {
     const { unmount: u2 } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing', reclaims: r })} gameId="g1" />);
     expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     u2();
-    render(<EndedScreen client={client} snapshot={snap({ stage: 'ended', reclaims: r })} gameId="g1" />);
+    render(<MemoryRouter><EndedScreen client={client} snapshot={snap({ stage: 'ended', reclaims: r })} gameId="g1" /></MemoryRouter>);
     expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
   });
 });

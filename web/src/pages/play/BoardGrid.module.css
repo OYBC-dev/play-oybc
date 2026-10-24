@@ -1,6 +1,7 @@
 .wrap { display: flex; flex-direction: column; gap: 8px; }
 /* Right/bottom padding keeps the 2px hard shadow of the last column/row inside the box. */
 .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 0 2px 2px 0; }
+.grid[data-readonly='true'] { gap: 5px; }
 .cell {
   position: relative; box-sizing: border-box; aspect-ratio: 1; width: 100%; min-width: 44px; min-height: 44px; padding: 5px;
   display: flex; align-items: flex-start; justify-content: flex-start; text-align: left;

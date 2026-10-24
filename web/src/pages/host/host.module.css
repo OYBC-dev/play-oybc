@@ -1,8 +1,8 @@
-.reclaims { display: flex; flex-direction: column; gap: 8px; }
-.reclaim { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
-.who { font-weight: 600; overflow-wrap: anywhere; }
-.actions { display: flex; gap: 8px; }
-.actions > * { flex: 1; }
+.reclaims { display: flex; flex-direction: column; gap: 10px; }
+.reclaim { display: flex; flex-direction: column; gap: 12px; }
+.who { font-family: var(--riso-font-head); font-weight: 800; font-size: 19px; letter-spacing: -0.01em; line-height: 1.15; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 10px; }
+.actions > * { flex: 1 1 0; min-width: 0; }
 .dialogActions { display: flex; gap: 8px; margin-top: 4px; }
 .dialogActions > * { flex: 1 1 0; min-width: 0; }
 .body { margin: 0; font-size: 15px; line-height: 1.45; text-wrap: pretty; }

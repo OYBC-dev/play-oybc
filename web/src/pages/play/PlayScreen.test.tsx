@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import type { BingoDoc } from 'game-core';
 import type { GameSnapshot } from '../../game/GameClient';
 import { FakeGameClient } from '../../game/fakeGameClient';
@@ -77,7 +78,7 @@ describe('PlayScreen', () => {
 
 describe('EndedScreen', () => {
   it('shows the leaderboard and a read-only final board', () => {
-    render(<EndedScreen client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')] })} />);
+    render(<MemoryRouter><EndedScreen client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')] })} /></MemoryRouter>);
     expect(screen.getByText('Cody')).toBeInTheDocument();
     const cells = screen.getAllByRole('button', { name: /Task|Free/ });
     expect(cells).toHaveLength(25);
