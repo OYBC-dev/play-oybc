@@ -10,9 +10,18 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;600;700;800&family=Archivo:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <!-- Runs before first paint so there is no light flash in dark mode. Deliberately
+         duplicates the few lines of theme.ts (the tested source; main.tsx keeps it live). -->
+    <script>
+      (function () {
+        var r = document.documentElement;
+        r.setAttribute('data-pt', 'harvest');
+        r.setAttribute('data-theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" class="riso-grain"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
