@@ -8,7 +8,7 @@ final class SubscriptionHubTests: XCTestCase {
                                    bingoCount: 0, shortfalls: [:], reviewGate: false)
     private let reclaim = Reclaim(id: "r1", doc: ReclaimDoc(requesterUid: "u9", name: "Cody", seatId: "s2", status: .pending, createdAt: 1))
 
-    private func hub() -> (SubscriptionHub, AsyncThrowingStream<GameSnapshot, Error>.Iterator) {
+    private func makeHub() -> (SubscriptionHub, AsyncThrowingStream<GameSnapshot, Error>.Iterator) {
         let (stream, continuation) = AsyncThrowingStream<GameSnapshot, Error>.makeStream()
         let hub = SubscriptionHub(db: nil, gameId: "g1", seatId: "s1", continuation: continuation)
         hub.seedForTesting(seats: [], view: [], board: nil, bingos: [])
@@ -16,7 +16,7 @@ final class SubscriptionHubTests: XCTestCase {
     }
 
     func testReclaimsErrorClearsPromptsAndKeepsStreaming() async throws {
-        var (hub, it) = hub()
+        let (hub, iterator) = makeHub(); var it = iterator
         hub.gameChanged(hostGame)
         hub.reclaimsChanged([reclaim])
         _ = try await it.next()
@@ -35,7 +35,7 @@ final class SubscriptionHubTests: XCTestCase {
     }
 
     func testOtherListenerErrorEndsTheStream() async throws {
-        var (hub, it) = hub()
+        let (hub, iterator) = makeHub(); var it = iterator
         hub.gameChanged(hostGame)
         _ = try await it.next()
         hub.listenerFailedForTesting(AppError(code: "unavailable", token: nil, underlying: nil))
