@@ -70,9 +70,9 @@ test('three phones play a full game', async ({ browser }) => {
     await aCells.nth(i).click();
     await expect(aCells.nth(i)).toHaveAttribute('data-marked', 'true');
   }
-  await expect(B.page.getByText('Stephen got a bingo!')).toBeVisible();
-  await expect(C.page.getByText('Stephen got a bingo!')).toBeVisible();
-  await expect(A.page.getByText('Stephen got a bingo!')).toHaveCount(0);
+  await expect(B.page.getByRole('button', { name: 'Stephen got a bingo!' })).toBeVisible();
+  await expect(C.page.getByRole('button', { name: 'Stephen got a bingo!' })).toBeVisible();
+  await expect(A.page.getByRole('button', { name: 'Stephen got a bingo!' })).toHaveCount(0);
 
   // 5. B marks a cell, reloads: same board, same marks, no name prompt.
   const bCells = B.page.locator('button[data-marked]');
