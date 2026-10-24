@@ -9,10 +9,12 @@ export interface AvatarStackProps {
   onToggle: () => void;
   /** Whether the list this stack toggles is open (sets aria-expanded). */
   expanded?: boolean;
+  /** Id of the list this stack toggles (sets aria-controls). */
+  controls?: string;
 }
 
 /** Overlapping avatars with a "+N" overflow bubble; the whole stack is one button. */
-export function AvatarStack({ seats, max = 4, onToggle, expanded }: AvatarStackProps): React.ReactElement {
+export function AvatarStack({ seats, max = 4, onToggle, expanded, controls }: AvatarStackProps): React.ReactElement {
   const shown = seats.slice(0, max);
   const extra = seats.length - shown.length;
   return (
@@ -21,6 +23,7 @@ export function AvatarStack({ seats, max = 4, onToggle, expanded }: AvatarStackP
       className={styles.stack}
       onClick={onToggle}
       aria-expanded={expanded}
+      aria-controls={controls}
       aria-label={`${seats.length} ${seats.length === 1 ? 'player' : 'players'}`}
     >
       {shown.map((s, i) => (

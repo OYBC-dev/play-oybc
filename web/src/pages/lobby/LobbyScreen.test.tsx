@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GameSnapshot } from '../../game/GameClient';
 import { appError, FakeGameClient } from '../../game/fakeGameClient';
@@ -156,6 +156,8 @@ describe('LobbyScreen', () => {
     expect(screen.queryByRole('list', { name: 'Players' })).toBeNull();
     await userEvent.click(stack);
     expect(stack).toHaveAttribute('aria-expanded', 'true');
+    expect(stack.getAttribute('aria-controls')).toBe(screen.getByRole('list', { name: 'Players' }).id);
+    expect(stack.getAttribute('aria-controls')).not.toBe('');
     const players = within(screen.getByRole('list', { name: 'Players' }));
     expect(players.getAllByRole('listitem')).toHaveLength(3);
     const hostChip = players.getByText('Host').closest('li')!;
@@ -206,13 +208,58 @@ describe('LobbyScreen', () => {
     expect(sheet.queryByRole('img', { name: 'QR code' })).toBeNull();
   });
 
-  it('Copy link writes the join link and reads Copied', async () => {
+  it('Copy link writes the join link, reads Copied, and reverts after 2s', async () => {
+    vi.useFakeTimers();
+    try {
+      setup(snap({ host: false }));
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy link' })); });
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/g/ABCDE`);
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(1999); });
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(1); });
+      expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the Copied timer on unmount', async () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = setup(snap({ host: false }));
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.resolve() }, configurable: true });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy link' })); });
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a clipboard failure leaves Copy link', async () => {
     setup(snap({ host: false }));
-    const writeText = vi.fn(() => Promise.resolve());
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    await userEvent.click(screen.getByRole('button', { name: 'Copy link' }));
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/g/ABCDE`);
-    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) }, configurable: true });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy link' })); });
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull();
+  });
+
+  it('twenty short seats: the shortfall lines are their own scroll block; code, QR and Launch stay', () => {
+    const s = snap();
+    s.seats = Array.from({ length: 20 }, (_, i) => ({ seatId: `p${i}`, name: `Player Number ${i} With A Long Name`, nameKey: `p${i}`, joinedAt: i }));
+    s.game.shortfalls = Object.fromEntries(s.seats.map((seat, i) => [seat.seatId, i + 1]));
+    s.game.hostSeatId = 's1';
+    setup(s);
+    const block = screen.getByTestId('shortfalls');
+    expect(block).toHaveClass('shorts');
+    expect(block.children).toHaveLength(20);
+    const sheet = within(screen.getByTestId('lobby-sheet'));
+    expect(block.contains(sheet.getByLabelText('Game code'))).toBe(false);
+    expect(block.contains(sheet.getByRole('button', { name: 'Share' }))).toBe(false);
+    expect(block.contains(sheet.getByRole('button', { name: 'Launch' }))).toBe(false);
   });
 
   it('player sheet has the code and a small Copy link, no QR or Launch', () => {

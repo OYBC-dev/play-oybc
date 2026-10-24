@@ -1,7 +1,7 @@
 /* Fixed bottom sheet above the browser bar / home indicator. */
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
-  box-sizing: border-box; max-width: 480px; margin: 0 auto;
+  box-sizing: border-box; max-width: 480px; max-height: 70vh; max-height: min(70dvh, 620px); margin: 0 auto;
   display: flex; flex-direction: column; gap: 10px;
   padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
   background-color: var(--riso-paper-2); color: var(--riso-ink);
@@ -13,26 +13,30 @@
 }
 .ready { background-color: var(--riso-blue); color: var(--riso-on-color); }
 .ready .info p { color: var(--riso-on-color); }
-.handle { width: 40px; height: 5px; border-radius: 99px; background: currentColor; opacity: 0.35; margin: 0 auto; }
-.row { display: flex; align-items: center; gap: 14px; }
-.info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.handle { flex: none; width: 40px; height: 5px; border-radius: 99px; background: currentColor; opacity: 0.35; margin: 0 auto; }
+.row { flex: 0 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 14px; }
+.row > :not(.info) { align-self: center; flex: none; }
+.info { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.info > :not(.shorts) { flex: none; }
+/* Many short seats: the lines scroll so code, QR and Launch stay visible. */
+.shorts { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .code { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
 .short { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-red); overflow-wrap: anywhere; }
 .count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-muted); }
-.error { font-size: 13px; }
+.error { flex: none; font-size: 13px; }
 .ready .error { color: var(--riso-on-color); }
 /* QR tiles: static cream + ink so they scan in both themes. */
 .tile {
-  flex: none; box-sizing: border-box; width: 64px; height: 64px; padding: 4px; cursor: pointer;
+  flex: none; box-sizing: border-box; width: 64px; height: 64px; padding: 1px; cursor: pointer;
   background: #fbf6ea; border: 2px solid #18120b; border-radius: 6px;
   box-shadow: 2px 2px 0 var(--riso-shadow-ink); line-height: 0;
 }
 .tile:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
 .ready .tile:focus-visible { outline-color: var(--riso-on-color); }
 .qrSvg { display: block; width: 100%; height: 100%; }
-.expanded { display: flex; align-items: center; gap: 16px; padding-top: 6px; border-top: 1px solid var(--riso-hair); }
+.expanded { flex: none; display: flex; align-items: center; gap: 16px; padding-top: 6px; border-top: 1px solid var(--riso-hair); }
 .bigQr {
-  flex: none; box-sizing: border-box; width: 160px; height: 160px; padding: 8px; line-height: 0;
+  flex: none; box-sizing: border-box; width: 160px; height: 160px; padding: 2px; line-height: 0;
   background: #fbf6ea; border: 2px solid #18120b; border-radius: 8px; box-shadow: 3px 3px 0 var(--riso-shadow-ink);
 }
 .actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }

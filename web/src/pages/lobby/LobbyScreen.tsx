@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import { errorMessage } from '../../game/errorMessages';
 import type { GameClient, GameSnapshot } from '../../game/GameClient';
 import { AvatarStack } from '../../components/riso/AvatarStack';
@@ -22,6 +22,7 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const playersId = useId();
   const onSheetHeight = useCallback((px: number) => setSheetHeight(px), []);
 
   const remove = async (id: string) => {
@@ -48,10 +49,10 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
           <h1 className={styles.pool}>Pool</h1>
           <span className={styles.count} data-testid="pool-count">{snapshot.view.length} / {MIN_POOL_SIZE}</span>
         </div>
-        <AvatarStack seats={seats} max={5} expanded={playersOpen} onToggle={() => setPlayersOpen((o) => !o)} />
+        <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
       </header>
       {playersOpen && (
-        <PlayerList snapshot={snapshot}>
+        <PlayerList snapshot={snapshot} id={playersId}>
           <HostMenu client={client} gameId={gameId} snapshot={snapshot} />
         </PlayerList>
       )}

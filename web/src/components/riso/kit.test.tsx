@@ -12,7 +12,9 @@ describe('AvatarStack', () => {
   it('shows max avatars and a +N bubble', () => {
     render(<AvatarStack seats={seats} max={4} onToggle={() => {}} />);
     expect(screen.getByText('+2')).toBeInTheDocument();
-    expect(screen.getByText('AL')).toBeInTheDocument();
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('D')).toBeInTheDocument();
+    expect(screen.queryByText('E')).toBeNull();
     expect(screen.queryByText('F')).toBeNull();
   });
   it('has no bubble when everyone fits', () => {

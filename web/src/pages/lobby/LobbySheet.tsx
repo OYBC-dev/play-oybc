@@ -26,13 +26,20 @@ export function shortfallLines(snapshot: GameSnapshot): string[] {
     .sort();
 }
 
-/** Copies the join link; the label reads "Copied" once it worked. */
+/** How long the "Copied" label stays before reverting to "Copy link". */
+export const COPIED_MS = 2000;
+
+/** Copies the join link; the label reads "Copied" for COPIED_MS once it worked. */
 function CopyLinkButton({ link, size, fullWidth }: { link: string; size?: 'small'; fullWidth?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const copy = async () => {
+    if (timer.current) clearTimeout(timer.current);
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
+      timer.current = setTimeout(() => setCopied(false), COPIED_MS);
     } catch {
       setCopied(false);
     }
@@ -101,13 +108,17 @@ export function LobbySheet({
         <div className={styles.info}>
           <RisoSectionLabel>Game code</RisoSectionLabel>
           <div className={styles.code} aria-label="Game code">{code}</div>
-          {isHost && lines.map((l) => <div key={l} className={styles.short}>{l}</div>)}
+          {lines.length > 0 && (
+            <div className={styles.shorts} data-testid="shortfalls">
+              {lines.map((l) => <div key={l} className={styles.short}>{l}</div>)}
+            </div>
+          )}
           {isHost && !ready && lines.length === 0 && <div className={styles.count}>{pool} / {MIN_POOL_SIZE}</div>}
         </div>
         {isHost ? (
           <>
             <button type="button" className={styles.tile} aria-label="Share" aria-expanded={qrOpen} onClick={() => setQrOpen((o) => !o)}>
-              <QRCodeSVG value={link} marginSize={0} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
+              <QRCodeSVG value={link} marginSize={2} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
             </button>
             <RisoButton kind={ready ? 'dark' : 'primary'} size="large" disabled={!ready || busy} onClick={() => void launch()}>Launch</RisoButton>
           </>
@@ -119,7 +130,7 @@ export function LobbySheet({
       {isHost && qrOpen && (
         <div className={styles.expanded}>
           <div role="img" aria-label="QR code" className={styles.bigQr}>
-            <QRCodeSVG value={link} marginSize={0} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
+            <QRCodeSVG value={link} marginSize={2} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
           </div>
           <div className={styles.actions}>
             <CopyLinkButton link={link} fullWidth />
