@@ -43,6 +43,7 @@ export function JoinPage() {
     let live = true;
     const backToName = (e: unknown) => {
       if (!live) return;
+      setDenied(false);
       setError(errorMessage(e));
       setPhase({ kind: 'name' });
     };
@@ -64,6 +65,7 @@ export function JoinPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (phase.kind === 'waiting') return;
     setBusy(true);
     setError(null);
     setDenied(false);
@@ -91,9 +93,9 @@ export function JoinPage() {
         readOnly={waiting}
       />
       {error && <p className="error" role="alert">{error}</p>}
-      {denied && !waiting && <p className={styles.denied} role="alert"><span className={styles.dot} />The host said no</p>}
+      {denied && <p className={styles.denied} role="alert"><span className={styles.dot} />The host said no</p>}
       {waiting ? (
-        <div className={styles.waiting}>
+        <div className={styles.waiting} role="status">
           Waiting for the host
           <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
         </div>

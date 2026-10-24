@@ -1,4 +1,4 @@
-.home { padding: 40px 20px 32px; gap: 26px; }
+:global(.page).home { padding: 40px 16px 32px; gap: 26px; }
 .hero { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 16px 0 6px; }
 .form { display: flex; flex-direction: column; gap: 12px; }
 .input {
@@ -9,7 +9,7 @@
 }
 .input:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
 .code { font-weight: 800; font-size: 20px; letter-spacing: 0.22em; text-transform: uppercase; }
-.join { padding: 36px 20px 32px; gap: 28px; }
+:global(.page).join { padding: 36px 16px 32px; gap: 28px; }
 .joinHead { display: flex; align-items: center; gap: 14px; }
 .joinCode { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; margin-top: 4px; }
 .joinHead p { margin: 0; }

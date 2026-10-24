@@ -80,6 +80,9 @@ describe('JoinPage', () => {
     expect(screen.getByLabelText('Your name')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Your name')).toHaveValue('Pat');
     expect(screen.queryByRole('button', { name: 'Join' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for the host');
+    await userEvent.type(screen.getByLabelText('Your name'), '{Enter}');
+    expect(client.calls.filter((c) => c[0] === 'joinGame')).toHaveLength(1);
     expect(client.calls).toContainEqual(['watchReclaim', 'g1', 'r1']);
     client.whoAmIResult = { gameId: 'g1', seatId: 's2' };
     await act(async () => client.emitReclaim('approved'));
