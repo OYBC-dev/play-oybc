@@ -1,0 +1,29 @@
+.stack {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.overlap {
+  margin-left: -8px;
+}
+.more {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--riso-ink);
+  border-radius: 50%;
+  background: var(--riso-paper-2);
+  color: var(--riso-ink);
+  box-shadow: 2px 2px 0 var(--riso-shadow-ink);
+  font-family: var(--riso-font-head);
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+}

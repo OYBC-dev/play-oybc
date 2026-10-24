@@ -1,0 +1,28 @@
+.wordmark {
+  position: relative;
+  display: inline-block;
+}
+.word {
+  font-family: var(--riso-font-head);
+  font-weight: 800;
+  font-size: 92px;
+  letter-spacing: -0.045em;
+  line-height: 0.85;
+  color: var(--riso-ink);
+}
+.stamp {
+  position: absolute;
+  right: -20px;
+  top: -22px;
+  transform: rotate(9deg);
+  background: var(--riso-red);
+  color: var(--riso-on-color);
+  font-family: var(--riso-font-head);
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
+  padding: 4px 10px;
+  border: 2px solid var(--riso-ink);
+  border-radius: var(--riso-r-pill);
+  box-shadow: 2px 2px 0 var(--riso-shadow-ink);
+}
