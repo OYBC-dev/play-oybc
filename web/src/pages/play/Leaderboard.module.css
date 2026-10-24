@@ -1,7 +1,7 @@
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .row {
   display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; height: 56px; box-sizing: border-box;
-  border-bottom: 1px solid var(--riso-hairline, color-mix(in srgb, var(--riso-ink) 18%, transparent));
+  border-bottom: 1px solid var(--riso-hair);
 }
 .row:last-child { border-bottom: 0; }
 .rank { font-family: var(--riso-font-head); font-weight: 800; font-size: 20px; color: var(--riso-muted); }

@@ -30,6 +30,13 @@ describe('BoardGrid', () => {
     expect(screen.getByRole('button', { name: 'Task 5' })).toHaveAttribute('data-highlight', 'false');
   });
 
+  it('read-only cells ignore clicks', async () => {
+    const onToggle = vi.fn(async () => ok);
+    render(<BoardGrid board={board()} onToggle={onToggle} readOnly />);
+    await user().click(screen.getByRole('button', { name: 'Task 3' }));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
   it('tap calls onToggle and flips immediately; disabled while in flight', async () => {
     let resolve!: (r: ToggleMarkRes) => void;
     const onToggle = vi.fn(() => new Promise<ToggleMarkRes>((r) => { resolve = r; }));
