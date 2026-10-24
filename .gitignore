@@ -20,3 +20,7 @@ test-results
 coverage/
 *.tsbuildinfo
 .DS_Store
+
+# Design handoffs (reference only, never committed)
+design_handoff_*/
+*.zip
