@@ -14,12 +14,12 @@
 .ready { background-color: var(--riso-blue); color: var(--riso-on-color); }
 .ready .info p { color: var(--riso-on-color); }
 .handle { flex: none; width: 40px; height: 5px; border-radius: 99px; background: currentColor; opacity: 0.35; margin: 0 auto; }
-.row { flex: 0 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 14px; }
-.row > :not(.info) { align-self: center; flex: none; }
-.info { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.row { flex: 0 1 auto; min-height: 0; display: flex; align-items: center; gap: 14px; }
+.row > :not(.info) { flex: none; }
+.info { flex: 1; min-width: 0; min-height: 0; max-height: 100%; display: flex; flex-direction: column; gap: 4px; }
 .info > :not(.shorts) { flex: none; }
-/* Many short seats: the lines scroll so code, QR and Launch stay visible. */
-.shorts { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Many short seats: at most ~3 line boxes show; the rest scroll, so the sheet keeps its normal height. */
+.shorts { min-height: 0; max-height: calc(3 * 1.35em); overflow-y: auto; overscroll-behavior: contain; font-size: 12.5px; line-height: 1.35; }
 .code { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
 .short { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-red); overflow-wrap: anywhere; }
 .count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-muted); }
