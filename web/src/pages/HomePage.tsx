@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RisoBrandMark } from '../components/riso/RisoBrandMark';
+import { PlayBrandMark, Wordmark } from '../components/riso/PlayBrandMark';
 import { RisoButton } from '../components/riso/RisoButton';
 import { RisoCard } from '../components/riso/RisoCard';
 import { RisoSectionLabel } from '../components/riso/RisoSectionLabel';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
+import styles from './Landing.module.css';
 
 /** Landing page: host a new game or join one by code. */
 export function HomePage() {
@@ -36,24 +37,40 @@ export function HomePage() {
   }
 
   return (
-    <main className="page">
-      <div className="brand"><RisoBrandMark size={40} /> Play OYBC</div>
-      <RisoCard>
-        <form className="stack" onSubmit={host}>
-          <RisoSectionLabel>Host</RisoSectionLabel>
-          <label className="field">Your name
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} autoComplete="nickname" />
-          </label>
+    <main className={`page ${styles.home}`}>
+      <div className={styles.hero}>
+        <PlayBrandMark size="home" />
+        <Wordmark />
+      </div>
+      <RisoCard padded>
+        <form className={styles.form} onSubmit={host}>
+          <RisoSectionLabel>Host a game</RisoSectionLabel>
+          <input
+            className={styles.input}
+            aria-label="Your name"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={20}
+            autoComplete="nickname"
+          />
           {error && <p className="error" role="alert">{error}</p>}
           <RisoButton type="submit" kind="primary" size="large" fullWidth disabled={busy}>Host a game</RisoButton>
         </form>
       </RisoCard>
-      <RisoCard>
-        <form className="stack" onSubmit={join}>
+      <RisoCard padded>
+        <form className={styles.form} onSubmit={join}>
           <RisoSectionLabel>Join</RisoSectionLabel>
-          <label className="field">Game code
-            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={5} autoCapitalize="characters" autoComplete="off" />
-          </label>
+          <input
+            className={`${styles.input} ${styles.code}`}
+            aria-label="Game code"
+            placeholder="Game code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            maxLength={5}
+            autoCapitalize="characters"
+            autoComplete="off"
+          />
           <RisoButton type="submit" kind="blue" size="large" fullWidth disabled={!code.trim()}>Join</RisoButton>
         </form>
       </RisoCard>

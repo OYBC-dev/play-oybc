@@ -32,6 +32,13 @@ describe('HomePage', () => {
     expect(client.calls[0]).toEqual(['createGame', 'Stephen']);
   });
 
+  it('shows the section labels and the Play OYBC mark', () => {
+    setup();
+    expect(screen.getByText('Host a game', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('Join', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Play OYBC' })).toBeInTheDocument();
+  });
+
   it('joins by code, uppercased', async () => {
     setup();
     await userEvent.type(screen.getByLabelText('Game code'), 'abcde');

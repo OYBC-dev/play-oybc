@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { PlayBrandMark } from '../components/riso/PlayBrandMark';
 import { RisoButton } from '../components/riso/RisoButton';
 import { RisoCard } from '../components/riso/RisoCard';
 import { RisoSectionLabel } from '../components/riso/RisoSectionLabel';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
 import { GamePage } from './GamePage';
+import styles from './Landing.module.css';
 
 type Phase =
   | { kind: 'checking' }
@@ -21,6 +23,7 @@ export function JoinPage() {
   const [phase, setPhase] = useState<Phase>({ kind: 'checking' });
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -46,7 +49,8 @@ export function JoinPage() {
     const stop = client.watchReclaim(waitingFor.gameId, waitingFor.reclaimId, (status) => {
       if (!live || status === 'pending') return;
       if (status === 'denied') {
-        setError('The host said no');
+        setError(null);
+        setDenied(true);
         setPhase({ kind: 'name' });
         return;
       }
@@ -62,6 +66,7 @@ export function JoinPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setDenied(false);
     try {
       const res = await client.joinGame(code, name);
       if (res.status === 'reclaim-pending') setPhase({ kind: 'waiting', gameId: res.gameId, reclaimId: res.reclaimId });
@@ -73,13 +78,38 @@ export function JoinPage() {
     }
   }
 
+  const nameForm = (waiting: boolean) => (
+    <form className={styles.form} onSubmit={submit}>
+      <RisoSectionLabel>Your name</RisoSectionLabel>
+      <input
+        className={styles.input}
+        aria-label="Your name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        maxLength={20}
+        autoComplete="nickname"
+        readOnly={waiting}
+      />
+      {error && <p className="error" role="alert">{error}</p>}
+      {denied && !waiting && <p className={styles.denied} role="alert"><span className={styles.dot} />The host said no</p>}
+      {waiting ? (
+        <div className={styles.waiting}>
+          Waiting for the host
+          <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
+        </div>
+      ) : (
+        <RisoButton type="submit" kind="blue" size="large" fullWidth disabled={busy}>Join</RisoButton>
+      )}
+    </form>
+  );
+
   switch (phase.kind) {
     case 'seated':
       return <GamePage key={`${phase.gameId}:${phase.seatId}`} gameId={phase.gameId} seatId={phase.seatId} />;
     case 'checking':
       return <main className="page"><p className="muted">Loading</p></main>;
     case 'waiting':
-      return <main className="page"><RisoCard><p>Waiting for the host</p></RisoCard></main>;
+      return <JoinShell code={code}>{nameForm(true)}</JoinShell>;
     case 'failed':
       return (
         <main className="page">
@@ -89,19 +119,22 @@ export function JoinPage() {
         </main>
       );
     case 'name':
-      return (
-        <main className="page">
-          <RisoCard>
-            <form className="stack" onSubmit={submit}>
-              <RisoSectionLabel>{code}</RisoSectionLabel>
-              <label className="field">Your name
-                <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} autoComplete="nickname" />
-              </label>
-              {error && <p className="error" role="alert">{error}</p>}
-              <RisoButton type="submit" kind="primary" size="large" fullWidth disabled={busy}>Join</RisoButton>
-            </form>
-          </RisoCard>
-        </main>
-      );
+      return <JoinShell code={code}>{nameForm(false)}</JoinShell>;
   }
+}
+
+/** Page chrome for the join flow: header (mark, kicker, code) over the name card. */
+function JoinShell({ code, children }: { code: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <main className={`page ${styles.join}`}>
+      <div className={styles.joinHead}>
+        <PlayBrandMark size="header" />
+        <div>
+          <RisoSectionLabel variant="kicker">Join</RisoSectionLabel>
+          <div className={styles.joinCode}>{code}</div>
+        </div>
+      </div>
+      <RisoCard padded>{children}</RisoCard>
+    </main>
+  );
 }

@@ -62,6 +62,14 @@ describe('JoinPage', () => {
     expect(client.calls).toContainEqual(['joinGame', 'ABCDE', 'Pat']);
   });
 
+  it('shows the kicker and code in the header', async () => {
+    setup(new FakeGameClient());
+    await nameField();
+    expect(screen.getByText('Join', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('ABCDE')).toBeInTheDocument();
+    expect(screen.getByText('Your name', { selector: 'p' })).toBeInTheDocument();
+  });
+
   it('waits for the host on reclaim-pending, then renders the game when approved', async () => {
     const client = new FakeGameClient();
     client.joinResult = { status: 'reclaim-pending', gameId: 'g1', reclaimId: 'r1' };
@@ -69,6 +77,9 @@ describe('JoinPage', () => {
     await userEvent.type(await nameField(), 'Pat');
     await submit();
     expect(await screen.findByText('Waiting for the host')).toBeInTheDocument();
+    expect(screen.getByLabelText('Your name')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Your name')).toHaveValue('Pat');
+    expect(screen.queryByRole('button', { name: 'Join' })).toBeNull();
     expect(client.calls).toContainEqual(['watchReclaim', 'g1', 'r1']);
     client.whoAmIResult = { gameId: 'g1', seatId: 's2' };
     await act(async () => client.emitReclaim('approved'));
@@ -83,8 +94,9 @@ describe('JoinPage', () => {
     await submit();
     await screen.findByText('Waiting for the host');
     await act(async () => client.emitReclaim('denied'));
-    expect(await screen.findByLabelText('Your name')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Your name')).not.toHaveAttribute('readonly');
     expect(screen.getByRole('alert')).toHaveTextContent('The host said no');
+    expect(screen.getByRole('button', { name: 'Join' })).toBeInTheDocument();
   });
 
   it.each([
