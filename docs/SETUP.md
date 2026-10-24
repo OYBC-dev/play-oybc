@@ -52,7 +52,8 @@ pnpm --filter scripts load
 
 1. Morning of 10-31: set `MIN_INSTANCES=1` in `functions/.env.play-oybc`, then `firebase deploy --only functions`.
 2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --dir scripts forceHost <code>` to list the game's seats (seatId, name, occupied), then `pnpm --dir scripts forceHost <code> <seatId>` to make an occupied seat the host (needs `gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS` for project `play-oybc`).
-3. Next day: set `MIN_INSTANCES=0` and run `firebase deploy --only functions` again.
+3. If a guest says they asked to get back in and the host phone shows no prompt, reload the host's game screen; the prompt list re-attaches.
+4. Next day: set `MIN_INSTANCES=0` and run `firebase deploy --only functions` again.
 
 ## Smoke test
 
