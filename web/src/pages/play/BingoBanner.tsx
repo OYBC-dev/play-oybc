@@ -5,6 +5,7 @@ import { useReducedMotion } from './useReducedMotion';
 import styles from './BingoBanner.module.css';
 
 const EXIT_MS = 380;
+const MAX_STACK = 3;
 
 /** The ink star tile at the banner's left. */
 function Star() {
@@ -26,16 +27,26 @@ export function BingoBanner({ queue, onDismiss }: { queue: BingoDoc[]; onDismiss
   const prev = useRef<BingoDoc[]>([]);
   const [leaving, setLeaving] = useState<BingoDoc[]>([]);
 
+  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => { pending.forEach(clearTimeout); pending.clear(); };
+  }, []);
+
   useEffect(() => {
     const gone = reduced ? [] : prev.current.filter((b) => !queue.some((q) => q.seq === b.seq));
     prev.current = queue;
     if (gone.length === 0) return;
     setLeaving((l) => [...l, ...gone]);
-    const t = setTimeout(() => setLeaving((l) => l.filter((b) => !gone.includes(b))), EXIT_MS);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      timers.current.delete(t);
+      setLeaving((l) => l.filter((b) => !gone.includes(b)));
+    }, EXIT_MS);
+    timers.current.add(t);
   }, [queue, reduced]);
 
   const front = queue[0] ?? null;
+  const shown = queue.slice(0, MAX_STACK);
   return (
     <>
       <div className={styles.sr} role="status" aria-live="polite" data-testid="bingo-announce">
@@ -48,7 +59,7 @@ export function BingoBanner({ queue, onDismiss }: { queue: BingoDoc[]; onDismiss
             <div className={`${styles.card} ${styles.leave}`}><Star /><span className={styles.text}>{b.name} got a bingo!</span></div>
           </div>
         ))}
-        {queue.map((b, i) => (
+        {shown.map((b, i) => (
           <div key={b.seq} className={styles.slot} style={{ zIndex: 20 - i }}>
             <div
               className={styles.pose}

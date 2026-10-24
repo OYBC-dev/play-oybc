@@ -86,6 +86,48 @@ describe('BingoBanner stack', () => {
   });
 });
 
+describe('BingoBanner fixes', () => {
+  it('does not leak leaving nodes when a bingo arrives mid-exit', () => {
+    render(<Harness initial={[]} />);
+    push([b(1, 'a', 'Ann'), b(2, 'c', 'Cody')]);
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(screen.getAllByTestId('bingo-banner-leaving')).toHaveLength(1);
+    act(() => { vi.advanceTimersByTime(100); });
+    push([b(1, 'a', 'Ann'), b(2, 'c', 'Cody'), b(3, 'd', 'Dee')]);
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(screen.queryByTestId('bingo-banner-leaving')).toBeNull();
+  });
+
+  it('renders at most 3 of 20 queued and shows all in order', () => {
+    render(<Harness initial={[]} />);
+    const all = Array.from({ length: 20 }, (_, i) => b(i + 1, 'x' + i, 'P' + (i + 1)));
+    push(all);
+    expect(screen.getAllByTestId('bingo-banner')).toHaveLength(3);
+    const fronts: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      fronts.push(screen.getAllByTestId('bingo-banner')[0].textContent!);
+      act(() => { vi.advanceTimersByTime(4000); });
+    }
+    expect(fronts).toEqual(all.map((x) => `${x.name} got a bingo!`));
+    expect(screen.queryByTestId('bingo-banner')).toBeNull();
+  });
+
+  it('a banner arriving behind the front does not restart its 4 s timer', () => {
+    render(<Harness initial={[]} />);
+    push([b(1, 'a', 'Ann')]);
+    act(() => { vi.advanceTimersByTime(3000); });
+    push([b(1, 'a', 'Ann'), b(2, 'c', 'Cody')]);
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(names()).toEqual(['Cody got a bingo!']);
+  });
+
+  it('renders a 28-character name with no spaces', () => {
+    render(<Harness initial={[]} />);
+    push([b(1, 'a', 'Abcdefghijklmnopqrstuvwxyz12')]);
+    expect(screen.getByTestId('bingo-banner')).toHaveTextContent('Abcdefghijklmnopqrstuvwxyz12 got a bingo!');
+  });
+});
+
 describe('confetti pieces', () => {
   it('stay within the spec ranges and token colors', () => {
     const p = makePieces(7);
