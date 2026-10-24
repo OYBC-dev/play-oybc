@@ -1,5 +1,6 @@
 :global(.page).lobby { padding-top: 12px; gap: 14px; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.headerActions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pool { margin: 0; font-family: var(--riso-font-head); font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .count { font-family: var(--riso-font-head); font-size: 16px; font-weight: 800; color: var(--riso-muted); white-space: nowrap; }

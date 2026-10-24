@@ -163,16 +163,17 @@ describe('LobbyScreen', () => {
     const hostChip = players.getByText('Host').closest('li')!;
     expect(hostChip).toHaveTextContent('MeHost');
     expect(players.getByText('Host')).toHaveClass('expiring');
-    expect(screen.getByRole('button', { name: 'Host menu' })).toBeInTheDocument();
     await userEvent.click(stack);
     expect(screen.queryByRole('list', { name: 'Players' })).toBeNull();
   });
 
-  it('player sees no Host menu in the chip list', async () => {
+  it('header carries the host dots menu for the host only', () => {
+    const { unmount } = setup(snap());
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-haspopup', 'menu');
+    unmount();
     setup(snap({ host: false }));
-    await userEvent.click(screen.getByRole('button', { name: '3 players' }));
-    expect(screen.getByRole('list', { name: 'Players' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Host menu' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
   });
 
   it('empty lobby: only the host, a waiting pill and no tasks yet', () => {

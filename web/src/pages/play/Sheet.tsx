@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { RisoButton } from '../../components/riso/RisoButton';
 import styles from './Sheet.module.css';
+import { useModalFocus } from './useModalFocus';
 
 /** A scrim click this soon after opening is the tail of the gesture that opened it (iOS long-press release). */
 const SCRIM_GUARD_MS = 400;
@@ -10,28 +11,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const openedAt = useRef(performance.now());
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    return () => previous?.focus?.();
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      onCloseRef.current();
-    } else if (e.key === 'Tab' && ref.current) {
-      const f = [...ref.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], [tabindex="0"]')];
-      if (f.length === 0) return;
-      const first = f[0];
-      const last = f[f.length - 1];
-      if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
-  };
+  const onKeyDown = useModalFocus(ref, onClose);
 
   return (
     <div className={styles.scrim} onClick={(e) => { if (e.target === e.currentTarget && performance.now() - openedAt.current > SCRIM_GUARD_MS) onClose(); }}>

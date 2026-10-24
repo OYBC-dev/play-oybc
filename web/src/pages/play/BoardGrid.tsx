@@ -5,7 +5,6 @@ import { cellsInLines } from './cellsInLines';
 import { Sheet } from './Sheet';
 import styles from './BoardGrid.module.css';
 
-const PENDING_DIM_MS = 250;
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
 
@@ -20,19 +19,18 @@ export interface BoardGridProps {
 /**
  * The 5x5 board. Taps flip optimistically; the server's marks (next snapshot) win,
  * a rejected call rolls back and shows its error. A cell in flight is disabled and
- * only looks dimmed once the call has taken longer than 250 ms.
+ * carries `data-pending`; its CSS only dims it once the call has taken longer
+ * than 250 ms (a transition delay, so quick calls never flash).
  */
 export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps) {
   const [overrides, setOverrides] = useState<ReadonlyMap<number, boolean>>(new Map());
   const [inFlight, setInFlight] = useState<ReadonlySet<number>>(new Set());
-  const [slow, setSlow] = useState<ReadonlySet<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
   const longPressed = useRef(false);
   const inFlightRef = useRef(inFlight);
   inFlightRef.current = inFlight;
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   // A fresh snapshot is authoritative: drop optimistic flips for cells with no call outstanding.
   useEffect(() => {
@@ -43,7 +41,6 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
     });
   }, [board]);
   useEffect(() => () => {
-    timers.current.forEach(clearTimeout);
     if (press.current) clearTimeout(press.current.timer);
   }, []);
 
@@ -73,16 +70,12 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
     setError(null);
     setOverrides((o) => new Map(o).set(i, want));
     setInFlight((s) => new Set(s).add(i));
-    timers.current.set(i, setTimeout(() => setSlow((s) => new Set(s).add(i)), PENDING_DIM_MS));
     try {
       await onToggle(i, want);
     } catch (e) {
       setOverrides((o) => { const n = new Map(o); n.delete(i); return n; });
       setError(errorMessage(e));
     } finally {
-      clearTimeout(timers.current.get(i));
-      timers.current.delete(i);
-      setSlow((s) => cleared(s, i));
       setInFlight((s) => cleared(s, i));
     }
   };
@@ -95,16 +88,17 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
           const free = cell.kind === 'free';
           const marked = free || (overrides.get(i) ?? board.marks[i]);
           const label = cell.kind === 'free' ? 'Free' : cell.text;
+          const inLine = !free && marked && highlighted.has(i);
           return (
             <button
               key={i}
               type="button"
-              className={styles.cell}
+              className={inLine ? `${styles.cell} riso-halftone` : styles.cell}
               aria-label={label}
               aria-pressed={free ? undefined : marked}
               data-marked={String(marked)}
-              data-highlight={String(highlighted.has(i))}
-              data-pending={String(slow.has(i))}
+              data-highlight={String(inLine)}
+              data-pending={String(!readOnly && inFlight.has(i))}
               data-free={String(free)}
               aria-disabled={readOnly && !free ? true : undefined}
               disabled={free || (!readOnly && inFlight.has(i))}

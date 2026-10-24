@@ -49,17 +49,28 @@ describe('PlayScreen', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('host sees End game, confirm calls end; non-host does not', async () => {
+  it('header: code pill + Leaderboard for everyone, dots menu for the host only', () => {
     const client = new FakeGameClient();
     const { unmount } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
-    await userEvent.click(screen.getByRole('button', { name: 'End game' }));
-    expect(client.calls.some((c) => c[0] === 'end')).toBe(false);
-    const dialog = screen.getByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'End game' }));
-    expect(client.calls).toContainEqual(['end', 'g1']);
+    const header = screen.getByRole('banner');
+    expect(within(header).getByText('ABCDE')).toBeInTheDocument();
+    expect(within(header).getByRole('button', { name: 'Leaderboard' })).toBeInTheDocument();
+    expect(within(header).getByRole('button', { name: 'Menu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'End game' })).not.toBeInTheDocument();
     unmount();
     render(<PlayScreen client={client} snapshot={snap({ host: false })} gameId="g1" />);
-    expect(screen.queryByRole('button', { name: 'End game' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).getByText('ABCDE')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+  });
+
+  it('host ends the game from the menu: End the game? dialog, confirm calls end', async () => {
+    const client = new FakeGameClient();
+    render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'End game' }));
+    const dialog = screen.getByRole('dialog', { name: 'End the game?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'End game' }));
+    expect(client.calls).toContainEqual(['end', 'g1']);
   });
 });
 

@@ -54,6 +54,15 @@ test('three phones play a full game', async ({ browser }) => {
   await launch.click();
   for (const p of [A, B, C]) await expect(p.page.getByTestId('stage-playing')).toBeVisible();
 
+  // Board cells show mentions resolved: "@Stephen falls asleep" reads "Stephen falls asleep".
+  for (const p of [B, C]) {
+    const cells = p.page.locator('button[data-marked]');
+    await expect(cells).toHaveCount(25);
+    const labels = await cells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+    expect(labels.filter((l) => l.includes('@'))).toEqual([]);
+    expect(labels.filter((l) => l.includes('falls asleep')).every((l) => l === 'Stephen falls asleep')).toBe(true);
+  }
+
   // 4. A marks the first row; B and C see the banner, A does not.
   const aCells = A.page.locator('button[data-marked]');
   await expect(aCells).toHaveCount(25);
@@ -100,8 +109,9 @@ test('three phones play a full game', async ({ browser }) => {
 
   // 8. A ends the game: everyone still seated sees the leaderboard with Stephen first.
   // B was displaced by E's approved reclaim (the server deletes the old member doc), so B has no read access any more.
-  await A.page.getByRole('button', { name: 'End game' }).click();
-  await A.page.getByRole('dialog').getByRole('button', { name: 'End game' }).click();
+  await A.page.getByRole('button', { name: 'Menu' }).click();
+  await A.page.getByRole('menuitem', { name: 'End game' }).click();
+  await A.page.getByRole('dialog', { name: 'End the game?' }).getByRole('button', { name: 'End game' }).click();
   for (const p of [A, C, D, E]) {
     await expect(p.page.getByTestId('stage-ended')).toBeVisible();
     await expect(p.page.locator('ol li').first()).toContainText('Stephen');

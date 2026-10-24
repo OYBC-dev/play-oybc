@@ -38,18 +38,24 @@ function endsCleanly(text: string, end: number): boolean {
   return true;
 }
 
+/** One `@` token found in task text, with its [start, end) span (start is the `@`). */
+export type MentionToken =
+  | { kind: 'someone'; start: number; end: number }
+  | { kind: 'anyone'; start: number; end: number }
+  | { kind: 'seat'; seat: Seat; start: number; end: number }
+  | { kind: 'unknown'; start: number; end: number; token: string };
+
 /**
- * Parses @mentions: `@someone`, `@anyone`, or the longest matching seat name
- * (case- and whitespace-insensitive). An `@` preceded by a letter/digit, or
- * not followed by a letter/digit, is plain text.
+ * Scans `text` for @mention tokens: `@someone`, `@anyone`, or the longest
+ * matching seat name (case- and whitespace-insensitive). An `@` preceded by a
+ * letter/digit, or not followed by a letter/digit, is plain text. Every other
+ * `@word` is an `unknown` token spanning the word.
  */
-export function parseMentions(text: string, seats: readonly Seat[]): ParseMentionsResult {
+export function scanMentions(text: string, seats: readonly Seat[]): MentionToken[] {
   const byLength = seats
-    .map((s) => ({ seatId: s.seatId, key: nameKey(s.name) }))
+    .map((seat) => ({ seat, key: nameKey(seat.name) }))
     .sort((a, b) => b.key.length - a.key.length);
-  const seatIds: string[] = [];
-  let someone = false;
-  let anyone = false;
+  const tokens: MentionToken[] = [];
 
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '@' || isWordChar(text[i - 1]) || !isWordChar(text[i + 1])) continue;
@@ -59,26 +65,57 @@ export function parseMentions(text: string, seats: readonly Seat[]): ParseMentio
       return end >= 0 && endsCleanly(text, end) ? end : -1;
     };
 
+    let token: MentionToken | null = null;
     let end = tryKey('someone');
-    if (end >= 0) { someone = true; i = end - 1; continue; }
-    end = tryKey('anyone');
-    if (end >= 0) { anyone = true; i = end - 1; continue; }
-    let matched = false;
-    for (const s of byLength) {
+    if (end >= 0) token = { kind: 'someone', start: i, end };
+    if (!token && (end = tryKey('anyone')) >= 0) token = { kind: 'anyone', start: i, end };
+    for (const s of token ? [] : byLength) {
       end = tryKey(s.key);
-      if (end >= 0) {
-        if (!seatIds.includes(s.seatId)) seatIds.push(s.seatId);
-        i = end - 1;
-        matched = true;
-        break;
-      }
+      if (end >= 0) { token = { kind: 'seat', seat: s.seat, start: i, end }; break; }
     }
-    if (matched) continue;
-    let stop = start;
-    while (isWordChar(text[stop]) || isJoiner(text[stop])) stop++;
-    return { ok: false, error: 'unknown-mention', token: '@' + text.slice(start, stop) };
+    if (!token) {
+      let stop = start;
+      while (isWordChar(text[stop]) || isJoiner(text[stop])) stop++;
+      token = { kind: 'unknown', start: i, end: stop, token: '@' + text.slice(start, stop) };
+    }
+    tokens.push(token);
+    i = token.end - 1;
+  }
+  return tokens;
+}
+
+/**
+ * Parses @mentions (token rules in {@link scanMentions}). Fails on the first
+ * `@word` that is neither a keyword nor a seat name.
+ */
+export function parseMentions(text: string, seats: readonly Seat[]): ParseMentionsResult {
+  const seatIds: string[] = [];
+  let someone = false;
+  let anyone = false;
+  for (const t of scanMentions(text, seats)) {
+    if (t.kind === 'unknown') return { ok: false, error: 'unknown-mention', token: t.token };
+    if (t.kind === 'someone') someone = true;
+    else if (t.kind === 'anyone') anyone = true;
+    else if (!seatIds.includes(t.seat.seatId)) seatIds.push(t.seat.seatId);
   }
   return { ok: true, mentions: { seatIds, someone, anyone } };
+}
+
+/** Rewrites each token for which `render` returns a string; other text is untouched. */
+function rewriteMentions(
+  text: string,
+  seats: readonly Seat[],
+  render: (t: MentionToken) => string | null,
+): string {
+  let out = '';
+  let last = 0;
+  for (const t of scanMentions(text, seats)) {
+    const value = render(t);
+    if (value === null) continue;
+    out += text.slice(last, t.start) + value;
+    last = t.end;
+  }
+  return out + text.slice(last);
 }
 
 /**
@@ -86,16 +123,23 @@ export function parseMentions(text: string, seats: readonly Seat[]): ParseMentio
  * with `replacement`. Other text, `@anyone` and seat mentions are untouched.
  */
 export function replaceSomeone(text: string, replacement: string): string {
-  let out = '';
-  let last = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '@' || isWordChar(text[i - 1]) || !isWordChar(text[i + 1])) continue;
-    const end = matchKey(text, i + 1, 'someone');
-    if (end >= 0 && endsCleanly(text, end)) {
-      out += text.slice(last, i) + replacement;
-      last = end;
-      i = end - 1;
-    }
-  }
-  return out + text.slice(last);
+  return rewriteMentions(text, [], (t) => (t.kind === 'someone' ? replacement : null));
+}
+
+/**
+ * Board display text: `@Name` becomes the seat's name as the seat wrote it
+ * (longest seat-name match), `@anyone` becomes "Anyone", and `@someone`
+ * becomes `someoneName` (left verbatim when null). Unknown `@word`s are kept.
+ */
+export function resolveMentionDisplay(
+  text: string,
+  seats: readonly Seat[],
+  someoneName: string | null,
+): string {
+  return rewriteMentions(text, seats, (t) => {
+    if (t.kind === 'seat') return t.seat.name;
+    if (t.kind === 'anyone') return 'Anyone';
+    if (t.kind === 'someone') return someoneName;
+    return null;
+  });
 }

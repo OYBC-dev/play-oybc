@@ -1,5 +1,5 @@
 import { CenterSquareType, GRID_SIZE, TASKS_PER_BOARD } from './constants';
-import { replaceSomeone } from './mentions';
+import { resolveMentionDisplay } from './mentions';
 import { placeBoard } from './placement';
 import { PoolTask, Seat } from './types';
 import { canBeDealt } from './visibility';
@@ -9,7 +9,9 @@ export type BoardCell = { kind: 'task'; taskId: string; text: string } | { kind:
 
 /**
  * Deals a 5x5 board for one seat: shuffles the dealable tasks, centers FREE,
- * and resolves each `@someone` to one other seat (consistent within a task).
+ * and resolves mentions for display (see {@link resolveMentionDisplay}): each
+ * `@someone` becomes one other seat (consistent within a task), `@Name` the
+ * seat's name, `@anyone` "Anyone".
  *
  * @throws Error('insufficient-pool') when fewer than 24 tasks are dealable to the seat.
  */
@@ -25,9 +27,8 @@ export function dealBoard(
   const grid = placeBoard({ items: eligible, gridSize: GRID_SIZE, centerType: CenterSquareType.FREE, randomize: true, rng });
   return grid.map((task): BoardCell => {
     if (!task) return { kind: 'free' };
-    const text = others.length
-      ? replaceSomeone(task.text, others[Math.floor(rng() * others.length)].name)
-      : task.text;
+    const someoneName = others.length ? others[Math.floor(rng() * others.length)].name : null;
+    const text = resolveMentionDisplay(task.text, seats, someoneName);
     return { kind: 'task', taskId: task.id, text };
   });
 }

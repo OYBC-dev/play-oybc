@@ -49,13 +49,13 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
           <h1 className={styles.pool}>Pool</h1>
           <span className={styles.count} data-testid="pool-count">{snapshot.view.length} / {MIN_POOL_SIZE}</span>
         </div>
-        <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
+        <div className={styles.headerActions}>
+          <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
+          {/* endGame only ends a playing game server-side, so the lobby menu offers Make host alone. */}
+          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd={false} />
+        </div>
       </header>
-      {playersOpen && (
-        <PlayerList snapshot={snapshot} id={playersId}>
-          <HostMenu client={client} gameId={gameId} snapshot={snapshot} />
-        </PlayerList>
-      )}
+      {playersOpen && <PlayerList snapshot={snapshot} id={playersId} />}
       {seats.length <= 1 && (
         <div className={styles.waiting} role="status">
           Waiting for players

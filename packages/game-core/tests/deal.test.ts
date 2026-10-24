@@ -1,5 +1,5 @@
 import { dealBoard } from '../src/deal';
-import { replaceSomeone } from '../src/mentions';
+import { replaceSomeone, resolveMentionDisplay } from '../src/mentions';
 import { PoolTask, Seat } from '../src/types';
 import { makeSeededRng } from './seededRng';
 
@@ -25,11 +25,11 @@ describe('dealBoard', () => {
     expect(dealBoard(tasks, seats, 's1', makeSeededRng(42))).toEqual(b);
   });
   it('resolves @someone to another seat, consistently within a task', () => {
-    const tasks = [...plain(23), mk('sw', '@someone takes a shot, @Someone drinks', { someone: true })];
+    const tasks = [...plain(23), mk('sw', '@someone sings, @Someone dances', { someone: true })];
     for (let seed = 0; seed < 50; seed++) {
       const b = dealBoard(tasks, seats, 's1', makeSeededRng(seed));
       const cell = b.find((c) => c.kind === 'task' && c.taskId === 'sw') as { text: string };
-      expect(cell.text).toMatch(/^(Bo|Cy) takes a shot, \1 drinks$/);
+      expect(cell.text).toMatch(/^(Bo|Cy) sings, \1 dances$/);
     }
   });
   it('keeps @someone verbatim with a single seat', () => {
@@ -37,10 +37,21 @@ describe('dealBoard', () => {
     const b = dealBoard(tasks, [seats[0]], 's1', makeSeededRng(1));
     expect((b.find((c) => c.kind === 'task' && c.taskId === 'sw') as { text: string }).text).toBe('@someone dances');
   });
-  it('leaves @anyone unchanged', () => {
+  it('shows @anyone as Anyone', () => {
     const tasks = [...plain(23), mk('a', '@anyone sings', { anyone: true })];
     const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
-    expect((b.find((c) => c.kind === 'task' && c.taskId === 'a') as { text: string }).text).toBe('@anyone sings');
+    expect((b.find((c) => c.kind === 'task' && c.taskId === 'a') as { text: string }).text).toBe('Anyone sings');
+  });
+  it('shows @Name as the seat name, with the seat name\'s case', () => {
+    const tasks = [...plain(23), mk('n', '@bo trips over @CY', { seatIds: ['s2', 's3'] })];
+    const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
+    expect((b.find((c) => c.kind === 'task' && c.taskId === 'n') as { text: string }).text).toBe('Bo trips over Cy');
+  });
+  it('leaves tasks without mentions unchanged', () => {
+    const tasks = [...plain(23), mk('p', 'Someone trips, then someone@home sings')];
+    const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
+    expect((b.find((c) => c.kind === 'task' && c.taskId === 'p') as { text: string }).text)
+      .toBe('Someone trips, then someone@home sings');
   });
   it('throws insufficient-pool', () => {
     expect(() => dealBoard(plain(23), seats, 's1')).toThrow('insufficient-pool');
@@ -51,5 +62,27 @@ describe('replaceSomeone boundaries', () => {
   it('follows parseMentions token rules', () => {
     expect(replaceSomeone('a@someone @someonex @someone-else @someone\'s ok @SOMEONE.', 'Bo'))
       .toBe("a@someone @someonex @someone-else Bo's ok Bo.");
+  });
+});
+
+describe('resolveMentionDisplay', () => {
+  const party: Seat[] = [
+    { seatId: 'a', name: 'Jo', joinedAt: 0 },
+    { seatId: 'b', name: 'Josh', joinedAt: 1 },
+    { seatId: 'c', name: 'Mary Ann', joinedAt: 2 },
+  ];
+  it('takes the longest seat-name match, so Jo never eats @Josh', () => {
+    expect(resolveMentionDisplay('@Josh and @jo dance', party, null)).toBe('Josh and Jo dance');
+  });
+  it('matches multi-word names across whitespace runs and keeps possessives', () => {
+    expect(resolveMentionDisplay("@mary   ann's cat sings", party, null)).toBe("Mary Ann's cat sings");
+  });
+  it('shows @anyone as Anyone and resolves @someone only when given a name', () => {
+    expect(resolveMentionDisplay('@ANYONE hugs @someone', party, 'Josh')).toBe('Anyone hugs Josh');
+    expect(resolveMentionDisplay('@anyone hugs @someone', party, null)).toBe('Anyone hugs @someone');
+  });
+  it('keeps unknown mentions, embedded @ and text without mentions verbatim', () => {
+    expect(resolveMentionDisplay('@Joshua waves at a@jo', party, null)).toBe('@Joshua waves at a@jo');
+    expect(resolveMentionDisplay('Plain text, no tags', party, 'Jo')).toBe('Plain text, no tags');
   });
 });

@@ -1,62 +1,110 @@
-import { useState } from 'react';
-import { RisoButton } from '../../components/riso/RisoButton';
-import { errorMessage } from '../../game/errorMessages';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { RisoCard } from '../../components/riso/RisoCard';
+import { RisoIcon } from '../../components/riso/RisoIcon';
 import type { GameClient, GameSnapshot } from '../../game/GameClient';
-import { Sheet } from '../play/Sheet';
+import { EndGameDialog } from './EndGameDialog';
+import { MakeHostDialog } from './MakeHostDialog';
 import styles from './host.module.css';
 
-/** Host-only menu: hand the host role to another player (after a confirm). Renders nothing for non-hosts. */
-export function HostMenu({ client, gameId, snapshot }: { client: GameClient; gameId: string; snapshot: GameSnapshot }) {
+export interface HostMenuProps {
+  client: GameClient;
+  gameId: string;
+  snapshot: GameSnapshot;
+  /** Offer "End game" (only while playing: the server ends a playing game only). */
+  canEnd: boolean;
+}
+
+/**
+ * Host-only dots button + popover menu: "Make host" (opens the radio dialog;
+ * disabled with no other players) and, when `canEnd`, a red "End game" (opens
+ * the confirm dialog). Renders nothing for non-hosts. The popover closes on an
+ * outside tap or Escape; focus goes to the first item on open and back to the
+ * button on close.
+ */
+export function HostMenu({ client, gameId, snapshot, canEnd }: HostMenuProps) {
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<{ seatId: string; name: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<'make' | 'end' | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const first = menu.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)');
+    (first ?? menu.current)?.focus();
+    const onDown = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
   if (snapshot.game.hostSeatId !== snapshot.mySeatId) return null;
 
-  const others = [...snapshot.seats].filter((s) => s.seatId !== snapshot.mySeatId).sort((a, b) => a.joinedAt - b.joinedAt);
-  const close = () => { setOpen(false); setTarget(null); setError(null); };
+  const others = [...snapshot.seats]
+    .filter((s) => s.seatId !== snapshot.mySeatId)
+    .sort((a, b) => a.joinedAt - b.joinedAt)
+    .map((s) => ({ seatId: s.seatId, name: s.name }));
 
-  const transfer = async () => {
-    if (!target) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await client.transferHost(gameId, target.seatId);
-      close();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
+  const closeMenu = () => { setOpen(false); button.current?.focus(); };
+  const choose = (d: 'make' | 'end') => { setOpen(false); setDialog(d); };
+
+  const onMenuKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      if (e.key === 'Escape') e.preventDefault();
+      e.stopPropagation();
+      closeMenu();
+      return;
     }
+    const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? [])];
+    if (items.length === 0) return;
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const to = e.key === 'ArrowDown' ? (at + 1) % items.length
+      : e.key === 'ArrowUp' ? (at - 1 + items.length) % items.length
+        : e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    items[to].focus();
   };
 
   return (
-    <>
-      <RisoButton size="small" onClick={() => setOpen(true)}>Host menu</RisoButton>
-      {open && !target && (
-        <Sheet title="Host menu" onClose={close}>
-          {others.length === 0 ? <p className="muted">No other players</p> : (
-            <ul className={styles.list}>
-              {others.map((s) => (
-                <li key={s.seatId} className={styles.row}>
-                  <span className={styles.who}>{s.name}</span>
-                  <RisoButton size="small" aria-label={`Make ${s.name} host`} onClick={() => { setError(null); setTarget({ seatId: s.seatId, name: s.name }); }}>Make host</RisoButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Sheet>
-      )}
-      {open && target && (
-        <Sheet title={`Make ${target.name} host`} onClose={close}>
-          <p className={styles.body}>{target.name} takes over hosting. You become a regular player.</p>
-          {error && <p className="error" role="alert">{error}</p>}
-          <div className={styles.actions}>
-            <RisoButton onClick={() => setTarget(null)}>Cancel</RisoButton>
-            <RisoButton kind="primary" disabled={busy} onClick={() => void transfer()}>Make host</RisoButton>
+    <div ref={wrap} className={styles.menuWrap}>
+      <button
+        ref={button}
+        type="button"
+        className={styles.dots}
+        aria-label="Menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => (open ? closeMenu() : setOpen(true))}
+      >
+        <RisoIcon name="dots" size={20} />
+      </button>
+      {open && (
+        <RisoCard shadow="large" className={styles.menu}>
+          <div ref={menu} id={menuId} role="menu" aria-label="Menu" tabIndex={-1} className={styles.menuList} onKeyDown={onMenuKey}>
+            <button type="button" role="menuitem" className={styles.item} disabled={others.length === 0} onClick={() => choose('make')}>
+              <RisoIcon name="you" size={18} />Make host
+            </button>
+            {canEnd && (
+              <>
+                <div className={styles.hairline} role="separator" />
+                <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={() => choose('end')}>
+                  <RisoIcon name="logout" size={18} />End game
+                </button>
+              </>
+            )}
           </div>
-        </Sheet>
+        </RisoCard>
       )}
-    </>
+      {dialog === 'make' && (
+        <MakeHostDialog client={client} gameId={gameId} candidates={others} onClose={() => setDialog(null)} returnFocus={button} />
+      )}
+      {dialog === 'end' && canEnd && (
+        <EndGameDialog client={client} gameId={gameId} onClose={() => setDialog(null)} returnFocus={button} />
+      )}
+    </div>
   );
 }

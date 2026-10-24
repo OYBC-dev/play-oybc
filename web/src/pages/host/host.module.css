@@ -1,7 +1,52 @@
 .reclaims { display: flex; flex-direction: column; gap: 8px; }
-.reclaim, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.reclaim { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
 .who { font-weight: 600; overflow-wrap: anywhere; }
 .actions { display: flex; gap: 8px; }
 .actions > * { flex: 1; }
-.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.body { margin: 0; }
+.dialogActions { display: flex; gap: 8px; margin-top: 4px; }
+.dialogActions > * { flex: 1 1 0; min-width: 0; }
+.body { margin: 0; font-size: 15px; line-height: 1.45; text-wrap: pretty; }
+.wrapLabel { min-width: 0; overflow-wrap: anywhere; text-align: center; }
+
+/* Dots button + popover menu (README §5 header, §8 Menu). */
+.menuWrap { position: relative; flex: none; }
+.dots {
+  appearance: none; box-sizing: border-box; width: 44px; height: 44px; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  color: var(--riso-ink); background: var(--riso-paper-2);
+  border: 2px solid var(--riso-ink); border-radius: var(--riso-r-card);
+  box-shadow: 3px 3px 0 var(--riso-shadow-ink);
+}
+.dots:focus-visible, .item:focus-visible, .radio:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+.menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 25; width: 216px; animation: menuFade 0.15s ease both; }
+.menuList { padding: 6px; outline: none; }
+.item {
+  appearance: none; border: 0; background: transparent; box-sizing: border-box; width: 100%; height: 48px;
+  display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 6px; cursor: pointer; text-align: left;
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 15px; color: var(--riso-ink);
+}
+.item:hover:not(:disabled) { background: var(--riso-paper); }
+.item:disabled { opacity: 0.45; cursor: not-allowed; }
+.danger { color: var(--riso-red); }
+/* Harvest-dark rust on the dark card is ~2.5:1; lift it toward ink so the label stays readable. */
+:global([data-theme='dark']) .danger { color: color-mix(in srgb, var(--riso-red), var(--riso-ink) 35%); }
+.hairline { height: 1px; background: var(--riso-hair); margin: 4px 10px; }
+@keyframes menuFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Make host radio list (22px ring, blue fill when selected, 46px rows). */
+.radios { display: flex; flex-direction: column; }
+.radio {
+  appearance: none; border: 0; border-top: 1px solid var(--riso-hair); background: transparent;
+  box-sizing: border-box; width: 100%; min-height: 46px; padding: 0 6px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 16px; color: var(--riso-ink);
+}
+.ring {
+  flex: none; box-sizing: border-box; width: 22px; height: 22px; border-radius: 999px;
+  border: 2px solid var(--riso-ink); display: grid; place-items: center; background: transparent;
+}
+.ring > span { width: 10px; height: 10px; border-radius: 999px; background: transparent; }
+.ring[data-checked='true'] { background: var(--riso-blue); }
+.ring[data-checked='true'] > span { background: var(--riso-on-color); }
+.radioName { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .menu { animation: none; } }

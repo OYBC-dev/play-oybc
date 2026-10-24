@@ -22,6 +22,8 @@
   --riso-on-color: #fbf6ea;
   --riso-ink-static: #18120b;
   --riso-lavender: #c9cff2;
+  /* Modal scrim (static warm ink at 45%, both modes). */
+  --riso-scrim: rgba(24, 18, 11, 0.45);
 
   /* Shape */
   --riso-r-card: 8px;
