@@ -6,7 +6,7 @@ import { applyTheme } from './theme';
 import './styles/riso.css';
 import './styles/app.css';
 
-applyTheme(document, window.matchMedia('(prefers-color-scheme: dark)'));
+applyTheme(document, typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
