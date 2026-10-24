@@ -18,7 +18,7 @@ export function PlayScreen({ client, snapshot, gameId }: { client: GameClient; s
   const [leaderboard, setLeaderboard] = useState(false);
 
   return (
-    <div className={`page ${styles.play}`} data-testid="stage-playing">
+    <div className={`page ${styles.play}`} data-testid="stage-playing" data-focus-fallback tabIndex={-1}>
       <BingoBanner bingo={banner.current} onDismiss={banner.dismiss} />
       {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
       <header className={styles.header}>

@@ -7,3 +7,4 @@ body { margin: 0; background: var(--riso-paper); color: var(--riso-ink); font-fa
 .muted { color: var(--riso-muted); margin: 0; }
 .brand { display: flex; align-items: center; gap: 12px; font-family: var(--riso-font-head); font-weight: 800; font-size: 28px; }
 .page button { min-height: 44px; }
+[data-focus-fallback]:focus { outline: none; }

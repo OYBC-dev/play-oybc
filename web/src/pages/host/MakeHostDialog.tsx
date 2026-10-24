@@ -12,13 +12,15 @@ export function MakeHostDialog({ client, gameId, candidates, onClose, returnFocu
   client: GameClient; gameId: string; candidates: readonly HostCandidate[]; onClose: () => void;
   returnFocus?: RefObject<HTMLElement | null>;
 }) {
-  const [picked, setPicked] = useState<HostCandidate | null>(null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  // A pick that left the game (seat gone from `candidates`) no longer counts.
+  const picked = candidates.find((c) => c.seatId === pickedId) ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
   const tabStop = Math.max(0, candidates.findIndex((c) => c.seatId === picked?.seatId));
 
-  const pick = (c: HostCandidate) => { setError(null); setPicked(c); };
+  const pick = (c: HostCandidate) => { setError(null); setPickedId(c.seatId); };
   /** Arrow keys move through the group and select, like native radios. */
   const onRadioKey = (e: KeyboardEvent, i: number) => {
     const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;

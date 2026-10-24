@@ -47,6 +47,18 @@ describe('dealBoard', () => {
     const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
     expect((b.find((c) => c.kind === 'task' && c.taskId === 'n') as { text: string }).text).toBe('Bo trips over Cy');
   });
+  it('resolves @someone and @Name in the same text', () => {
+    const tasks = [...plain(23), mk('mix', '@someone hugs @cy', { someone: true, seatIds: ['s3'] })];
+    for (let seed = 0; seed < 20; seed++) {
+      const b = dealBoard(tasks, seats, 's1', makeSeededRng(seed));
+      expect((b.find((c) => c.kind === 'task' && c.taskId === 'mix') as { text: string }).text).toMatch(/^(Bo|Cy) hugs Cy$/);
+    }
+  });
+  it('passes an unknown @word through unchanged', () => {
+    const tasks = [...plain(23), mk('u', '@Zed waves at @bo')];
+    const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
+    expect((b.find((c) => c.kind === 'task' && c.taskId === 'u') as { text: string }).text).toBe('@Zed waves at Bo');
+  });
   it('leaves tasks without mentions unchanged', () => {
     const tasks = [...plain(23), mk('p', 'Someone trips, then someone@home sings')];
     const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));

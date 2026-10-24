@@ -195,6 +195,45 @@ describe('HostMenu', () => {
     expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
   });
 
+  it('after a successful transfer the menu unmounts and focus lands on the page, not <body>', async () => {
+    const client = new FakeGameClient();
+    let current = snap({ stage: 'playing' });
+    const { rerender } = render(<PlayScreen client={client} snapshot={current} gameId="g1" />);
+    client.transferHost = async () => {
+      current = snap({ stage: 'playing', host: false });
+      rerender(<PlayScreen client={client} snapshot={current} gameId="g1" />);
+    };
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Make host' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Cody' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Make Cody host' }));
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByTestId('stage-playing')).toHaveFocus();
+  });
+
+  it('lobby: no dots button when the host is alone; the board keeps a disabled Make host', async () => {
+    const { unmount } = render(<LobbyScreen client={new FakeGameClient()} snapshot={twoSeats(snap())} gameId="g1" />);
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    unmount();
+    render(<PlayScreen client={new FakeGameClient()} snapshot={twoSeats(snap({ stage: 'playing' }))} gameId="g1" />);
+    const menu = await openMenu();
+    expect(within(menu).getByRole('menuitem', { name: 'Make host' })).toBeDisabled();
+  });
+
+  it('Make host forgets a pick whose player left', async () => {
+    const client = new FakeGameClient();
+    const { rerender } = render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Make host' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Pat' }));
+    expect(screen.getByRole('button', { name: 'Make Pat host' })).toBeEnabled();
+    const s = snap({ stage: 'playing' });
+    rerender(<HostMenu client={client} gameId="g1" snapshot={{ ...s, seats: s.seats.filter((x) => x.seatId !== 's3') }} canEnd />);
+    expect(screen.queryByRole('radio', { name: 'Pat' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio').every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Make host' })).toBeDisabled();
+  });
+
   it('lobby menu offers Make host only (the server ends playing games only)', async () => {
     render(<LobbyScreen client={new FakeGameClient()} snapshot={snap()} gameId="g1" />);
     const menu = await openMenu();

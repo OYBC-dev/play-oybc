@@ -17,7 +17,8 @@ export interface HostMenuProps {
 /**
  * Host-only dots button + popover menu: "Make host" (opens the radio dialog;
  * disabled with no other players) and, when `canEnd`, a red "End game" (opens
- * the confirm dialog). Renders nothing for non-hosts. The popover closes on an
+ * the confirm dialog). Renders nothing for non-hosts, or when there is no
+ * other player and End game is not offered. The popover closes on an
  * outside tap or Escape; focus goes to the first item on open and back to the
  * button on close.
  */
@@ -46,6 +47,8 @@ export function HostMenu({ client, gameId, snapshot, canEnd }: HostMenuProps) {
     .filter((s) => s.seatId !== snapshot.mySeatId)
     .sort((a, b) => a.joinedAt - b.joinedAt)
     .map((s) => ({ seatId: s.seatId, name: s.name }));
+  // Nothing to offer (lobby, host alone): no button at all. The board keeps a disabled Make host.
+  if (!canEnd && others.length === 0) return null;
 
   const closeMenu = () => { setOpen(false); button.current?.focus(); };
   const choose = (d: 'make' | 'end') => { setOpen(false); setDialog(d); };

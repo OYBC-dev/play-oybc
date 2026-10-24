@@ -42,7 +42,7 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
   const padBottom = sheetHeight === null ? SHEET_FALLBACK_PX : Math.max(130, sheetHeight + 16);
 
   return (
-    <div className={`page ${styles.lobby}`} style={{ paddingBottom: padBottom }} data-testid="stage-lobby">
+    <div className={`page ${styles.lobby}`} style={{ paddingBottom: padBottom }} data-testid="stage-lobby" data-focus-fallback tabIndex={-1}>
       {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
       <header className={styles.header}>
         <div className={styles.title}>
