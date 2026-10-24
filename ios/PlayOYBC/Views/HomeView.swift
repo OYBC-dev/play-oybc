@@ -7,6 +7,10 @@ struct HomeView: View {
     let onHosted: (_ code: String, _ gameId: String, _ seatId: String) -> Void
     /// Called with a parsed game code.
     let onJoin: (_ code: String) -> Void
+    /// The saved game whose launch check failed transiently, if any.
+    var resume: ResumePrompt? = nil
+    /// Checks the saved game again.
+    var onResume: () -> Void = {}
 
     @State var name = ""
     @State var code = ""
@@ -18,6 +22,14 @@ struct HomeView: View {
             HStack(spacing: 12) {
                 BrandMarkView(size: 40)
                 Text("Play OYBC").font(.risoHead(28, .extraBold)).foregroundStyle(Color.risoInk)
+            }
+            if let resume {
+                RisoCardBox {
+                    SectionLabel("Your game · \(resume.code)")
+                    if let error = resume.error { ErrorText(error) }
+                    RisoButton(title: "Resume game", kind: .primary, fullWidth: true, large: true) { onResume() }
+                        .risoDisabled(resume.busy)
+                }
             }
             RisoCardBox {
                 SectionLabel("Host")

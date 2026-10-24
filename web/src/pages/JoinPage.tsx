@@ -22,6 +22,7 @@ export function JoinPage() {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -31,7 +32,7 @@ export function JoinPage() {
       (e) => { if (live) setPhase({ kind: 'failed', message: errorMessage(e) }); },
     );
     return () => { live = false; };
-  }, [client, code]);
+  }, [client, code, attempt]);
 
   const waitingFor = phase.kind === 'waiting' ? phase : null;
   useEffect(() => {
@@ -83,6 +84,7 @@ export function JoinPage() {
       return (
         <main className="page">
           <p className="error" role="alert">{phase.message}</p>
+          <RisoButton kind="primary" onClick={() => setAttempt((n) => n + 1)}>Try again</RisoButton>
           <Link to="/">Home</Link>
         </main>
       );

@@ -11,6 +11,7 @@ const MESSAGES: Record<string, string> = {
   'invalid-cell': 'That square is not available',
   'unknown-seat': 'That player is not in this game',
   'invalid-text': 'Task text is empty or too long',
+  'reclaim-cooldown': 'Wait a minute before asking again',
 };
 
 const FALLBACK = 'Something went wrong';

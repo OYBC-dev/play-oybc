@@ -51,7 +51,8 @@ pnpm --filter scripts load
 ## Party-day runbook
 
 1. Morning of 10-31: set `MIN_INSTANCES=1` in `functions/.env.play-oybc`, then `firebase deploy --only functions`.
-2. Next day: set `MIN_INSTANCES=0` and run `firebase deploy --only functions` again.
+2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --dir scripts forceHost <code>` to list the game's seats (seatId, name, occupied), then `pnpm --dir scripts forceHost <code> <seatId>` to make an occupied seat the host (needs `gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS` for project `play-oybc`).
+3. Next day: set `MIN_INSTANCES=0` and run `firebase deploy --only functions` again.
 
 ## Smoke test
 
@@ -70,7 +71,7 @@ Run on the hosted URL with the host plus at least 2 other phones.
 | 9 | Mark squares to complete a line; the "<Name> got a bingo!" banner shows on all phones | |
 | 10 | Unmark and re-mark a square; marks persist and no duplicate Bingo banner appears | |
 | 11 | Reload a phone mid-game; it returns to the same seat, board and marks | |
-| 12 | Open the join link on a new device and join with an existing player's name; the host sees "<Name> wants back in" and approves | |
+| 12 | Open the join link on a new device and join with an existing player's name; the host sees "Someone wants to take <Name>'s seat" and approves | |
 | 13 | The displaced original phone shows "You've been replaced in this game." with a Home link | |
 | 14 | Host ends the game; every phone shows the leaderboard | |
 
@@ -95,7 +96,7 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | 13 | iOS: complete a line | The five squares turn gold; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
 | 14 | iOS: tap Leaderboard | Sheet lists the bingos in order with #n and h:mm times |
 | 15 | iOS: force-quit and relaunch the app | It returns to the same seat, board and marks without asking for a name |
-| 16 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Cody wants back in" with Allow / Deny; tap Deny: B shows "The host said no" |
+| 16 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Someone wants to take Cody's seat" with Allow / Deny; tap Deny: B shows "The host said no" |
 | 17 | Phone B: join as "Cody" again; iOS taps Allow | B gets Cody's board; phone A shows "You've been replaced in this game." with a Home link |
 | 18 | iOS: tap Host menu, tap Make host next to Pat, then Make host in the confirm sheet | Pat (B) now has End game and the Host menu; iOS loses them and the reclaim prompt |
 | 19 | Phone B (new host): Host menu, make the iOS player host again | iOS gets End game and the Host menu back |

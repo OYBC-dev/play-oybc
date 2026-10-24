@@ -74,7 +74,9 @@ struct RootView: View {
                 case .home:
                     HomeView(service: model.service,
                              onHosted: { code, g, s in seat(code: code, gameId: g, seatId: s) },
-                             onJoin: { openJoin(code: $0) })
+                             onJoin: { openJoin(code: $0) },
+                             resume: model.resumePrompt,
+                             onResume: { _Concurrency.Task { await model.retryResume() } })
                 case let .join(code):
                     if let joinModel {
                         JoinView(model: joinModel, onHome: goHome,

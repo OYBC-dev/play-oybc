@@ -62,6 +62,13 @@ final class SchemaDecodingTests: XCTestCase {
         XCTAssertEqual(r.newBingoSeqs, [4])
     }
 
+    func testToggleRequestEncodesMarkedOnlyWhenSet() throws {
+        let set = try XCTUnwrap(try FirebaseCoding.encode(ToggleMarkReq(gameId: "g", cellIndex: 3, marked: false)) as? [String: Any])
+        XCTAssertEqual(set["marked"] as? Bool, false)
+        let flip = try XCTUnwrap(try FirebaseCoding.encode(ToggleMarkReq(gameId: "g", cellIndex: 3)) as? [String: Any])
+        XCTAssertNil(flip["marked"])
+    }
+
     func testRoundTrip() throws {
         let b = try load(BoardDoc.self, "board")
         XCTAssertEqual(try JSONDecoder().decode(BoardDoc.self, from: JSONEncoder().encode(b)), b)

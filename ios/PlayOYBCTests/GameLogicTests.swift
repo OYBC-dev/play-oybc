@@ -99,6 +99,7 @@ final class ErrorMessagesTests: XCTestCase {
         XCTAssertEqual(ErrorMessages.message(for: AppError(code: "unknown-mention", token: "@Zed", underlying: nil)), "No player named @Zed")
         XCTAssertEqual(ErrorMessages.message(for: AppError(code: "unknown-mention", token: nil, underlying: nil)), "No one here goes by that name")
         XCTAssertEqual(ErrorMessages.message(for: NSError(domain: "x", code: 1)), "Something went wrong")
+        XCTAssertEqual(ErrorMessages.message(for: AppError(code: "reclaim-cooldown", token: nil, underlying: nil)), "Wait a minute before asking again")
     }
 
     func testListenerCopy() {

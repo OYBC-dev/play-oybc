@@ -27,7 +27,7 @@ describe('PlayScreen', () => {
     const client = new FakeGameClient();
     render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
     await userEvent.click(screen.getByRole('button', { name: 'Task 3' }));
-    expect(client.calls).toContainEqual(['toggleMark', 'g1', 3]);
+    expect(client.calls).toContainEqual(['toggleMark', 'g1', 3, true]);
   });
 
   it('shows a banner for a new bingo from another player, tap dismisses', async () => {

@@ -1,14 +1,19 @@
 import { onCall } from 'firebase-functions/v2/https';
 import {
-  CENTER_INDEX, dealBoard, nameKey, normalizeName,
+  CENTER_INDEX, RECLAIM_RETRY_COOLDOWN_MS, dealBoard, nameKey, normalizeName,
   type BoardDoc, type GameDoc, type JoinGameReq, type JoinGameRes, type MemberDoc, type ReclaimDoc,
 } from 'game-core';
 import { requireUid } from '../lib/auth';
 import { appError } from '../lib/errors';
 import { codeRef, db, parseCode, refs } from '../lib/gameRefs';
+import { TX_OPTIONS } from '../lib/tx';
 import { rebuildViews, toSeats, toTasks } from '../lib/views';
 
-/** Joins a game by code: resumes an existing member, requests reclaim on a name clash, else seats the caller (dealing a board if playing). */
+/**
+ * Joins a game by code: resumes an existing member, requests reclaim on a name clash, else seats the caller
+ * (dealing a board if playing). A requester whose reclaim of that seat was denied under a minute ago is refused
+ * with `reclaim-cooldown`.
+ */
 export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) => {
   const uid = requireUid(req);
   const code = parseCode(req.data?.code);
@@ -19,9 +24,9 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     if (!codeSnap.exists) throw appError('not-found', 'game-not-found');
     const gameId = (codeSnap.data() as { gameId: string }).gameId;
     const r = refs(gameId);
-    const [gameSnap, memberSnap, seatsSnap, tasksSnap, pendingSnap] = await Promise.all([
+    const [gameSnap, memberSnap, seatsSnap, tasksSnap, mineSnap] = await Promise.all([
       tx.get(r.game), tx.get(r.member(uid)), tx.get(r.seats), tx.get(r.tasks),
-      tx.get(r.reclaims.where('requesterUid', '==', uid).where('status', '==', 'pending')),
+      tx.get(r.reclaims.where('requesterUid', '==', uid)),
     ]);
     if (!gameSnap.exists) throw appError('not-found', 'game-not-found');
     const game = gameSnap.data() as GameDoc;
@@ -34,11 +39,15 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     const key = nameKey(name);
     const taken = seatsSnap.docs.find((d) => (d.data() as { nameKey: string }).nameKey === key);
     if (taken) {
-      const existing = pendingSnap.docs.find((d) => (d.data() as ReclaimDoc).seatId === taken.id);
+      const mine = mineSnap.docs.map((d) => ({ id: d.id, ...(d.data() as ReclaimDoc) })).filter((d) => d.seatId === taken.id);
+      const existing = mine.find((d) => d.status === 'pending');
       if (existing) return { status: 'reclaim-pending', gameId, reclaimId: existing.id };
+      const now = Date.now();
+      const recentlyDenied = mine.some((d) => d.status === 'denied' && now - (d.resolvedAt ?? d.createdAt) < RECLAIM_RETRY_COOLDOWN_MS);
+      if (recentlyDenied) throw appError('failed-precondition', 'reclaim-cooldown');
       const reclaimRef = r.reclaims.doc();
       const reclaim: ReclaimDoc = {
-        requesterUid: uid, name, seatId: taken.id, status: 'pending', createdAt: Date.now(),
+        requesterUid: uid, name, seatId: taken.id, status: 'pending', createdAt: now,
       };
       tx.set(reclaimRef, reclaim);
       return { status: 'reclaim-pending', gameId, reclaimId: reclaimRef.id };
@@ -64,5 +73,5 @@ export const joinGame = onCall<JoinGameReq, Promise<JoinGameRes>>(async (req) =>
     tx.set(r.member(uid), { seatId });
     rebuildViews(tx, gameId, tasks, seats);
     return { status: 'joined', gameId, seatId };
-  });
+  }, TX_OPTIONS);
 });

@@ -5,6 +5,7 @@ describe('errorMessage', () => {
   it('maps app error codes and falls back otherwise', () => {
     expect(errorMessage({ details: { code: 'game-ended' } })).toBe('That game has ended');
     expect(errorMessage(new Error('boom'))).toBe('Something went wrong');
+    expect(errorMessage({ details: { code: 'reclaim-cooldown' } })).toBe('Wait a minute before asking again');
   });
 });
 

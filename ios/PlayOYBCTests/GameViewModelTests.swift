@@ -209,6 +209,20 @@ final class GameViewModelTests: XCTestCase {
         await t.value
     }
 
+    func testToggleSendsDesiredValue() async {
+        let fake = FakeGameService()
+        fake.toggleResult = .success(ToggleMarkRes(marks: serverMarks(3), completedLines: [], newBingoSeqs: []))
+        let vm = await started(fake)
+        await vm.toggle(cell: 3)
+        var s = snapshot()
+        s.board?.marks[3] = true
+        fake.emit(s)
+        await settle()
+        await vm.toggle(cell: 3)
+        XCTAssertEqual(fake.toggledCells, [3, 3])
+        XCTAssertEqual(fake.toggledValues, [true, false])
+    }
+
     func testFreeCellIgnored() async {
         let fake = FakeGameService()
         let vm = await started(fake)
@@ -296,6 +310,52 @@ final class GameViewModelTests: XCTestCase {
         model.goHome()
         XCTAssertEqual(model.route, .home)
         XCTAssertNil(st.load())
+    }
+
+    func testLaunchTransientFailureKeepsPointerAndOffersResume() async {
+        let fake = FakeGameService()
+        fake.whoAmIError = AppError(code: "functions/14", token: nil, underlying: nil)
+        let st = store("r4"); st.save(code: "ABCDE")
+        let model = AppModel(service: fake, store: st)
+        await model.launch()
+        XCTAssertEqual(st.load(), "ABCDE")
+        XCTAssertEqual(model.route, .home)
+        XCTAssertEqual(model.resumePrompt, ResumePrompt(code: "ABCDE"))
+
+        await model.retryResume()
+        XCTAssertEqual(model.resumePrompt, ResumePrompt(code: "ABCDE", error: "Something went wrong"))
+        XCTAssertEqual(st.load(), "ABCDE")
+
+        fake.whoAmIError = nil
+        fake.whoAmIResult = WhoAmIRes(gameId: "g9", seatId: "s9")
+        await model.retryResume()
+        XCTAssertNil(model.resumePrompt)
+        XCTAssertEqual(model.route, .game(code: "ABCDE", gameId: "g9", seatId: "s9"))
+        XCTAssertEqual(fake.whoAmICodes, ["ABCDE", "ABCDE", "ABCDE"])
+    }
+
+    func testLaunchGameNotFoundClearsPointer() async {
+        let fake = FakeGameService()
+        fake.whoAmIError = AppError.gameNotFound
+        let st = store("r5"); st.save(code: "ABCDE")
+        let model = AppModel(service: fake, store: st)
+        await model.launch()
+        XCTAssertNil(st.load())
+        XCTAssertNil(model.resumePrompt)
+    }
+
+    func testRetryThatFindsNoSeatClearsPrompt() async {
+        let fake = FakeGameService()
+        fake.whoAmIError = AppError(code: "unknown", token: nil, underlying: nil)
+        let st = store("r6"); st.save(code: "ABCDE")
+        let model = AppModel(service: fake, store: st)
+        await model.launch()
+        XCTAssertNotNil(model.resumePrompt)
+        fake.whoAmIError = nil
+        await model.retryResume()
+        XCTAssertNil(model.resumePrompt)
+        XCTAssertNil(st.load())
+        XCTAssertEqual(model.route, .home)
     }
 
     func testLaunchClearsPointerWhenNoSeat() async {

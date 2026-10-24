@@ -5,7 +5,10 @@ import { appError } from '../lib/errors';
 import { db, parseGameId, refs } from '../lib/gameRefs';
 import { TX_OPTIONS } from '../lib/tx';
 
-/** Toggles one square; each newly completed line appends an ordered, announced `bingos` entry. */
+/**
+ * Sets (`marked` given) or flips (`marked` omitted, 0.1.0 clients) one square; each newly completed line appends
+ * an ordered, announced `bingos` entry. A set to the value the square already holds writes nothing.
+ */
 export const toggleMark = onCall<ToggleMarkReq, Promise<ToggleMarkRes>>(async (req) => {
   const uid = requireUid(req);
   const gameId = parseGameId(req.data?.gameId);
@@ -13,6 +16,8 @@ export const toggleMark = onCall<ToggleMarkReq, Promise<ToggleMarkRes>>(async (r
   if (typeof cellIndex !== 'number' || !Number.isInteger(cellIndex) || cellIndex < 0 || cellIndex > 24) {
     throw appError('invalid-argument', 'invalid-cell');
   }
+  const desired = req.data?.marked;
+  if (desired !== undefined && typeof desired !== 'boolean') throw appError('invalid-argument', 'invalid-cell');
 
   return db.runTransaction(async (tx) => {
     const r = refs(gameId);
@@ -21,7 +26,8 @@ export const toggleMark = onCall<ToggleMarkReq, Promise<ToggleMarkRes>>(async (r
     if (game.stage !== 'playing') throw appError('failed-precondition', 'wrong-stage');
     if (!boardSnap.exists || !seatSnap.exists) throw appError('failed-precondition', 'wrong-stage');
     const board = boardSnap.data() as BoardDoc;
-    const { marks, completedLines, newLines } = applyMark(board, cellIndex);
+    const { marks, completedLines, newLines, changed } = applyMark(board, cellIndex, desired);
+    if (!changed && desired !== undefined) return { marks: board.marks, completedLines: board.completedLines, newBingoSeqs: [] };
 
     const announcedLines = [...board.announcedLines];
     let bingoCount = game.bingoCount;

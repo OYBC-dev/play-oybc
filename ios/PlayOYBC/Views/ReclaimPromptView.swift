@@ -14,7 +14,7 @@ struct ReclaimPromptView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(reclaims) { r in
                     HStack(spacing: 8) {
-                        Text("\(r.doc.name) wants back in")
+                        Text("Someone wants to take \(r.doc.name)'s seat")
                             .font(.risoBody(15, .semibold))
                             .foregroundStyle(Color.risoInk)
                             .frame(maxWidth: .infinity, alignment: .leading)

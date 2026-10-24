@@ -15,6 +15,8 @@ final class FakeGameService: GameService, @unchecked Sendable {
     /// Thrown by every void call (addTask, deleteTask, launch, end, resolveReclaim, transferHost).
     var callError: Error?
     private(set) var toggledCells: [Int] = []
+    /// The `marked` value sent with each toggle, parallel to `toggledCells`.
+    private(set) var toggledValues: [Bool] = []
     private(set) var whoAmICodes: [String] = []
     private(set) var joins: [(code: String, name: String)] = []
     private(set) var calls: [String] = []
@@ -59,8 +61,8 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func addTask(gameId: String, text: String) async throws { try void("addTask:\(text)") }
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
     func launch(gameId: String) async throws { try void("launch") }
-    func toggleMark(gameId: String, cellIndex: Int) async throws -> ToggleMarkRes {
-        let gated = lock.withLock { toggledCells.append(cellIndex); return gateToggle }
+    func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
+        let gated = lock.withLock { toggledCells.append(cellIndex); toggledValues.append(marked); return gateToggle }
         if gated { await withCheckedContinuation { c in lock.withLock { gates[cellIndex] = c } } }
         return try lock.withLock { toggleResultByCell[cellIndex] ?? toggleResult }.get()
     }

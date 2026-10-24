@@ -13,7 +13,7 @@ export const firebaseGameClient: GameClient = {
   addTask: async (gameId, text) => { await api.addTask({ gameId, text }); },
   deleteTask: async (gameId, taskId) => { await api.deleteTask({ gameId, taskId }); },
   launch: async (gameId) => { await api.launchGame({ gameId }); },
-  toggleMark: (gameId, cellIndex) => api.toggleMark({ gameId, cellIndex }),
+  toggleMark: (gameId, cellIndex, marked) => api.toggleMark({ gameId, cellIndex, marked }),
   end: async (gameId) => { await api.endGame({ gameId }); },
   resolveReclaim: async (gameId, reclaimId, approve) => { await api.resolveReclaim({ gameId, reclaimId, approve }); },
   transferHost: async (gameId, toSeatId) => { await api.transferHost({ gameId, toSeatId }); },
@@ -47,7 +47,12 @@ export const firebaseGameClient: GameClient = {
           state.reclaims = snap.docs.map((d) => ({ id: d.id, ...(d.data() as ReclaimDoc) }));
           emit();
         },
-        fail,
+        // Host-only extra: losing it must not end the game screen. Drop the prompts and keep playing.
+        (e) => {
+          console.warn('reclaims listener failed', e);
+          state.reclaims = [];
+          emit();
+        },
       );
     };
 

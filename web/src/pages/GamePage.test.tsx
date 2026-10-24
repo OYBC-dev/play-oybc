@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ClientProvider } from '../game/ClientContext';
 import { FakeGameClient } from '../game/fakeGameClient';
@@ -33,6 +34,25 @@ describe('GamePage', () => {
     act(() => client.emitError(denied()));
     expect(await screen.findByRole('alert')).toHaveTextContent("You've been replaced in this game.");
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+  });
+
+  it('a transient listener error offers Try again, which re-subscribes', async () => {
+    const client = new FakeGameClient();
+    setup(client);
+    act(() => client.emitError(new Error('unavailable')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong');
+    client.snapshot = snapshot;
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('stage-lobby')).toBeInTheDocument();
+    expect(client.calls.filter((c) => c[0] === 'subscribe')).toHaveLength(2);
+  });
+
+  it('replaced and not-in-game are terminal (no Try again)', async () => {
+    const client = new FakeGameClient();
+    setup(client);
+    act(() => client.emitError(denied()));
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 
   it('says not in this game when access was never granted', async () => {

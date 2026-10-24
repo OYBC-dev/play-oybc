@@ -22,6 +22,11 @@ final class ScreenSnapshotTests: XCTestCase {
         assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in }, name: "Stephen", code: "HX7KQ"), height: 520)
     }
 
+    func testHomeWithResume() {
+        assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in },
+                            resume: ResumePrompt(code: "HX7KQ", error: "Something went wrong"), name: "Stephen", code: ""), height: 700)
+    }
+
     func testJoinName() {
         let vm = JoinViewModel(service: FakeGameService(), code: "HX7KQ", phase: .name)
         assertBoth(JoinView(model: vm, onHome: {}, name: "Cody"), height: 360)

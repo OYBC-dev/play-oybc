@@ -33,6 +33,17 @@ const nameField = () => screen.findByLabelText('Your name');
 const submit = () => userEvent.click(screen.getByRole('button', { name: 'Join' }));
 
 describe('JoinPage', () => {
+  it('a failed whoAmI offers Try again, which checks again', async () => {
+    const client = new FakeGameClient();
+    client.whoAmIResult = appError('internal');
+    setup(client);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong');
+    client.whoAmIResult = { gameId: 'g1', seatId: 's2' };
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('stage-lobby')).toBeInTheDocument();
+    expect(client.calls.filter((c) => c[0] === 'whoAmI')).toHaveLength(2);
+  });
+
   it('renders the game without asking for a name when already seated', async () => {
     const client = new FakeGameClient();
     client.whoAmIResult = { gameId: 'g1', seatId: 's2' };

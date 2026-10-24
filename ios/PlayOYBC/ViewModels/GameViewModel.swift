@@ -100,7 +100,8 @@ final class GameViewModel: ObservableObject {
         guard serverSnapshot?.game.stage == .playing,
               let server = serverSnapshot?.board, server.marks.indices.contains(cell),
               server.cells[cell] != .free, !pendingCells.contains(cell) else { return }
-        overlay[cell] = !effectiveBoard(server).marks[cell]
+        let want = !effectiveBoard(server).marks[cell]
+        overlay[cell] = want
         error = nil
         pendingCells.insert(cell)
         dimTasks[cell] = _Concurrency.Task { [weak self, sleeper] in
@@ -110,7 +111,7 @@ final class GameViewModel: ObservableObject {
         }
         publish()
         do {
-            _ = try await service.toggleMark(gameId: gameId, cellIndex: cell)
+            _ = try await service.toggleMark(gameId: gameId, cellIndex: cell, marked: want)
             error = nil
         } catch {
             overlay[cell] = nil
@@ -170,12 +171,17 @@ enum AppRoute: Equatable {
 /// A game the launch check found this device still seated in.
 struct ResumedGame: Equatable { var code: String; var gameId: String; var seatId: String }
 
+/// A saved game whose launch check failed transiently; Home offers to try it again.
+struct ResumePrompt: Equatable { var code: String; var busy = false; var error: String? }
+
 /// App-level state the UI layer drives: launch warm-up, resume, remembering the joined game.
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var resumed: ResumedGame?
     @Published private(set) var launched = false
     @Published private(set) var route: AppRoute = .home
+    /// Set when the saved game could not be checked (offline, server hiccup); nil otherwise.
+    @Published private(set) var resumePrompt: ResumePrompt?
     let service: GameService
     private let store: ResumeStore
 
@@ -185,19 +191,43 @@ final class AppModel: ObservableObject {
     }
 
     /// At launch: if `lastGame` holds a code, ask the server where this uid sits.
-    /// No seat clears the pointer; a network failure keeps it for the next launch.
+    /// A definitive answer (no seat, or no such game) clears the pointer; any other failure keeps it
+    /// and shows the resume prompt on Home.
     func launch() async {
         defer { launched = true }
         guard let code = store.load() else { return }
+        if await check(code: code) != nil { resumePrompt = ResumePrompt(code: code) }
+    }
+
+    /// Home's resume prompt: checks the saved game again. Failing again keeps the prompt with the error.
+    func retryResume() async {
+        guard let prompt = resumePrompt, !prompt.busy else { return }
+        resumePrompt?.busy = true
+        resumePrompt?.error = nil
+        if let failure = await check(code: prompt.code) {
+            resumePrompt = ResumePrompt(code: prompt.code, error: ErrorMessages.message(for: failure))
+        }
+    }
+
+    /// Asks where this uid sits in `code`'s game and routes there. Returns the error only for a
+    /// transient failure (the pointer is kept); every definitive answer also clears the prompt.
+    private func check(code: String) async -> Error? {
         do {
             if let me = try await service.whoAmI(code: code) {
+                resumePrompt = nil
                 resumed = ResumedGame(code: code, gameId: me.gameId, seatId: me.seatId)
                 route = .game(code: code, gameId: me.gameId, seatId: me.seatId)
             } else {
-                store.clear()
+                forget()
             }
+            return nil
         } catch {
+            if AppError.from(error).code == AppError.gameNotFound.code {
+                forget()
+                return nil
+            }
             resumed = nil
+            return error
         }
     }
 
@@ -205,13 +235,14 @@ final class AppModel: ObservableObject {
     func remember(code: String) { store.save(code: code) }
 
     /// Forgets the game (left or ended).
-    func forget() { store.clear(); resumed = nil }
+    func forget() { store.clear(); resumed = nil; resumePrompt = nil }
 
     /// Shows the join flow for a code.
     func openJoin(code: String) { route = .join(code: code) }
 
     /// Seats this device in a game and remembers it for resume.
     func seat(code: String, gameId: String, seatId: String) {
+        resumePrompt = nil
         remember(code: code)
         route = .game(code: code, gameId: gameId, seatId: seatId)
     }

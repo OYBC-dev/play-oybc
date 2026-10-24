@@ -158,7 +158,7 @@ Three forms, typed inline in task text:
 - Live views recover after the network drops and returns, without a manual refresh.
 - **Seat reclaim** (identity lost — QR opened in a private tab / in-app browser then
   reopened in Safari, site data cleared, new phone): the player types their existing
-  name on the join screen → the host gets "*Name* wants back in" → on approve, the
+  name on the join screen → the host gets "Someone wants to take *Name*'s seat" → on approve, the
   seat's uid is replaced with the new one and they get their board, marks and pool view
   back. On deny, nothing changes. *(Owner decision.)*
 - **Host hand-off:** the host can pass the host role to any player (who then has every

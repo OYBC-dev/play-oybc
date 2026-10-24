@@ -11,7 +11,8 @@ const MOVE_CANCEL_PX = 10;
 
 export interface BoardGridProps {
   board: BoardDoc;
-  onToggle: (cellIndex: number) => Promise<ToggleMarkRes>;
+  /** Called with the value the cell should now hold. */
+  onToggle: (cellIndex: number, marked: boolean) => Promise<ToggleMarkRes>;
   /** Final boards: nothing is tappable. */
   readOnly?: boolean;
 }
@@ -74,7 +75,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
     setInFlight((s) => new Set(s).add(i));
     timers.current.set(i, setTimeout(() => setSlow((s) => new Set(s).add(i)), PENDING_DIM_MS));
     try {
-      await onToggle(i);
+      await onToggle(i, want);
     } catch (e) {
       setOverrides((o) => { const n = new Map(o); n.delete(i); return n; });
       setError(errorMessage(e));

@@ -24,9 +24,10 @@ export const resolveReclaim = onCall<ResolveReclaimReq, Promise<Record<string, n
     const reclaimSnap = await tx.get(r.reclaim(reclaimId));
     if (!reclaimSnap.exists) throw appError('not-found', 'reclaim-not-found');
     const reclaim = reclaimSnap.data() as ReclaimDoc;
+    const now = Date.now();
     if (reclaim.status !== 'pending') throw appError('failed-precondition', 'wrong-stage');
     if (!approve) {
-      tx.update(reclaimSnap.ref, { status: 'denied' });
+      tx.update(reclaimSnap.ref, { status: 'denied', resolvedAt: now });
       return 'done';
     }
     const [requesterSnap, holdersSnap, pendingSnap] = await Promise.all([
@@ -35,14 +36,14 @@ export const resolveReclaim = onCall<ResolveReclaimReq, Promise<Record<string, n
       tx.get(r.reclaims.where('seatId', '==', reclaim.seatId).where('status', '==', 'pending')),
     ]);
     if (requesterSnap.exists || seatId === reclaim.seatId) {
-      tx.update(reclaimSnap.ref, { status: 'denied' });
+      tx.update(reclaimSnap.ref, { status: 'denied', resolvedAt: now });
       // Requester already seated, or the host's own seat: commit the denial, then report outside the tx: throwing here would roll it back.
       return 'conflict';
     }
     for (const d of holdersSnap.docs) tx.delete(d.ref);
     tx.set(r.member(reclaim.requesterUid), { seatId: reclaim.seatId } satisfies MemberDoc);
-    tx.update(reclaimSnap.ref, { status: 'approved' });
-    for (const d of pendingSnap.docs) if (d.id !== reclaimId) tx.update(d.ref, { status: 'denied' });
+    tx.update(reclaimSnap.ref, { status: 'approved', resolvedAt: now });
+    for (const d of pendingSnap.docs) if (d.id !== reclaimId) tx.update(d.ref, { status: 'denied', resolvedAt: now });
     return 'done';
   }, TX_OPTIONS);
   if (outcome === 'conflict') throw appError('failed-precondition', 'wrong-stage');

@@ -21,7 +21,8 @@ protocol GameService {
     func addTask(gameId: String, text: String) async throws
     func deleteTask(gameId: String, taskId: String) async throws
     func launch(gameId: String) async throws
-    func toggleMark(gameId: String, cellIndex: Int) async throws -> ToggleMarkRes
+    /// Sets the square to `marked` (idempotent on retry).
+    func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes
     func end(gameId: String) async throws
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws
     func transferHost(gameId: String, toSeatId: String) async throws

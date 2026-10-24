@@ -3,7 +3,8 @@ import { HttpsError, type FunctionsErrorCode } from 'firebase-functions/v2/https
 /** App-level error codes carried in HttpsError `details.code`. */
 export type AppErrorCode =
   | 'invalid-name' | 'invalid-text' | 'game-not-found' | 'game-ended' | 'unknown-mention'
-  | 'self-mention' | 'not-host' | 'wrong-stage' | 'not-ready' | 'invalid-cell' | 'unknown-seat' | 'reclaim-not-found';
+  | 'self-mention' | 'not-host' | 'wrong-stage' | 'not-ready' | 'invalid-cell' | 'unknown-seat' | 'reclaim-not-found'
+  | 'reclaim-cooldown';
 
 /**
  * Builds an HttpsError with a standard Firebase code and an app code in `details.code`.

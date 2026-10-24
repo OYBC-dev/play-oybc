@@ -36,12 +36,20 @@ describe('BoardGrid', () => {
     render(<BoardGrid board={board()} onToggle={onToggle} />);
     const cell = screen.getByRole('button', { name: 'Task 3' });
     await user().click(cell);
-    expect(onToggle).toHaveBeenCalledWith(3);
+    expect(onToggle).toHaveBeenCalledWith(3, true);
     expect(cell).toHaveAttribute('data-marked', 'true');
     expect(cell).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Task 4' })).not.toBeDisabled();
     await act(async () => { resolve(ok); });
     expect(cell).not.toBeDisabled();
+  });
+
+  it('tapping a marked cell asks for marked=false', async () => {
+    const onToggle = vi.fn(async () => ok);
+    const marks = Array.from({ length: 25 }, (_, i) => i === 12 || i === 3);
+    render(<BoardGrid board={board({ marks })} onToggle={onToggle} />);
+    await user().click(screen.getByRole('button', { name: 'Task 3' }));
+    expect(onToggle).toHaveBeenCalledWith(3, false);
   });
 
   it('dims only after 250 ms in flight, never hides', async () => {

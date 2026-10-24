@@ -40,6 +40,21 @@ describe('resolveReclaim', () => {
     expect(await readAdmin(`games/${gameId}/members/${await uidOf('u2')}`)).toEqual({ seatId: codySeat });
     expect(await readAdmin(`games/${gameId}/members/${await uidOf('u9')}`)).toBeUndefined();
   });
+  it('a denied requester must wait a minute before asking for that seat again', async () => {
+    const { gameId, reclaimId } = await withReclaim();
+    const code = (await readAdmin(`games/${gameId}`)).code;
+    await callAs('u1', 'resolveReclaim', { gameId, reclaimId, approve: false });
+    expect(typeof (await readAdmin(`games/${gameId}/reclaims/${reclaimId}`)).resolvedAt).toBe('number');
+    expect(await appCodeOf(callAs('u9', 'joinGame', { code, name: 'Cody' }))).toBe('reclaim-cooldown');
+    // Someone else may still ask.
+    expect((await callAs('u10', 'joinGame', { code, name: 'Cody' })).status).toBe('reclaim-pending');
+    // After the minute, u9 may ask again.
+    const { admin } = await import('./helpers');
+    await admin.doc(`games/${gameId}/reclaims/${reclaimId}`).update({ resolvedAt: Date.now() - 61_000 });
+    const again = await callAs('u9', 'joinGame', { code, name: 'Cody' });
+    expect(again.status).toBe('reclaim-pending');
+    expect(again.reclaimId).not.toBe(reclaimId);
+  });
   it('rejects an already-resolved reclaim', async () => {
     const { gameId, reclaimId } = await withReclaim();
     await callAs('u1', 'resolveReclaim', { gameId, reclaimId, approve: false });

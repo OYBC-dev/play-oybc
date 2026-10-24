@@ -37,7 +37,8 @@ export interface GameClient {
   addTask(gameId: string, text: string): Promise<void>;
   deleteTask(gameId: string, taskId: string): Promise<void>;
   launch(gameId: string): Promise<void>;
-  toggleMark(gameId: string, cellIndex: number): Promise<ToggleMarkRes>;
+  /** Sets the square to `marked` (idempotent on retry). */
+  toggleMark(gameId: string, cellIndex: number, marked: boolean): Promise<ToggleMarkRes>;
   end(gameId: string): Promise<void>;
   resolveReclaim(gameId: string, reclaimId: string, approve: boolean): Promise<void>;
   transferHost(gameId: string, toSeatId: string): Promise<void>;

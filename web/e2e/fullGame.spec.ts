@@ -90,7 +90,7 @@ test('three phones play a full game', async ({ browser }) => {
   extra.push(E.ctx);
   await join(E.page, code, 'cody');
   await expect(E.page.getByText('Waiting for the host')).toBeVisible();
-  await expect(A.page.getByText('Cody wants back in')).toBeVisible();
+  await expect(A.page.getByText("Someone wants to take Cody's seat")).toBeVisible();
   await A.page.getByRole('button', { name: 'Allow' }).click();
   await expect(E.page.getByTestId('stage-playing')).toBeVisible();
   const eCells = E.page.locator('button[data-marked]');

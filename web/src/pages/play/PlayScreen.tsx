@@ -43,7 +43,7 @@ export function PlayScreen({ client, snapshot, gameId }: { client: GameClient; s
         {isHost && <RisoButton size="small" kind="primary" onClick={() => { setEndError(null); setSheet('end'); }}>End game</RisoButton>}
       </div>
       {board ? (
-        <BoardGrid board={board} onToggle={(i) => client.toggleMark(gameId, i)} />
+        <BoardGrid board={board} onToggle={(i, marked) => client.toggleMark(gameId, i, marked)} />
       ) : (
         <p className="muted">Loading</p>
       )}

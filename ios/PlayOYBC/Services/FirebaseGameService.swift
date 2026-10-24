@@ -109,8 +109,8 @@ final class FirebaseGameService: GameService {
     func addTask(gameId: String, text: String) async throws { try await callVoid("addTask", AddTaskReq(gameId: gameId, text: text)) }
     func deleteTask(gameId: String, taskId: String) async throws { try await callVoid("deleteTask", DeleteTaskReq(gameId: gameId, taskId: taskId)) }
     func launch(gameId: String) async throws { try await callVoid("launchGame", LaunchGameReq(gameId: gameId)) }
-    func toggleMark(gameId: String, cellIndex: Int) async throws -> ToggleMarkRes {
-        try await call("toggleMark", ToggleMarkReq(gameId: gameId, cellIndex: cellIndex), as: ToggleMarkRes.self)
+    func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
+        try await call("toggleMark", ToggleMarkReq(gameId: gameId, cellIndex: cellIndex, marked: marked), as: ToggleMarkRes.self)
     }
     func end(gameId: String) async throws { try await callVoid("endGame", EndGameReq(gameId: gameId)) }
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws {
@@ -200,10 +200,13 @@ private final class ReclaimWatcher {
 
 /// Merges the five game listeners (plus the host-only reclaims listener) into snapshots,
 /// emitting once every part has reported (the web `subscribe` rule). Main-actor confined;
-/// Firestore delivers listener callbacks on the main queue.
+/// Firestore delivers listener callbacks on the main queue. Any listener error ends the stream
+/// except the host-only reclaims listener's, which only clears the reclaim prompts.
+/// Internal (not private) so tests can drive the `…Changed` / `…Failed` entry points without Firestore.
 @MainActor
-private final class SubscriptionHub {
-    private let db: Firestore
+final class SubscriptionHub {
+    /// Nil only in tests, which never call `start()`; no listener is attached without it.
+    private let db: Firestore?
     private let gameId: String
     private let seatId: String
     private let continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation
@@ -219,11 +222,42 @@ private final class SubscriptionHub {
     private var bingos: [BingoDoc]?
     private var reclaims: [Reclaim] = []
 
-    init(db: Firestore, gameId: String, seatId: String, continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation) {
+    init(db: Firestore?, gameId: String, seatId: String, continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation) {
         self.db = db; self.gameId = gameId; self.seatId = seatId; self.continuation = continuation
     }
 
-    private var gameRef: DocumentReference { db.collection("games").document(gameId) }
+    private var gameRef: DocumentReference? { db?.collection("games").document(gameId) }
+
+    /// A new game doc: re-evaluates host status (attaching or dropping the reclaims listener).
+    func gameChanged(_ g: GameDoc) {
+        game = g
+        setReclaimListener(isHost: g.hostSeatId == seatId)
+        emit()
+    }
+
+    /// The host's pending reclaims.
+    func reclaimsChanged(_ r: [Reclaim]) {
+        reclaims = r
+        emit()
+    }
+
+    #if DEBUG
+    /// Tests only: fills the non-game parts so the next change emits.
+    func seedForTesting(seats: [Seat], view: [PoolViewEntry], board: BoardDoc?, bingos: [BingoDoc]) {
+        self.seats = seats; self.view = view; self.board = .some(board); self.bingos = bingos
+    }
+
+    /// Tests only: a fatal listener error (any listener but reclaims).
+    func listenerFailedForTesting(_ e: Error) { fail(e) }
+    #endif
+
+    /// The host-only reclaims listener failed: drop the prompts and keep the game running.
+    func reclaimsFailed(_ e: Error) {
+        guard !closed else { return }
+        log.error("reclaims listener failed: \(e.localizedDescription)")
+        reclaims = []
+        emit()
+    }
 
     func fail(_ e: Error) {
         guard !closed else { return }
@@ -252,11 +286,11 @@ private final class SubscriptionHub {
         }
     }
 
-    /// Wraps a listener so errors fail the stream and callbacks run main-isolated.
-    private func listen<S>(_ handler: @escaping (S) -> Void) -> (S?, Error?) -> Void {
+    /// Wraps a listener so errors go to `onError` (default: fail the stream) and callbacks run main-isolated.
+    private func listen<S>(onError: ((Error) -> Void)? = nil, _ handler: @escaping (S) -> Void) -> (S?, Error?) -> Void {
         { [self] value, error in
             MainActor.assumeIsolated {
-                if let error { return fail(AppError.from(error)) }
+                if let error { return (onError ?? { self.fail($0) })(AppError.from(error)) }
                 guard !closed, let value else { return }
                 handler(value)
             }
@@ -264,7 +298,7 @@ private final class SubscriptionHub {
     }
 
     func start() {
-        guard !closed else { return }
+        guard !closed, let gameRef else { return }
         regs.append(gameRef.addSnapshotListener(listen { [self] (snap: DocumentSnapshot) in
             guard snap.exists, let data = snap.data() else {
                 // A cache miss is not a missing game; only a server-confirmed absence is.
@@ -272,10 +306,7 @@ private final class SubscriptionHub {
                 return fail(AppError.gameNotFound)
             }
             do {
-                let g = try FirebaseCoding.decode(GameDoc.self, from: data)
-                game = g
-                setReclaimListener(isHost: g.hostSeatId == seatId)
-                emit()
+                gameChanged(try FirebaseCoding.decode(GameDoc.self, from: data))
             } catch { fail(error) }
         }))
         regs.append(gameRef.collection("seats").addSnapshotListener(listen { [self] (snap: QuerySnapshot) in
@@ -307,10 +338,9 @@ private final class SubscriptionHub {
         reclaimReg?.remove()
         reclaimReg = nil
         guard isHost else { reclaims = []; return }
-        reclaimReg = gameRef.collection("reclaims").whereField("status", isEqualTo: "pending")
-            .addSnapshotListener(listen { [self] (snap: QuerySnapshot) in
-                reclaims = snap.documents.compactMap { d in decodeLenient(ReclaimDoc.self, d).map { Reclaim(id: d.documentID, doc: $0) } }
-                emit()
+        reclaimReg = gameRef?.collection("reclaims").whereField("status", isEqualTo: "pending")
+            .addSnapshotListener(listen(onError: { [self] in reclaimsFailed($0) }) { [self] (snap: QuerySnapshot) in
+                reclaimsChanged(snap.documents.compactMap { d in decodeLenient(ReclaimDoc.self, d).map { Reclaim(id: d.documentID, doc: $0) } })
             })
     }
 }

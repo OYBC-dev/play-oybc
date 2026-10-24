@@ -26,7 +26,7 @@ export function ReclaimPrompt({ client, gameId, reclaims }: { client: GameClient
     <div className={styles.reclaims} data-testid="reclaim-prompt">
       {reclaims.map((r) => (
         <div key={r.id} className={styles.reclaim}>
-          <span className={styles.who}>{r.name} wants back in</span>
+          <span className={styles.who}>Someone wants to take {r.name}&apos;s seat</span>
           <div className={styles.actions}>
             <RisoButton size="small" kind="green" disabled={busy === r.id} onClick={() => void resolve(r.id, true)}>Allow</RisoButton>
             <RisoButton size="small" disabled={busy === r.id} onClick={() => void resolve(r.id, false)}>Deny</RisoButton>

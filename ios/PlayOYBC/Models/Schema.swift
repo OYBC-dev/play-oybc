@@ -145,7 +145,8 @@ struct AddTaskReq: Codable, Equatable { var gameId: String; var text: String }
 struct AddTaskRes: Codable, Equatable { var taskId: String }
 struct DeleteTaskReq: Codable, Equatable { var gameId: String; var taskId: String }
 struct LaunchGameReq: Codable, Equatable { var gameId: String }
-struct ToggleMarkReq: Codable, Equatable { var gameId: String; var cellIndex: Int }
+/// `marked` sets the square to that value (idempotent); nil = flip (0.1.0 clients). Nil is omitted on the wire.
+struct ToggleMarkReq: Codable, Equatable { var gameId: String; var cellIndex: Int; var marked: Bool? = nil }
 struct ToggleMarkRes: Codable, Equatable { var marks: [Bool]; var completedLines: [String]; var newBingoSeqs: [Int] }
 struct EndGameReq: Codable, Equatable { var gameId: String }
 struct ResolveReclaimReq: Codable, Equatable { var gameId: String; var reclaimId: String; var approve: Bool }

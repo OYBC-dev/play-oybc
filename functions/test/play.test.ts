@@ -108,6 +108,35 @@ describe('toggleMark', () => {
     expect((await bingos(gameId)).map((x) => x.seq)).toEqual([1, 2]);
     expect((await readAdmin(`games/${gameId}`)).bingoCount).toBe(2);
   });
+  it('marked=true sent twice marks once and announces at most one bingo', async () => {
+    const { gameId, ids } = await playing();
+    for (const i of [0, 1, 2, 3]) await callAs('u2', 'toggleMark', { gameId, cellIndex: i, marked: true });
+    const first = await callAs('u2', 'toggleMark', { gameId, cellIndex: 4, marked: true });
+    const retry = await callAs('u2', 'toggleMark', { gameId, cellIndex: 4, marked: true });
+    expect(first.newBingoSeqs).toEqual([1]);
+    expect(retry.newBingoSeqs).toEqual([]);
+    expect(retry.marks[4]).toBe(true);
+    expect(await bingos(gameId)).toHaveLength(1);
+    expect((await readAdmin(`games/${gameId}`)).bingoCount).toBe(1);
+    expect((await readAdmin(`games/${gameId}/boards/${ids.u2}`)).marks[4]).toBe(true);
+  });
+  it('marked=false on an unmarked square is a no-op', async () => {
+    const { gameId, ids } = await playing();
+    const res = await callAs('u2', 'toggleMark', { gameId, cellIndex: 3, marked: false });
+    expect(res.marks[3]).toBe(false);
+    expect((await readAdmin(`games/${gameId}/boards/${ids.u2}`)).marks.filter(Boolean)).toHaveLength(1);
+  });
+  it('marked omitted flips (0.1.0 clients)', async () => {
+    const { gameId, ids } = await playing();
+    await mark('u2', gameId, 3);
+    expect((await readAdmin(`games/${gameId}/boards/${ids.u2}`)).marks[3]).toBe(true);
+    await mark('u2', gameId, 3);
+    expect((await readAdmin(`games/${gameId}/boards/${ids.u2}`)).marks[3]).toBe(false);
+  });
+  it('rejects a non-boolean marked', async () => {
+    const { gameId } = await playing();
+    expect(await appCodeOf(callAs('u2', 'toggleMark', { gameId, cellIndex: 3, marked: 'yes' }))).toBe('invalid-cell');
+  });
   it('validates cellIndex', async () => {
     const { gameId, ids } = await playing();
     for (const cellIndex of [25, -1, 1.5, '3', null, undefined]) {

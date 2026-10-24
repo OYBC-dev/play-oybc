@@ -34,7 +34,7 @@ describe('ReclaimPrompt', () => {
   it('shows who wants back in; Allow and Deny resolve the reclaim', async () => {
     const client = new FakeGameClient();
     render(<ReclaimPrompt client={client} gameId="g1" reclaims={[reclaim]} />);
-    expect(screen.getByText('Cody wants back in')).toBeInTheDocument();
+    expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Allow' }));
     await userEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(client.calls).toContainEqual(['resolveReclaim', 'g1', 'r1', true]);
@@ -55,13 +55,13 @@ describe('ReclaimPrompt', () => {
     const client = new FakeGameClient();
     const r = [reclaim];
     const { unmount: u1 } = render(<LobbyScreen client={client} snapshot={snap({ reclaims: r })} gameId="g1" />);
-    expect(screen.getByText('Cody wants back in')).toBeInTheDocument();
+    expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     u1();
     const { unmount: u2 } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing', reclaims: r })} gameId="g1" />);
-    expect(screen.getByText('Cody wants back in')).toBeInTheDocument();
+    expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     u2();
     render(<EndedScreen client={client} snapshot={snap({ stage: 'ended', reclaims: r })} gameId="g1" />);
-    expect(screen.getByText('Cody wants back in')).toBeInTheDocument();
+    expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
   });
 });
 

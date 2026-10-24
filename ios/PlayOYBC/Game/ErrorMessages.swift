@@ -17,6 +17,7 @@ enum ErrorMessages {
         "invalid-cell": "That square is not available",
         "unknown-seat": "That player is not in this game",
         "invalid-text": "Task text is empty or too long",
+        "reclaim-cooldown": "Wait a minute before asking again",
     ]
 
     /// Copy for any error thrown by a service call.

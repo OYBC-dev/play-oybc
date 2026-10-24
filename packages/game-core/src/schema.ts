@@ -50,10 +50,14 @@ export interface ReclaimDoc {
   seatId: string;
   status: 'pending' | 'approved' | 'denied';
   createdAt: number;
+  /** When the reclaim was approved or denied (absent on older docs). */
+  resolvedAt?: number;
 }
 
 export interface CreateGameReq { name: string }
 export interface CreateGameRes { gameId: string; code: string; seatId: string }
+/** A requester whose reclaim of a seat was denied must wait this long before asking for it again. */
+export const RECLAIM_RETRY_COOLDOWN_MS = 60_000;
 export interface JoinGameReq { code: string; name: string }
 export type JoinGameRes =
   | { status: 'joined' | 'resumed'; gameId: string; seatId: string }
@@ -64,7 +68,8 @@ export interface AddTaskReq { gameId: string; text: string }
 export interface AddTaskRes { taskId: string }
 export interface DeleteTaskReq { gameId: string; taskId: string }
 export interface LaunchGameReq { gameId: string }
-export interface ToggleMarkReq { gameId: string; cellIndex: number }
+/** `marked` sets the square to that value (idempotent); omitted = flip (0.1.0 clients send none). */
+export interface ToggleMarkReq { gameId: string; cellIndex: number; marked?: boolean }
 export interface ToggleMarkRes { marks: boolean[]; completedLines: string[]; newBingoSeqs: number[] }
 export interface EndGameReq { gameId: string }
 export interface ResolveReclaimReq { gameId: string; reclaimId: string; approve: boolean }
