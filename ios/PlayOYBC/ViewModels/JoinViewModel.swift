@@ -15,14 +15,18 @@ final class JoinViewModel: ObservableObject {
     @Published private(set) var phase: Phase = .checking
     @Published private(set) var error: String?
     @Published private(set) var busy = false
+    /// The host turned down the last reclaim request ("The host said no").
+    @Published private(set) var denied = false
     let code: String
     private let service: GameService
     private var watchTask: _Concurrency.Task<Void, Never>?
 
-    init(service: GameService, code: String, phase: Phase = .checking) {
+    init(service: GameService, code: String, phase: Phase = .checking, error: String? = nil, denied: Bool = false) {
         self.service = service
         self.code = code
         self.phase = phase
+        self.error = error
+        self.denied = denied
     }
 
     deinit { watchTask?.cancel() }
@@ -45,6 +49,7 @@ final class JoinViewModel: ObservableObject {
     func submit(name: String) async {
         busy = true
         error = nil
+        denied = false
         defer { busy = false }
         do {
             switch try await service.joinGame(code: code, name: name) {
@@ -60,6 +65,7 @@ final class JoinViewModel: ObservableObject {
     }
 
     private func backToName(_ message: String) {
+        denied = false
         error = message
         phase = .name
     }
@@ -73,7 +79,9 @@ final class JoinViewModel: ObservableObject {
                     switch status {
                     case .pending: continue
                     case .denied:
-                        self.backToName("The host said no")
+                        self.error = nil
+                        self.denied = true
+                        self.phase = .name
                         return
                     case .approved:
                         do {

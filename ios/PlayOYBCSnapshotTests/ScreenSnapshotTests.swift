@@ -19,17 +19,40 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testHome() {
-        assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in }, name: "Stephen", code: "HX7KQ"), height: 520)
+        assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in }, name: "Stephen", code: "HX7KQ"), height: 720)
+    }
+
+    func testHomeEmpty() {
+        assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in }), height: 720)
     }
 
     func testHomeWithResume() {
         assertBoth(HomeView(service: FakeGameService(), onHosted: { _, _, _ in }, onJoin: { _ in },
-                            resume: ResumePrompt(code: "HX7KQ", error: "Something went wrong"), name: "Stephen", code: ""), height: 700)
+                            resume: ResumePrompt(code: "HX7KQ", error: "Something went wrong"), name: "Stephen", code: ""), height: 940)
     }
 
     func testJoinName() {
         let vm = JoinViewModel(service: FakeGameService(), code: "HX7KQ", phase: .name)
-        assertBoth(JoinView(model: vm, onHome: {}, name: "Cody"), height: 360)
+        assertBoth(JoinView(model: vm, onHome: {}, name: "Cody"), height: 400)
+    }
+
+    func testJoinWaiting() {
+        let vm = JoinViewModel(service: FakeGameService(), code: "HX7KQ", phase: .waiting(gameId: "g1", reclaimId: "r1"))
+        assertBoth(JoinView(model: vm, onHome: {}, name: "Cody", animateWaiting: false), height: 400)
+    }
+
+    func testJoinDenied() {
+        let vm = JoinViewModel(service: FakeGameService(), code: "HX7KQ", phase: .name, denied: true)
+        assertBoth(JoinView(model: vm, onHome: {}, name: "Cody"), height: 420)
+    }
+
+    func testJoinFailed() {
+        let vm = JoinViewModel(service: FakeGameService(), code: "HX7KQ", phase: .failed(message: "No game with that code"))
+        assertBoth(JoinView(model: vm, onHome: {}), height: 260)
+    }
+
+    func testKit() {
+        assertBoth(KitGallery(), height: 640)
     }
 
     func testLobbyHost() {
@@ -77,5 +100,37 @@ final class ScreenSnapshotTests: XCTestCase {
     func testListenerError() {
         let denied = AppError(code: "permission-denied", token: nil, underlying: nil)
         assertBoth(GameErrorView(message: ErrorMessages.listenerMessage(for: denied, wasSeated: true), onHome: {}), height: 160)
+    }
+}
+
+/// The I2 kit on one page: brand mark (both sizes), wordmark, Host badge, mini-board art,
+/// and a 6-seat avatar stack collapsed and expanded.
+private struct KitGallery: View {
+    private var sixSeats: [Seat] {
+        SnapshotFixtures.seats + [
+            Seat(seatId: "s5", doc: SeatDoc(name: "Ola", nameKey: "ola", joinedAt: SnapshotFixtures.fixedNow + 4000)),
+            Seat(seatId: "s6", doc: SeatDoc(name: "Zed", nameKey: "zed", joinedAt: SnapshotFixtures.fixedNow + 5000)),
+        ]
+    }
+
+    var body: some View {
+        RisoPage(gutter: Riso.gutter, spacing: 24) {
+            HStack(alignment: .bottom, spacing: 24) {
+                PlayBrandMark(size: .header)
+                PlayBrandMark(size: .home)
+            }
+            Wordmark().padding(.top, 22).frame(maxWidth: .infinity)
+            HStack(spacing: 24) {
+                RisoBadge("Host", kind: .expiring)
+                RisoMiniBoardArt()
+            }
+            SectionLabel("Players")
+            AvatarStack(seats: sixSeats, expanded: false, onToggle: {})
+            AvatarStack(seats: sixSeats, max: 5, expanded: true, onToggle: {})
+            HStack(spacing: 10) {
+                RisoButton(title: "Host a game", kind: .primary) {}
+                RisoButton(title: "Join", kind: .blue) {}
+            }
+        }
     }
 }

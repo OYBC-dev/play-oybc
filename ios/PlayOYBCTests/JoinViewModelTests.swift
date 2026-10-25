@@ -58,7 +58,12 @@ final class JoinViewModelTests: XCTestCase {
         fake.emitReclaim(.denied)
         await settle()
         XCTAssertEqual(vm.phase, .name)
-        XCTAssertEqual(vm.error, "The host said no")
+        XCTAssertTrue(vm.denied)
+        XCTAssertNil(vm.error)
+        // A new attempt clears the denied line.
+        fake.joinResult = .success(.joined(gameId: "g1", seatId: "s9"))
+        await vm.submit(name: "Cody")
+        XCTAssertFalse(vm.denied)
     }
 
     func testReclaimWatchErrorReturnsToName() async {

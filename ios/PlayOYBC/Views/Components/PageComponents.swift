@@ -1,8 +1,13 @@
 import SwiftUI
 
 /// A scrolling Riso page (web `.page`): paper background, 16pt gutters, 16pt stack gap.
+/// Home and Join pass the iOS large-title metrics (20pt gutter, their own top and gap).
 struct RisoPage<Content: View>: View {
     var scrolls = true
+    var gutter: CGFloat = 16
+    var top: CGFloat = 24
+    var bottom: CGFloat = 24
+    var spacing: CGFloat = 16
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -17,9 +22,10 @@ struct RisoPage<Content: View>: View {
     }
 
     private var stack: some View {
-        VStack(alignment: .leading, spacing: 16) { content }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 24)
+        VStack(alignment: .leading, spacing: spacing) { content }
+            .padding(.horizontal, gutter)
+            .padding(.top, top)
+            .padding(.bottom, bottom)
             .frame(maxWidth: 480, alignment: .leading)
             .frame(maxWidth: .infinity)
     }
@@ -63,37 +69,6 @@ struct RisoCardBox<Content: View>: View {
     }
 }
 
-/// A labelled text input (web `.field`).
-struct LabeledField: View {
-    let label: String
-    @Binding var text: String
-    var maxLength: Int
-    var capitalization: TextInputAutocapitalization = .words
-    var contentType: UITextContentType? = nil
-    var onSubmit: () -> Void = {}
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.risoBody(15, .semibold)).foregroundStyle(Color.risoInk)
-            TextField("", text: $text)
-                .accessibilityLabel(label)
-                .textInputAutocapitalization(capitalization)
-                .autocorrectionDisabled()
-                .textContentType(contentType)
-                .submitLabel(.go)
-                .onSubmit(onSubmit)
-                .font(.risoBody(16, .medium))
-                .foregroundStyle(Color.risoInk)
-                .tint(Color.risoBlue)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 48)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.risoPaper2))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
-                .onChange(of: text) { _, v in if v.count > maxLength { text = String(v.prefix(maxLength)) } }
-        }
-    }
-}
-
 /// Section label (web `RisoSectionLabel`).
 struct SectionLabel: View {
     let title: String
@@ -124,35 +99,6 @@ struct RisoSheet<Content: View>: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-}
-
-/// The OYBC 3×3 brand mark (web `RisoBrandMark`): red tile, cream dots, gold center.
-struct BrandMarkView: View {
-    var size: CGFloat = 40
-    private let pattern = [1, 0, 1, 0, 2, 0, 1, 0, 1]
-
-    var body: some View {
-        let cell = (size - 10 - 4 - 4) / 3
-        VStack(spacing: 2) {
-            ForEach(0..<3, id: \.self) { r in
-                HStack(spacing: 2) {
-                    ForEach(0..<3, id: \.self) { c in
-                        let v = pattern[r * 3 + c]
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(v == 2 ? Color.risoGold : (v == 1 ? Color.risoOnColor : Color.risoOnColor.opacity(0.32)))
-                            .frame(width: cell, height: cell)
-                    }
-                }
-            }
-        }
-        .padding(5)
-        .frame(width: size, height: size)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.risoRed))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.risoInk, lineWidth: 2))
-        .risoHardShadow(2, radius: 8)
-        .accessibilityElement()
-        .accessibilityLabel("OYBC")
     }
 }
 

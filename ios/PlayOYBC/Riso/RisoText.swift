@@ -4,10 +4,10 @@ import SwiftUI
 /// converted from the CSS `em` values to points at each role's fixed size
 /// (em × size).
 extension View {
-    /// Kicker — Bricolage 700, 12px, +.22em caps, red by default.
+    /// Kicker — Bricolage 700, 13px, +.22em caps, red by default (web `RisoSectionLabel` kicker).
     func risoKicker(_ color: Color = .risoRed) -> some View {
-        self.font(.risoHead(12, .bold))
-            .tracking(2.64)
+        self.font(.risoHead(13, .bold))
+            .tracking(2.86)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }
@@ -26,10 +26,10 @@ extension View {
             .foregroundStyle(Color.risoInk)
     }
 
-    /// Section label — Archivo 700, 11px, +.1em caps, muted.
+    /// Section label — Bricolage 700, 11px, +.16em caps, muted (web `RisoSectionLabel`).
     func risoSectionLabel(_ color: Color = .risoMuted) -> some View {
-        self.font(.risoBody(11, .bold))
-            .tracking(1.1)
+        self.font(.risoHead(11, .bold))
+            .tracking(1.76)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }

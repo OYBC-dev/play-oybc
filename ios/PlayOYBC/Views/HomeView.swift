@@ -18,11 +18,8 @@ struct HomeView: View {
     @State var busy = false
 
     var body: some View {
-        RisoPage {
-            HStack(spacing: 12) {
-                BrandMarkView(size: 40)
-                Text("Play OYBC").font(.risoHead(28, .extraBold)).foregroundStyle(Color.risoInk)
-            }
+        RisoPage(gutter: Riso.gutter, top: 40, bottom: 32, spacing: 26) {
+            hero
             if let resume {
                 RisoCardBox {
                     SectionLabel("Your game · \(resume.code)")
@@ -32,19 +29,32 @@ struct HomeView: View {
                 }
             }
             RisoCardBox {
-                SectionLabel("Host")
-                LabeledField(label: "Your name", text: $name, maxLength: 20, contentType: .nickname) { host() }
+                SectionLabel("Host a game")
+                RisoInputField(placeholder: "Your name", text: $name, maxLength: 20, contentType: .nickname) { host() }
                 if let error { ErrorText(error) }
                 RisoButton(title: "Host a game", kind: .primary, fullWidth: true, large: true) { host() }
                     .risoDisabled(busy)
             }
             RisoCardBox {
                 SectionLabel("Join")
-                LabeledField(label: "Game code", text: $code, maxLength: 120, capitalization: .characters) { join() }
+                // 120, not 5: a pasted game link is parsed down to its code.
+                RisoInputField(placeholder: "Game code", text: $code, maxLength: 120, style: .code,
+                               capitalization: .characters) { join() }
                 RisoButton(title: "Join", kind: .blue, fullWidth: true, large: true) { join() }
                     .risoDisabled(JoinCode.parse(code) == nil)
             }
         }
+    }
+
+    /// Brand mark over the wordmark, centred (web `.hero`).
+    private var hero: some View {
+        VStack(spacing: 18) {
+            PlayBrandMark(size: .home)
+            Wordmark()
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity)
     }
 
     private func host() {

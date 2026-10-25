@@ -4,10 +4,10 @@ import SwiftUI
 
 enum RisoButtonKind {
     case neutral   // paper2 / ink
-    case primary   // red / paper
-    case blue      // blue / paper
-    case green     // green / paper — success / confirm
-    case teal      // teal / paper — compound-type submit action (dark fill,
+    case primary   // red / on-color
+    case blue      // blue / on-color
+    case green     // green / on-color — success / confirm
+    case teal      // teal / on-color — compound-type submit action (dark fill,
                     // same contract as blue/green)
     case gold      // gold / inkStatic — primary CTA on a non-toolbar surface
                     // (e.g. the closing-out banner's Seal action). Uses
@@ -37,7 +37,11 @@ enum RisoButtonKind {
         case .neutral: return .risoInk
         case .gold: return .risoInkStatic
         case .ghost: return .risoInk
-        default: return .risoPaper
+        // Adaptive on purpose: the ink slab flips, so its label flips with it.
+        case .dark: return .risoPaper
+        // Filled kinds draw static cream (web `--riso-on-color`): adaptive paper turns
+        // near-black in dark mode and fails contrast on the rust / olive fills.
+        case .primary, .blue, .green, .teal: return .risoOnColor
         }
     }
 }
@@ -244,7 +248,8 @@ struct RisoSegmented<T: Hashable>: View {
                             Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
                         }
                     }
-                    .foregroundStyle(selection == opt.value ? Color.risoPaper : Color.risoInk)
+                    // Selected sits on a coloured fill: static cream, never adaptive paper.
+                    .foregroundStyle(selection == opt.value ? Color.risoOnColor : Color.risoInk)
                     .frame(maxWidth: equalWidth ? .infinity : nil)
                     .padding(.vertical, 10)
                     .padding(.horizontal, equalWidth ? 0 : 14)

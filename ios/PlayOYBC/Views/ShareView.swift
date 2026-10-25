@@ -32,7 +32,7 @@ struct ShareView: View {
                 }
                 Text(link)
                     .font(.risoBody(14, .semibold))
-                    .foregroundStyle(Color.risoBlue)
+                    .foregroundStyle(Color.risoMuted)
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
                 RisoButton(title: copied ? "Copied" : "Copy link", fullWidth: true) {

@@ -17,7 +17,7 @@ struct LeaderboardView: View {
                             .frame(width: 28, alignment: .leading)
                         Text(b.name).font(.risoBody(15, .bold)).foregroundStyle(Color.risoInk)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("#\(b.playerBingoNumber)").font(.risoHead(15, .extraBold)).foregroundStyle(Color.risoBlue)
+                        Text("#\(b.playerBingoNumber)").font(.risoHead(15, .extraBold)).foregroundStyle(Color.risoInk)
                         Text(LobbyLogic.clock(b.at, timeZone: timeZone))
                             .font(.risoBody(15).monospacedDigit()).foregroundStyle(Color.risoMuted)
                     }
