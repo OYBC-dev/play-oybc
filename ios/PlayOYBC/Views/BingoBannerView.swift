@@ -15,6 +15,7 @@ struct BingoBannerView: View {
     @State private var announced: Set<Int> = []
     @State private var bursts: [Int] = []
     @State private var burstSeen: Set<Int> = []
+    @State private var announcement: _Concurrency.Task<Void, Never>?
 
     private var motion: Bool { animates && !reduceMotion }
 
@@ -35,25 +36,27 @@ struct BingoBannerView: View {
             }
             .overlay { confetti }
         .onChange(of: banners.map(\.seq), initial: true) { _, _ in sync() }
+        .onDisappear { announcement?.cancel() }
     }
 
     static let gutter: CGFloat = 14
     private static let maxZ = 10
 
-    @ViewBuilder private func card(_ bingo: BingoDoc, index: Int) -> some View {
-        let content = BingoBannerCard(name: bingo.name)
-            .rotationEffect(.degrees(index == 0 ? -1.2 : 0), anchor: .top)
-            .scaleEffect(1 - Double(index) * 0.045, anchor: .top)
-            .offset(y: CGFloat(index) * 12)
-            .transition(motion ? .asymmetric(insertion: .offset(y: -110).combined(with: .opacity),
-                                              removal: .offset(y: -190).combined(with: .opacity)) : .identity)
-        if index == 0 {
-            Button(action: onDismiss) { content }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(bingo.name) got a bingo!")
-        } else {
-            content.accessibilityHidden(true).allowsHitTesting(false)
+    /// One view type for every position, keyed by the banner's seq, so a promoted card slides
+    /// forward instead of re-inserting; only the front takes touches and VoiceOver focus.
+    private func card(_ bingo: BingoDoc, index: Int) -> some View {
+        Button(action: onDismiss) {
+            BingoBannerCard(name: bingo.name)
+                .rotationEffect(.degrees(index == 0 ? -1.2 : 0), anchor: .top)
+                .scaleEffect(1 - Double(index) * 0.045, anchor: .top)
+                .offset(y: CGFloat(index) * 12)
         }
+        .buttonStyle(.plain)
+        .allowsHitTesting(index == 0)
+        .accessibilityHidden(index != 0)
+        .accessibilityLabel("\(bingo.name) got a bingo!")
+        .transition(motion ? .asymmetric(insertion: .offset(y: -110).combined(with: .opacity),
+                                          removal: .offset(y: -190).combined(with: .opacity)) : .identity)
     }
 
     @ViewBuilder private var confetti: some View {
@@ -74,12 +77,12 @@ struct BingoBannerView: View {
         let names = banners.filter { fresh.contains($0.seq) }.map(\.name)
         if motion { for seq in fresh where !burstSeen.contains(seq) { bursts.append(seq) } }
         burstSeen.formUnion(fresh)
-        // One announcement at a time: VoiceOver drops overlapping ones.
-        _Concurrency.Task {
-            for (i, name) in names.enumerated() {
-                if i > 0 { try? await _Concurrency.Task.sleep(nanoseconds: 2_000_000_000) }
-                AccessibilityNotification.Announcement("\(name) got a bingo!").post()
-            }
+        // One combined announcement (web's single live region): overlapping ones are dropped.
+        announcement?.cancel()
+        let message = names.map { "\($0) got a bingo!" }.joined(separator: " ")
+        announcement = _Concurrency.Task { @MainActor in
+            guard !_Concurrency.Task.isCancelled else { return }
+            AccessibilityNotification.Announcement(message).post()
         }
     }
 }
@@ -99,7 +102,7 @@ struct BingoBannerCard: View {
             Text("\(name) got a bingo!")
                 .font(.risoHead(24, .extraBold))
                 .tracking(-0.48)
-                .lineSpacing(0)
+                .tightLines()
                 .foregroundStyle(Color.risoInkStatic)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -127,5 +130,12 @@ private struct BannerStar: Shape {
         }
         p.closeSubpath()
         return p
+    }
+}
+
+private extension View {
+    /// Web's line-height 1.05 at 24 pt (25.2 pt); SwiftUI ignores a negative `lineSpacing`.
+    @ViewBuilder func tightLines() -> some View {
+        if #available(iOS 26, *) { lineHeight(.exact(points: 25.2)) } else { lineSpacing(-3) }
     }
 }

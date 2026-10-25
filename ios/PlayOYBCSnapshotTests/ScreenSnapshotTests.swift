@@ -92,12 +92,12 @@ final class ScreenSnapshotTests: XCTestCase {
 
     private static let longBingoName = "Bartholomew Fitzgerald-Smythe"
 
-    /// Three bingos at once: the long (24+ character) name sits last, so it shows below the front cards.
+    /// Three bingos at once: three equal-height names so the offset slivers show the stack.
     func testBingoStack3() {
         let stack = [
             BingoDoc(seq: 5, seatId: "s3", name: "Pat", line: "col_2", playerBingoNumber: 2, at: 1, status: .announced),
-            BingoDoc(seq: 6, seatId: "s4", name: "Mary Jane", line: "diag_main", playerBingoNumber: 1, at: 2, status: .announced),
-            BingoDoc(seq: 7, seatId: "s2", name: Self.longBingoName, line: "row_4", playerBingoNumber: 1, at: 3, status: .announced),
+            BingoDoc(seq: 6, seatId: "s4", name: "Dee", line: "diag_main", playerBingoNumber: 1, at: 2, status: .announced),
+            BingoDoc(seq: 7, seatId: "s2", name: "Cody", line: "row_4", playerBingoNumber: 1, at: 3, status: .announced),
         ]
         assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", banners: stack, bannerMotion: false), height: 520)
     }
