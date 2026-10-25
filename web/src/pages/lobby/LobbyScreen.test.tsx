@@ -8,7 +8,7 @@ import { nonsenseFor } from './nonsense';
 function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean } = {}): GameSnapshot {
   const host = over.host ?? true;
   const view = over.empty ? [] : [
-    { taskId: 't1', authorName: 'Pat', text: 'Someone spills wine', mine: false },
+    { taskId: 't1', authorName: 'Pat', text: 'Someone carves the pumpkin', mine: false },
     { taskId: 't2', authorName: 'Cody', text: null, mine: false },
     { taskId: 't3', authorName: 'Me', text: 'My own task', mine: true },
   ];
@@ -37,7 +37,7 @@ function setup(s: GameSnapshot) {
 describe('LobbyScreen', () => {
   it('renders entries; blurred ones show the author and two copies of per-task nonsense, never task text', () => {
     const { container } = setup(snap());
-    expect(screen.getByText('Someone spills wine')).toBeInTheDocument();
+    expect(screen.getByText('Someone carves the pumpkin')).toBeInTheDocument();
     const redacted = screen.getByRole('img', { name: 'Hidden task' });
     expect(redacted).toHaveAttribute('data-testid', 'redacted');
     const row = redacted.closest('li')!;
@@ -105,7 +105,7 @@ describe('LobbyScreen', () => {
     const { client } = setup(snap());
     let reject!: (e: Error) => void;
     client.deleteTask = (() => new Promise<void>((_, r) => { reject = r; })) as never;
-    const btn = screen.getByRole('button', { name: 'Delete task: Someone spills wine' });
+    const btn = screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' });
     await userEvent.click(btn);
     expect(btn).toBeDisabled();
     await act(async () => reject(appError('not-host')));
