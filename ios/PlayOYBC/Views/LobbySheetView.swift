@@ -20,14 +20,15 @@ struct LobbySheetView: View {
 
     /// Content-to-screen-edge padding on a home-indicator iPhone (the iOS frames' 38pt).
     static let bottomClearance: CGFloat = 38
-    /// Extra leading per shortfall line (web line-height 1.35).
+    /// Gap between shortfall lines, within a wrapped line and between lines alike.
     static let shortfallLeading: CGFloat = 2
     /// Three shortfall lines show; more scroll inside the sheet (web `.shorts`). Follows
     /// Dynamic Type through the same scaling as `Font.risoBody`.
     @ScaledMetric(relativeTo: .body) private var shortfallLine: CGFloat = 12.5
     private var shortfallCap: CGFloat {
         let font = UIFont(name: "Archivo-Bold", size: shortfallLine) ?? .systemFont(ofSize: shortfallLine, weight: .bold)
-        return 3 * (font.lineHeight + Self.shortfallLeading)
+        // Every line box sits one line height apart with the same gap, wrapped or not.
+        return 3 * font.lineHeight + 2 * Self.shortfallLeading
     }
 
     private var lines: [String] { isHost ? LobbyLogic.shortfallLines(game: snapshot.game, seats: snapshot.seats) : [] }
@@ -91,7 +92,7 @@ struct LobbySheetView: View {
             GameCodeText(code: snapshot.game.code, color: fg)
             if !lines.isEmpty {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: Self.shortfallLeading) {
                         ForEach(lines, id: \.self) { line in
                             Text(line)
                                 .font(.risoBody(12.5, .bold))

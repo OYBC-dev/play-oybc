@@ -41,7 +41,7 @@ enum SnapshotFixtures {
         GameSnapshot(game: game(stage: .lobby), mySeatId: "s1", seats: [seats[0]], view: [], board: nil, bingos: [], reclaims: [])
     }
 
-    /// A 29-character name: wraps in the sheet's shortfall block and truncates in its chip.
+    /// A 29-character name (past Join's 20 cap, a worst case): wraps in the sheet's shortfall block.
     static let longNameSeat = Seat(seatId: "s5", doc: SeatDoc(name: "Bartholomew Fitzgerald-Smythe", nameKey: "bartholomew fitzgerald-smythe",
                                                               joinedAt: fixedNow + 4000))
 

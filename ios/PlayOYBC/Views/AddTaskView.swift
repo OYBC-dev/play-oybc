@@ -43,7 +43,8 @@ struct AddTaskView: View {
                 if !options.isEmpty { autocomplete.offset(y: 56) }
             }
             .zIndex(1)
-            if let error { ErrorText(error) }
+            // The mention card floats where the error sits; the error shows again once it closes.
+            if let error, options.isEmpty { ErrorText(error) }
         }
     }
 

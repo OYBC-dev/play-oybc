@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Every player as a 38pt chip in join order; the host's chip carries the Host badge
-/// (web `PlayerList`).
+/// (web `PlayerList`). Chips size to the name (names cap at 20 characters on Join).
 struct PlayerListView: View {
     let snapshot: GameSnapshot
 
@@ -13,7 +13,6 @@ struct PlayerListView: View {
                         .font(.risoHead(14, .bold))
                         .foregroundStyle(Color.risoInk)
                         .lineLimit(1)
-                        .truncationMode(.tail)
                     if seat.seatId == snapshot.game.hostSeatId { RisoBadge("Host", kind: .expiring) }
                 }
                 .padding(.horizontal, 12)
