@@ -88,8 +88,30 @@ final class BoardLinesTests: XCTestCase {
 
     func testCellStyle() {
         XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: true).fill, .risoGold)
+        XCTAssertTrue(CellStyle(free: false, marked: true, highlighted: true).halftone)
         XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false).fill, .risoRed)
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false).foreground, .risoOnColor)
         XCTAssertEqual(CellStyle(free: false, marked: false, highlighted: false).fill, .risoPaper2)
+        // Free stays ink even inside a completed line, with no overprint.
+        XCTAssertEqual(CellStyle(free: true, marked: true, highlighted: true).fill, .risoInk)
+        XCTAssertFalse(CellStyle(free: true, marked: true, highlighted: true).halftone)
+    }
+
+    func testPendingCellDimsAndDropsShadow() {
+        var style = CellStyle(free: false, marked: true, highlighted: false)
+        XCTAssertEqual(style.opacity, 1)
+        XCTAssertTrue(style.showsShadow)
+        style.pending = true
+        XCTAssertEqual(style.opacity, 0.55)
+        XCTAssertFalse(style.showsShadow)
+        style.pending = false
+        XCTAssertEqual(style.opacity, 1)
+        XCTAssertTrue(style.showsShadow)
+    }
+
+    func testCellLineClamp() {
+        XCTAssertEqual(CellStyle.lineLimit(cellSide: 65), 4)
+        XCTAssertEqual(CellStyle.lineLimit(cellSide: 71.5), 5)
     }
 }
 
@@ -107,5 +129,49 @@ final class ErrorMessagesTests: XCTestCase {
         XCTAssertEqual(ErrorMessages.listenerMessage(for: denied, wasSeated: true), "You've been replaced in this game.")
         XCTAssertEqual(ErrorMessages.listenerMessage(for: denied, wasSeated: false), "You're not in this game.")
         XCTAssertEqual(ErrorMessages.listenerMessage(for: AppError.gameNotFound, wasSeated: true), "No game with that code")
+    }
+}
+
+final class HostMenuModelTests: XCTestCase {
+    private func seat(_ id: String, _ name: String, _ at: Double) -> Seat {
+        Seat(seatId: id, doc: SeatDoc(name: name, nameKey: name.lowercased(), joinedAt: at))
+    }
+
+    private func snapshot(me: String, seats: [Seat], stage: Stage = .playing) -> GameSnapshot {
+        GameSnapshot(game: GameDoc(code: "ABCDE", stage: stage, hostSeatId: "s1", createdAt: 1, launchedAt: nil, endedAt: nil,
+                                   bingoCount: 0, shortfalls: [:], reviewGate: false),
+                     mySeatId: me, seats: seats, view: [], board: nil, bingos: [], reclaims: [])
+    }
+
+    func testMakeHostDisabledWithNoOtherPlayers() {
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: [seat("s1", "Stephen", 1)]), canEnd: true)
+        XCTAssertTrue(m.showsButton, "the board keeps the button for End game")
+        XCTAssertFalse(m.makeHostEnabled)
+        XCTAssertTrue(m.showsEndGame)
+    }
+
+    func testCandidatesAreOthersInJoinOrder() {
+        let seats = [seat("s3", "Pat", 3), seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: seats), canEnd: true)
+        XCTAssertEqual(m.candidates.map(\.seatId), ["s2", "s3"])
+        XCTAssertTrue(m.makeHostEnabled)
+    }
+
+    func testLobbyMenuHasNoEndGame() {
+        let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: seats, stage: .lobby), canEnd: false)
+        XCTAssertTrue(m.showsButton)
+        XCTAssertFalse(m.showsEndGame)
+        XCTAssertTrue(m.makeHostEnabled)
+    }
+
+    func testLobbyHidesButtonWhenHostAlone() {
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: [seat("s1", "Stephen", 1)], stage: .lobby), canEnd: false)
+        XCTAssertFalse(m.showsButton)
+    }
+
+    func testNonHostNeverSeesButton() {
+        let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
+        XCTAssertFalse(HostMenuModel(snapshot: snapshot(me: "s2", seats: seats), canEnd: true).showsButton)
     }
 }

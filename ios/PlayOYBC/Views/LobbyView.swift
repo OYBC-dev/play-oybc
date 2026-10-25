@@ -17,9 +17,14 @@ struct LobbyView: View {
     @State private var sheetHeight: CGFloat = 150
     /// False freezes the waiting dots (snapshots).
     var animateWaiting = true
+    /// What the host menu has open (snapshots start it open).
+    @State var hostMenu: HostMenuStage?
+    @AccessibilityFocusState private var dotsFocused: Bool
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
     private var seats: [Seat] { LobbyLogic.seatsByJoin(snapshot.seats) }
+    /// `endGame` only ends a playing game server-side, so the lobby offers Make host alone.
+    private var menuModel: HostMenuModel { HostMenuModel(snapshot: snapshot, canEnd: false) }
 
     var body: some View {
         ZStack {
@@ -27,6 +32,7 @@ struct LobbyView: View {
             ScrollView { content }.scrollDismissesKeyboard(.interactively)
         }
         .overlay { sheet }
+        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused)
         .accessibilityIdentifier("stage-lobby")
     }
 
@@ -43,8 +49,6 @@ struct LobbyView: View {
                 .zIndex(1)
             if let deleteError { ErrorText(deleteError) }
             PoolListView(entries: snapshot.view, isHost: isHost, deleting: deleting) { remove($0) }
-            // Kept until the header dots menu replaces it (I4).
-            HostMenuView(service: service, gameId: gameId, snapshot: snapshot)
         }
         .padding(.horizontal, Riso.gutter)
         .padding(.top, 10)
@@ -53,26 +57,11 @@ struct LobbyView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Large "Pool" title with the "{n} / 24" count; the avatar stack on the right.
     private var header: some View {
-        HStack(alignment: .center, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Pool")
-                    .font(.risoHead(34, .extraBold))
-                    .tracking(-0.85)
-                    .foregroundStyle(Color.risoInk)
-                    .accessibilityAddTraits(.isHeader)
-                Text("\(snapshot.view.count) / \(GameConstants.minPoolSize)")
-                    .font(.risoHead(17, .extraBold))
-                    .foregroundStyle(Color.risoMuted)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            Spacer(minLength: 0)
-            AvatarStack(seats: seats, max: 5, expanded: playersOpen) { playersOpen.toggle() }
-                .padding(.trailing, 6)
-        }
-        .frame(minHeight: 44)
+        LobbyHeaderView(poolCount: snapshot.view.count, seats: seats, playersOpen: playersOpen,
+                        showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu, menuFocus: $dotsFocused,
+                        onTogglePlayers: { playersOpen.toggle() },
+                        onMenu: { hostMenu = hostMenu == .menu ? nil : .menu })
     }
 
     /// The bottom sheet, pinned to the screen's bottom edge and clear of the keyboard.
@@ -99,5 +88,62 @@ struct LobbyView: View {
             catch { deleteError = ErrorMessages.message(for: error) }
             deleting.remove(id)
         }
+    }
+}
+
+/// The lobby header (README §3): large "Pool" title with the "{n} / 24" count; the avatar stack
+/// and, for the host once someone else has joined, the dots menu on the right. At large text
+/// sizes the avatars and menu wrap under the title.
+struct LobbyHeaderView: View {
+    let poolCount: Int
+    /// Seats in join order.
+    let seats: [Seat]
+    let playersOpen: Bool
+    let showsMenu: Bool
+    var menuOpen = false
+    var menuFocus: AccessibilityFocusState<Bool>.Binding
+    let onTogglePlayers: () -> Void
+    let onMenu: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 10) {
+                title
+                Spacer(minLength: 0)
+                actions
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                title
+                actions
+            }
+        }
+        .frame(minHeight: 44)
+    }
+
+    private var title: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Pool")
+                .font(.risoHead(34, .extraBold))
+                .tracking(-0.85)
+                .foregroundStyle(Color.risoInk)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Text("\(poolCount) / \(GameConstants.minPoolSize)")
+                .font(.risoHead(17, .extraBold))
+                .foregroundStyle(Color.risoMuted)
+                .lineLimit(1)
+        }
+        .fixedSize()
+    }
+
+    private var actions: some View {
+        HStack(spacing: 10) {
+            AvatarStack(seats: seats, max: 5, expanded: playersOpen, onToggle: onTogglePlayers)
+                .padding(.trailing, 6)
+            if showsMenu {
+                HostMenuButton(open: menuOpen, focus: menuFocus, action: onMenu)
+            }
+        }
+        .fixedSize()
     }
 }

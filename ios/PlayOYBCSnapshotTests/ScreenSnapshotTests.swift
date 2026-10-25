@@ -112,17 +112,69 @@ final class ScreenSnapshotTests: XCTestCase {
         assertBoth(RisoPage { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: F.reclaims) }, height: 220)
     }
 
-    func testHostMenuSheet() {
-        assertBoth(HostMenuSheet(service: FakeGameService(), gameId: "g1", snapshot: F.lobby(mySeatId: "s1"), onClose: {}), height: 340)
+    func testBoardHostMenu() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", hostMenu: .menu), height: 470)
     }
 
-    func testHostMenuConfirm() {
-        assertBoth(HostMenuSheet(service: FakeGameService(), gameId: "g1", snapshot: F.lobby(mySeatId: "s1"), onClose: {}, target: F.seats[1]), height: 260)
+    func testMakeHostDialog() {
+        let others = Array(F.seats.dropFirst())
+        assertBoth(ZStack {
+            PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            MakeHostDialog(service: FakeGameService(), gameId: "g1", candidates: others, onClose: {}, pickedId: "s2")
+        }, height: 470)
+    }
+
+    func testEndGameDialog() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", hostMenu: .endGame), height: 470)
+    }
+
+    /// Square 7 (marked) is in flight past 250 ms: dimmed, shadow dropped.
+    func testBoardPendingCell() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", pendingCells: [7], slowCells: [7]), height: 470)
+    }
+
+    /// 120-character squares clamp (four lines at this width).
+    func testBoardLongText() {
+        var snap = F.playing(mySeatId: "s2")
+        snap.board = F.longTextBoard()
+        assertBoth(PlayView(service: FakeGameService(), snapshot: snap, gameId: "g1"), height: 470)
+    }
+
+    func testLobbyHostMenu() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1", hostMenu: .menu), height: screen, drawHierarchy: true)
+    }
+
+    /// Lobby header at an accessibility text size: title, count, avatars and dots stay whole.
+    func testLobbyHeaderAccessibilitySize() {
+        assertBoth(HeaderHarness { focus in
+            LobbyHeaderView(poolCount: 18, seats: F.seats, playersOpen: false, showsMenu: true, menuFocus: focus, onTogglePlayers: {}, onMenu: {})
+        }.environment(\.dynamicTypeSize, .accessibility2), height: 220)
+    }
+
+    /// Board header at an accessibility text size: code pill, Leaderboard and dots stay whole.
+    func testBoardHeaderAccessibilitySize() {
+        assertBoth(HeaderHarness { focus in
+            BoardHeaderView(code: "HX7KQ", showsMenu: true, menuFocus: focus, onLeaderboard: {}, onMenu: {})
+        }.environment(\.dynamicTypeSize, .accessibility2), height: 200)
     }
 
     func testListenerError() {
         let denied = AppError(code: "permission-denied", token: nil, underlying: nil)
         assertBoth(GameErrorView(message: ErrorMessages.listenerMessage(for: denied, wasSeated: true), onHome: {}), height: 160)
+    }
+}
+
+/// Hosts a header that needs a VoiceOver focus binding, on the page background.
+private struct HeaderHarness<Content: View>: View {
+    @AccessibilityFocusState private var focus: Bool
+    let content: (AccessibilityFocusState<Bool>.Binding) -> Content
+
+    init(@ViewBuilder content: @escaping (AccessibilityFocusState<Bool>.Binding) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        RisoPage(gutter: Riso.gutter, top: 20) { content($focus) }
     }
 }
 

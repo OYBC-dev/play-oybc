@@ -22,7 +22,7 @@ enum SnapshotFixtures {
     /// Pool as seen by `viewer`; the entry mentioning the viewer arrives without text.
     static func pool(viewer: String) -> [PoolViewEntry] {
         [
-            PoolViewEntry(taskId: "t1", authorName: "Stephen", text: "Someone spills a drink", mine: viewer == "s1"),
+            PoolViewEntry(taskId: "t1", authorName: "Stephen", text: "Someone bobs for apples", mine: viewer == "s1"),
             PoolViewEntry(taskId: "t2", authorName: "Cody", text: nil, mine: false),
             PoolViewEntry(taskId: "t3", authorName: "Pat", text: "A costume needs emergency tape repair", mine: viewer == "s3"),
             PoolViewEntry(taskId: "t4", authorName: "Mary Jane", text: "@Cody does the Monster Mash", mine: viewer == "s4"),
@@ -66,7 +66,7 @@ enum SnapshotFixtures {
     }
 
     static let taskTexts = [
-        "Someone spills a drink", "Fog machine sets off the smoke alarm", "A costume needs emergency tape repair",
+        "Someone bobs for apples", "Fog machine sets off the smoke alarm", "A costume needs emergency tape repair",
         "The dog steals candy", "Two people in the same costume", "Monster Mash plays", "Someone trips on a cape",
         "A pumpkin gets knocked over", "Cody does the Monster Mash", "Neighbor rings the doorbell",
         "Someone asks 'what are you supposed to be?'", "Fake blood on the couch", "A mask comes off for good",
@@ -96,6 +96,13 @@ enum SnapshotFixtures {
         BingoDoc(seq: 3, seatId: "s4", name: "Mary Jane", line: "diag_main", playerBingoNumber: 1, at: fixedNow + 2_400_000, status: .announced),
         BingoDoc(seq: 4, seatId: "s3", name: "Pat", line: "row_4", playerBingoNumber: 2, at: fixedNow + 3_000_000, status: .announced),
     ]
+
+    /// Every task square at the 120-character maximum (the clamp check).
+    static func longTextBoard() -> BoardDoc {
+        var b = board()
+        b.cells = b.cells.enumerated().map { i, c in c == .free ? c : .task(taskId: "l\(i)", text: maxLengthTask) }
+        return b
+    }
 
     static func playing(mySeatId: String = "s1") -> GameSnapshot {
         GameSnapshot(game: game(stage: .playing), mySeatId: mySeatId, seats: seats, view: [], board: board(),

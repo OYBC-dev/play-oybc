@@ -31,6 +31,7 @@ enum Riso {
         static let button: CGFloat = 3   // icon buttons, QR tile
         static let small: CGFloat = 2    // cells, avatars, small cards
         static let banner: CGFloat = 5   // bingo banner
+        static let large: CGFloat = 8    // web RisoCard `shadow="large"`: host menu, dialogs
     }
 
     /// The share view's QR tile — the only hex values outside the colorsets.
@@ -108,6 +109,11 @@ extension Color {
     /// Compound task type. A dark fill like blue/red/green — content on it
     /// uses `risoPaper` / `risoOnColor`, same as those.
     static let risoTeal = Color("RisoTeal", bundle: .riso)
+    /// Modal scrim — web `--riso-scrim`: static warm ink at 45% in both modes.
+    static let risoScrim = Color("RisoScrim", bundle: .riso)
+    /// Destructive text on a card (the host menu's "End game"): `risoRed` in light; in dark,
+    /// web's `color-mix(red, ink 35%)`, since the dark rust on the dark card is ~2.5:1.
+    static let risoDanger = Color("RisoDanger", bundle: .riso)
 }
 
 // MARK: - Fonts

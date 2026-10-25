@@ -1,77 +1,296 @@
 import SwiftUI
 
-/// Host-only "Host menu" button and sheet: hand the host role to another player after a
-/// confirm (web `HostMenu`). Renders nothing for non-hosts.
-struct HostMenuView: View {
-    let service: GameService
-    let gameId: String
-    let snapshot: GameSnapshot
-    @State var open = false
+// MARK: - Dots button
 
-    var body: some View {
-        if snapshot.game.hostSeatId == snapshot.mySeatId {
-            RisoButton(title: "Host menu", small: true) { open = true }
-                .sheet(isPresented: $open) {
-                    HostMenuSheet(service: service, gameId: gameId, snapshot: snapshot) { open = false }
-                }
-        }
+/// Where the dots button sits, so the menu can hang under it.
+struct HostMenuAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>?
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }
 
-/// The host menu's sheet content: the player list, then the "Make <name> host" confirm.
-struct HostMenuSheet: View {
-    let service: GameService
-    let gameId: String
-    let snapshot: GameSnapshot
-    let onClose: () -> Void
-    @State var target: Seat?
-    @State var busy = false
-    @State var error: String?
-
-    private var others: [Seat] {
-        LobbyLogic.seatsByJoin(snapshot.seats).filter { $0.seatId != snapshot.mySeatId }
-    }
+/// The host's 44pt dots button (web `HostMenu` trigger): paper-2 keyline tile, 3pt hard shadow.
+/// Publishes its bounds for `hostMenu(...)`, which draws the menu and dialogs.
+struct HostMenuButton: View {
+    let open: Bool
+    /// VoiceOver focus returns here when the menu or a dialog closes.
+    var focus: AccessibilityFocusState<Bool>.Binding
+    let action: () -> Void
 
     var body: some View {
-        if let target {
-            RisoSheet(title: "Make \(target.name) host", onClose: onClose) {
-                Text("\(target.name) takes over hosting. You become a regular player.")
-                    .font(.risoBody(16)).foregroundStyle(Color.risoInk)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let error { ErrorText(error) }
-                HStack(spacing: 8) {
-                    RisoButton(title: "Cancel", fullWidth: true) { self.target = nil; error = nil }
-                    RisoButton(title: "Make host", kind: .primary, fullWidth: true) { transfer(target) }
-                        .risoDisabled(busy)
-                }
-            }
-        } else {
-            RisoSheet(title: "Host menu", onClose: onClose) {
-                if others.isEmpty {
-                    MutedText("No other players")
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(others) { s in
-                            HStack {
-                                Text(s.name).font(.risoBody(16, .semibold)).foregroundStyle(Color.risoInk)
-                                Spacer()
-                                RisoButton(title: "Make host", small: true) { error = nil; target = s }
-                                    .accessibilityLabel("Make \(s.name) host")
-                            }
-                            .frame(minHeight: 44)
+        Button(action: action) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundStyle(Color.risoInk)
+                .frame(width: 44, height: 44)
+                .risoCard()
+        }
+        .buttonStyle(RisoButtonStyle())
+        .accessibilityLabel("Menu")
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
+        .accessibilityFocused(focus)
+        .anchorPreference(key: HostMenuAnchorKey.self, value: .bounds) { $0 }
+    }
+}
+
+// MARK: - Menu + dialogs layer
+
+extension View {
+    /// Draws the host menu under the dots button and the Make host / End game dialogs over
+    /// this view. Apply it to the screen's root so the scrim covers everything.
+    ///
+    /// - Parameters:
+    ///   - stage: What is open; nil when closed.
+    ///   - model: What the menu offers.
+    ///   - service: Performs the transfer / end calls.
+    ///   - gameId: The game.
+    ///   - triggerFocus: The dots button's VoiceOver focus, restored on close.
+    func hostMenu(stage: Binding<HostMenuStage?>, model: HostMenuModel, service: GameService, gameId: String,
+                  triggerFocus: AccessibilityFocusState<Bool>.Binding) -> some View {
+        modifier(HostMenuLayer(stage: stage, model: model, service: service, gameId: gameId, triggerFocus: triggerFocus))
+    }
+}
+
+private struct HostMenuLayer: ViewModifier {
+    @Binding var stage: HostMenuStage?
+    let model: HostMenuModel
+    let service: GameService
+    let gameId: String
+    var triggerFocus: AccessibilityFocusState<Bool>.Binding
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let menuWidth: CGFloat = 216
+
+    func body(content: Content) -> some View {
+        content
+            .overlayPreferenceValue(HostMenuAnchorKey.self) { anchor in
+                GeometryReader { geo in
+                    if model.isHost, stage == .menu, let anchor {
+                        let button = geo[anchor]
+                        ZStack(alignment: .topLeading) {
+                            // Outside tap closes (and swallows the tap, like the web popover).
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture(perform: close)
+                                .accessibilityHidden(true)
+                            HostMenuCard(model: model, onMakeHost: { stage = .makeHost },
+                                         onEndGame: { stage = .endGame }, onClose: close)
+                                .frame(width: Self.menuWidth)
+                                .padding(.leading, max(0, button.maxX - Self.menuWidth))
+                                .padding(.top, button.maxY + 8)
                         }
+                        .transition(.opacity)
                     }
                 }
             }
+            .overlay {
+                if model.isHost {
+                    switch stage {
+                    case .makeHost:
+                        MakeHostDialog(service: service, gameId: gameId, candidates: model.candidates, onClose: close)
+                            .transition(.opacity)
+                    case .endGame where model.canEnd:
+                        EndGameDialog(service: service, gameId: gameId, onClose: close)
+                            .transition(.opacity)
+                    default:
+                        EmptyView()
+                    }
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: stage)
+    }
+
+    private func close() {
+        stage = nil
+        // After the overlay leaves the accessibility tree, or VoiceOver ignores the request.
+        DispatchQueue.main.async { triggerFocus.wrappedValue = true }
+    }
+}
+
+// MARK: - Menu card
+
+/// The 216pt popover menu (README §8 Menu): "Make host" (disabled with no other players) and,
+/// on the board, a hairline then a red "End game".
+struct HostMenuCard: View {
+    let model: HostMenuModel
+    let onMakeHost: () -> Void
+    let onEndGame: () -> Void
+    let onClose: () -> Void
+
+    private enum Item: Hashable { case makeHost, endGame }
+    @AccessibilityFocusState private var focus: Item?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            item("Make host", systemImage: "person", color: .risoInk, enabled: model.makeHostEnabled, action: onMakeHost)
+                .accessibilityFocused($focus, equals: .makeHost)
+            if model.showsEndGame {
+                Rectangle()
+                    .fill(Color.risoHair)
+                    .frame(height: 1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .accessibilityHidden(true)
+                item("End game", systemImage: "rectangle.portrait.and.arrow.right", color: .risoDanger, enabled: true, action: onEndGame)
+                    .accessibilityFocused($focus, equals: .endGame)
+            }
+        }
+        .padding(6)
+        .risoCard()
+        .risoHardShadow(Riso.Shadow.large)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityLabel("Menu")
+        .accessibilityAction(.escape, onClose)
+        .onAppear {
+            // Focus the first enabled item, as web does.
+            DispatchQueue.main.async { focus = model.makeHostEnabled ? .makeHost : .endGame }
         }
     }
 
-    private func transfer(_ seat: Seat) {
+    private func item(_ title: String, systemImage: String, color: Color, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.risoHead(15, .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MenuItemStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+    }
+}
+
+/// A menu row: pressed shows the paper fill (web `.item:hover`).
+private struct MenuItemStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(RoundedRectangle(cornerRadius: 6).fill(configuration.isPressed ? Color.risoPaper : .clear))
+    }
+}
+
+// MARK: - Dialogs
+
+/// "Make host": a radio list of the other players, then "Make {Name} host" (web `MakeHostDialog`).
+struct MakeHostDialog: View {
+    let service: GameService
+    let gameId: String
+    /// Other seated players, in join order.
+    let candidates: [Seat]
+    let onClose: () -> Void
+    @State var pickedId: String?
+    @State var busy = false
+    @State var error: String?
+
+    /// A pick that left the game no longer counts.
+    private var picked: Seat? { candidates.first { $0.seatId == pickedId } }
+
+    var body: some View {
+        RisoDialog(title: "Make host", onClose: onClose) {
+            VStack(spacing: 0) {
+                ForEach(candidates) { radio($0) }
+            }
+            if let error { ErrorText(error) }
+            HStack(alignment: .top, spacing: 8) {
+                RisoButton(title: "Cancel", kind: .ghost, fullWidth: true, action: onClose)
+                RisoButton(title: picked.map { "Make \($0.name) host" } ?? "Make host", kind: .blue, fullWidth: true,
+                           centersWrappedLabel: true) { transfer() }
+                    .risoDisabled(picked == nil || busy)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func radio(_ seat: Seat) -> some View {
+        let checked = picked?.seatId == seat.seatId
+        return Button {
+            error = nil
+            pickedId = seat.seatId
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(checked ? Color.risoBlue : .clear)
+                    Circle().strokeBorder(Color.risoInk, lineWidth: 2)
+                    if checked { Circle().fill(Color.risoOnColor).frame(width: 10, height: 10) }
+                }
+                .frame(width: 22, height: 22)
+                Text(seat.name)
+                    .font(.risoHead(16, .bold))
+                    .foregroundStyle(Color.risoInk)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .frame(minHeight: 46)
+            .overlay(alignment: .top) { Rectangle().fill(Color.risoHair).frame(height: 1) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(seat.name)
+        .accessibilityAddTraits(checked ? [.isSelected] : [])
+    }
+
+    private func transfer() {
+        guard let picked else { return }
         busy = true
         error = nil
         _Concurrency.Task {
             do {
-                try await service.transferHost(gameId: gameId, toSeatId: seat.seatId)
+                try await service.transferHost(gameId: gameId, toSeatId: picked.seatId)
+                busy = false
+                onClose()
+            } catch {
+                self.error = ErrorMessages.message(for: error)
+                busy = false
+            }
+        }
+    }
+}
+
+/// "End the game?" confirm (web `EndGameDialog`).
+struct EndGameDialog: View {
+    let service: GameService
+    let gameId: String
+    let onClose: () -> Void
+    @State var busy = false
+    @State var error: String?
+
+    var body: some View {
+        RisoDialog(title: "End the game?", onClose: onClose) {
+            Text("Marking stops for everyone and the final leaderboard goes up.")
+                .font(.risoBody(15))
+                .lineSpacing(4)
+                .foregroundStyle(Color.risoInk)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error { ErrorText(error) }
+            HStack(alignment: .top, spacing: 8) {
+                RisoButton(title: "Cancel", kind: .ghost, fullWidth: true, action: onClose)
+                RisoButton(title: "End game", kind: .primary, fullWidth: true) { end() }
+                    .risoDisabled(busy)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func end() {
+        busy = true
+        error = nil
+        _Concurrency.Task {
+            do {
+                try await service.end(gameId: gameId)
                 busy = false
                 onClose()
             } catch {

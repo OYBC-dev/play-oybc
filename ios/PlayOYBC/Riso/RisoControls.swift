@@ -58,6 +58,9 @@ struct RisoButton: View {
     var fullWidth: Bool = false
     var large: Bool = false
     var small: Bool = false
+    /// Centre a label that wraps (a long name in "Make {Name} host"). Off by default: the
+    /// alignment shifts single-line glyphs by a subpixel, which would move every baseline.
+    var centersWrappedLabel: Bool = false
     let action: () -> Void
 
     private var fontSize: CGFloat { large ? 17 : (small ? 13 : 15) }
@@ -71,6 +74,7 @@ struct RisoButton: View {
                 Text(title)
             }
             .font(.risoHead(fontSize, .bold))
+            .multilineTextAlignment(centersWrappedLabel ? .center : .leading)
             .foregroundStyle(kind.foreground)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.vertical, vPad)

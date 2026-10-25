@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// The live game (web `PlayScreen`): your board, bingo banners, the leaderboard sheet, and for
-/// the host the host menu and End game.
+/// The live game (web `PlayScreen`): the code pill + Leaderboard (+ host dots menu) header,
+/// your board, bingo banners and the leaderboard sheet.
 struct PlayView: View {
-    enum SheetKind: String, Identifiable { case leaderboard, end; var id: String { rawValue } }
-
     let service: GameService
     let snapshot: GameSnapshot
     let gameId: String
@@ -16,25 +14,22 @@ struct PlayView: View {
     var onDismissBanner: () -> Void = {}
     var timeZone: TimeZone = .current
 
-    @State var sheet: SheetKind?
-    @State var ending = false
-    @State var endError: String?
+    @State var leaderboard = false
+    /// What the host menu has open (snapshots start it open).
+    @State var hostMenu: HostMenuStage?
+    @AccessibilityFocusState private var dotsFocused: Bool
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
+    private var menuModel: HostMenuModel { HostMenuModel(snapshot: snapshot, canEnd: true) }
 
     var body: some View {
         ZStack(alignment: .top) {
-            RisoPage {
+            RisoPage(gutter: Riso.gutter, top: 10, spacing: 14) {
                 if isHost { ReclaimPromptView(service: service, gameId: gameId, reclaims: snapshot.reclaims) }
-                HStack(spacing: 8) {
-                    RisoButton(title: "Leaderboard", small: true) { sheet = .leaderboard }
-                    Spacer(minLength: 0)
-                    HostMenuView(service: service, gameId: gameId, snapshot: snapshot)
-                    if isHost {
-                        Spacer(minLength: 0)
-                        RisoButton(title: "End game", kind: .primary, small: true) { endError = nil; sheet = .end }
-                    }
-                }
+                BoardHeaderView(code: snapshot.game.code, showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu,
+                                menuFocus: $dotsFocused,
+                                onLeaderboard: { leaderboard = true },
+                                onMenu: { hostMenu = hostMenu == .menu ? nil : .menu })
                 if let board = snapshot.board {
                     BoardGridView(board: board, pending: pendingCells, slow: slowCells, error: toggleError, onToggle: onToggle)
                 } else {
@@ -45,38 +40,66 @@ struct PlayView: View {
                 .padding(.top, 12)
                 .animation(.spring(duration: 0.35), value: banner?.seq)
         }
+        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused)
         .accessibilityIdentifier("stage-playing")
-        .sheet(item: $sheet) { kind in
-            switch kind {
-            case .leaderboard:
-                RisoSheet(title: "Leaderboard", onClose: { sheet = nil }) {
-                    LeaderboardView(bingos: snapshot.bingos, timeZone: timeZone)
-                }
-            case .end:
-                RisoSheet(title: "End game", onClose: { sheet = nil }) {
-                    Text("Everyone will see the final leaderboard.").font(.risoBody(16)).foregroundStyle(Color.risoInk)
-                    if let endError { ErrorText(endError) }
-                    HStack(spacing: 8) {
-                        RisoButton(title: "Cancel", fullWidth: true) { sheet = nil }
-                        RisoButton(title: "End game", kind: .primary, fullWidth: true) { end() }
-                            .risoDisabled(ending)
-                    }
-                }
+        .sheet(isPresented: $leaderboard) {
+            RisoSheet(title: "Leaderboard", onClose: { leaderboard = false }) {
+                LeaderboardView(bingos: snapshot.bingos, timeZone: timeZone)
             }
         }
     }
+}
 
-    private func end() {
-        ending = true
-        endError = nil
-        _Concurrency.Task {
-            do {
-                try await service.end(gameId: gameId)
-                sheet = nil
-            } catch {
-                endError = ErrorMessages.message(for: error)
+/// The board header (README §5): the game-code pill on the left; "Leaderboard" and, for the
+/// host, the dots button on the right. At large text sizes the actions wrap under the pill.
+struct BoardHeaderView: View {
+    let code: String
+    let showsMenu: Bool
+    var menuOpen = false
+    var menuFocus: AccessibilityFocusState<Bool>.Binding
+    let onLeaderboard: () -> Void
+    let onMenu: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                pill
+                Spacer(minLength: 0)
+                actions
             }
-            ending = false
+            VStack(alignment: .leading, spacing: 10) {
+                pill
+                actions
+            }
         }
+        .frame(minHeight: 44)
+    }
+
+    /// 36pt paper-2 capsule, 2pt keyline, Bricolage 800 14 at .14em.
+    private var pill: some View {
+        Text(code)
+            .font(.risoHead(14, .extraBold))
+            .tracking(1.96)
+            .foregroundStyle(Color.risoInk)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .background(Capsule().fill(Color.risoPaper2))
+            .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+            // Clip to the capsule: short capsule strokes draw flat stubs at their ends.
+            .clipShape(Capsule())
+            .fixedSize()
+            .accessibilityIdentifier("game-code")
+    }
+
+    private var actions: some View {
+        HStack(spacing: 8) {
+            RisoButton(title: "Leaderboard", small: true, action: onLeaderboard)
+                .risoHitSlop(6)
+            if showsMenu {
+                HostMenuButton(open: menuOpen, focus: menuFocus, action: onMenu)
+            }
+        }
+        .fixedSize()
     }
 }
