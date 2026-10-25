@@ -76,6 +76,7 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"
       - name: Snapshot tests
+        continue-on-error: true # TEMP: CI re-record, reverted before merge
         env:
           # Informational: the test file's per-call `record: .missing` takes precedence over this
           # env var. A missing baseline still fails the run, because `.missing` records the PNG
@@ -86,3 +87,9 @@ jobs:
           xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBCSnapshotTests \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"
+      - name: Upload recorded snapshots # TEMP: CI re-record, reverted before merge
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: ios/PlayOYBCSnapshotTests/__Snapshots__
