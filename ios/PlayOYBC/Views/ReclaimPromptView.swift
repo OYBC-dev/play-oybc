@@ -29,7 +29,6 @@ final class ReclaimPromptModel: ObservableObject {
 struct ReclaimPromptView: View {
     let reclaims: [Reclaim]
     @StateObject private var model: ReclaimPromptModel
-    @State private var contentHeight: CGFloat = 0
 
     init(service: GameService, gameId: String, reclaims: [Reclaim]) {
         self.reclaims = reclaims
@@ -38,29 +37,32 @@ struct ReclaimPromptView: View {
 
     var body: some View {
         if !reclaims.isEmpty {
-            // Caps the stack at the visible area; taller stacks scroll.
-            ScrollView {
+            // Sized against the container it is laid out in (the space the overlay proposes,
+            // less the top and bottom clearance): the stack shows whole when it fits, and a
+            // taller stack scrolls inside that height.
+            ViewThatFits(in: .vertical) {
                 stack
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                ScrollView { stack }
+                    .scrollBounceBehavior(.basedOnSize)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: contentHeight > 0 ? min(contentHeight, Self.maxHeight) : Self.maxHeight)
             .frame(maxWidth: 480)
             .padding(.top, 10)
+            .padding(.bottom, Self.bottomClearance)
             .accessibilityIdentifier("reclaim-prompt")
         }
     }
 
-    private static var maxHeight: CGFloat { UIScreen.main.bounds.height - 120 }
+    /// Container height the toast leaves free below itself (with the 10 pt top: 120 pt).
+    static let bottomClearance: CGFloat = 110
 
     private var stack: some View {
         VStack(spacing: 10) {
             ForEach(reclaims) { r in card(r) }
             if let error = model.error { ErrorText(error) }
         }
-        // Room for the cards' 8pt hard shadow inside the scroll bounds.
+        // Room for the cards' hard shadow inside the scroll bounds.
         .padding(.leading, Riso.gutter)
-        .padding(.trailing, Riso.gutter + 6)
+        .padding(.trailing, Riso.gutter + Riso.Shadow.large)
         .padding(.bottom, Riso.Shadow.large)
     }
 

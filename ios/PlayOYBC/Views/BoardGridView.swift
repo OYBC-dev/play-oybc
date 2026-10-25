@@ -88,7 +88,7 @@ struct BoardGridView: View {
         .accessibilityAddTraits(free || readOnly ? [] : .isButton)
         .accessibilityAddTraits(marked && !free ? .isSelected : [])
         .accessibilityAction {
-            if !readOnly, !free, !pending.contains(i) { onToggle(i) }
+            if Self.acceptsTap(readOnly: readOnly, free: free, pending: pending.contains(i)) { onToggle(i) }
         }
         .accessibilityAction(named: "Details") { if !free { detail = text } }
     }
