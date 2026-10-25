@@ -34,7 +34,7 @@ struct GameView: View {
                 LobbyView(service: service, snapshot: snap, gameId: vm.gameId)
             case .playing:
                 PlayView(service: service, snapshot: snap, gameId: vm.gameId,
-                         banner: vm.banner, pendingCells: vm.pendingCells, slowCells: vm.slowCells,
+                         banners: vm.banners, pendingCells: vm.pendingCells, slowCells: vm.slowCells,
                          toggleError: vm.error.map(ErrorMessages.message(for:)),
                          onToggle: { i in _Concurrency.Task { await vm.toggle(cell: i) } },
                          onDismissBanner: { vm.dismissBanner() })

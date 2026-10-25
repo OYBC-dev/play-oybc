@@ -6,7 +6,9 @@ struct PlayView: View {
     let service: GameService
     let snapshot: GameSnapshot
     let gameId: String
-    var banner: BingoDoc?
+    var banners: [BingoDoc] = []
+    /// False in snapshots: no confetti or banner motion.
+    var bannerMotion = true
     var pendingCells: Set<Int> = []
     var slowCells: Set<Int> = []
     var toggleError: String?
@@ -36,9 +38,9 @@ struct PlayView: View {
                     MutedText("Loading")
                 }
             }
-            BingoBannerView(bingo: banner, onDismiss: onDismissBanner)
-                .padding(.top, 12)
-                .animation(.spring(duration: 0.35), value: banner?.seq)
+            // Web places the stack at top: 56 — just under the header — so the code pill,
+            // Leaderboard and dots stay reachable (the stack passes taps through gaps).
+            BingoBannerView(banners: banners, animates: bannerMotion, onDismiss: onDismissBanner)
         }
         .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused)
         .accessibilityIdentifier("stage-playing")

@@ -23,7 +23,8 @@ struct ResumeStore {
 @MainActor
 final class GameViewModel: ObservableObject {
     @Published private(set) var snapshot: GameSnapshot?
-    @Published private(set) var banner: BingoDoc?
+    /// The bingo banners on screen, front first (at most three).
+    @Published private(set) var banners: [BingoDoc] = []
     @Published private(set) var pendingCells: Set<Int> = []
     /// In-flight cells whose call has taken longer than `pendingDimSeconds`; these render dimmed.
     @Published private(set) var slowCells: Set<Int> = []
@@ -35,8 +36,8 @@ final class GameViewModel: ObservableObject {
     let gameId: String
     let seatId: String
     private let service: GameService
-    private let bannerSeconds: Double
     private let sleeper: Sleeper
+    private let clock: () -> TimeInterval
     private var serverSnapshot: GameSnapshot?
     /// Optimistic mark values per cell, overlaid on the server board until the call settles.
     private var overlay: [Int: Bool] = [:]
@@ -47,12 +48,13 @@ final class GameViewModel: ObservableObject {
     /// A square in flight only looks dimmed once its call has taken this long.
     static let pendingDimSeconds = 0.25
 
-    init(service: GameService, gameId: String, seatId: String, bannerSeconds: Double = 4, sleeper: @escaping Sleeper = GameViewModel.realSleep) {
+    init(service: GameService, gameId: String, seatId: String, sleeper: @escaping Sleeper = GameViewModel.realSleep,
+         clock: @escaping () -> TimeInterval = { Date().timeIntervalSinceReferenceDate }) {
         self.service = service
         self.gameId = gameId
         self.seatId = seatId
-        self.bannerSeconds = bannerSeconds
         self.sleeper = sleeper
+        self.clock = clock
     }
 
     /// Injectable delay so banner timing is testable without real sleeps.
@@ -88,10 +90,10 @@ final class GameViewModel: ObservableObject {
         bannerTask?.cancel()
     }
 
-    /// Dismisses the current banner early.
+    /// Dismisses the front banner early.
     func dismissBanner() {
-        queue.dismiss()
-        refreshBanner()
+        queue.dismissFront(now: clock())
+        refreshBanners()
     }
 
     /// Optimistically flips a cell, then calls the server. The optimistic mark stays until the
@@ -130,8 +132,8 @@ final class GameViewModel: ObservableObject {
         // only changed other parts (e.g. someone else's bingo bumped the game doc) keeps the
         // optimistic marks, so they do not flicker back before the board update lands.
         if boardChanged { overlay = overlay.filter { pendingCells.contains($0.key) } }
-        queue.observe(snap.bingos, mySeatId: snap.mySeatId)
-        refreshBanner()
+        queue.observe(snap.bingos, mySeatId: snap.mySeatId, now: clock())
+        refreshBanners()
         publish()
     }
 
@@ -147,16 +149,20 @@ final class GameViewModel: ObservableObject {
         snapshot = s
     }
 
-    private func refreshBanner() {
-        let next = queue.current
-        if next == banner { return }
-        banner = next
+    /// Publishes the stack and re-arms the single wait for the earliest banner deadline; each
+    /// banner leaves on its own 4 s clock, so the wait re-arms after every change.
+    private func refreshBanners() {
+        if queue.banners != banners { banners = queue.banners }
         bannerTask?.cancel()
-        guard next != nil else { return }
-        bannerTask = _Concurrency.Task { [weak self, bannerSeconds, sleeper] in
-            try? await sleeper(bannerSeconds)
-            guard !_Concurrency.Task.isCancelled else { return }
-            self?.dismissBanner()
+        guard queue.nextDeadline != nil else { return }
+        bannerTask = _Concurrency.Task { [weak self, sleeper, clock] in
+            while true {
+                guard let due = self?.queue.nextDeadline else { return }
+                try? await sleeper(max(0, due - clock()))
+                guard !_Concurrency.Task.isCancelled, let self else { return }
+                self.queue.advance(to: clock())
+                if self.queue.banners != self.banners { self.banners = self.queue.banners }
+            }
         }
     }
 }
