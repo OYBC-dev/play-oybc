@@ -27,7 +27,6 @@ struct PlayView: View {
     var body: some View {
         ZStack(alignment: .top) {
             RisoPage(gutter: Riso.gutter, top: 10, spacing: 14) {
-                if isHost { ReclaimPromptView(service: service, gameId: gameId, reclaims: snapshot.reclaims) }
                 BoardHeaderView(code: snapshot.game.code, showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu,
                                 menuFocus: $dotsFocused,
                                 onLeaderboard: { leaderboard = true },

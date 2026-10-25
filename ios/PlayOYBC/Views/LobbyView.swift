@@ -38,7 +38,6 @@ struct LobbyView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if isHost { ReclaimPromptView(service: service, gameId: gameId, reclaims: snapshot.reclaims) }
             header
             if playersOpen { PlayerListView(snapshot: snapshot) }
             if seats.count <= 1 {

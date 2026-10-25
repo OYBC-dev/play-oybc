@@ -115,19 +115,36 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testLeaderboard() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.bingos, timeZone: F.utc) }, height: 380)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.bingos, timeZone: F.utc) }, height: 420)
     }
 
     func testLeaderboardEmpty() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: []) }, height: 160)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: []) }, height: 260)
+    }
+
+    /// Ten rows, 24+ character names and a double-digit bingo number: names truncate, pills stay whole.
+    func testLeaderboardLongNames() {
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.longNameBingos, timeZone: F.utc) }, height: 760)
     }
 
     func testEnded() {
-        assertBoth(EndedView(service: FakeGameService(), snapshot: F.ended(), gameId: "g1", timeZone: F.utc), height: 760)
+        assertBoth(EndedView(snapshot: F.ended(), timeZone: F.utc), height: 900)
     }
 
     func testReclaimPrompt() {
-        assertBoth(RisoPage { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: F.reclaims) }, height: 220)
+        assertBoth(RisoPage(top: 10) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: [F.reclaims[0]]) }, height: 200)
+    }
+
+    /// The toast floats over the play screen; the header stays visible beneath it.
+    func testReclaimOverBoard() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            .overlay(alignment: .top) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: [F.reclaims[0]]) }
+            .padding(.top, 0), height: 640)
+    }
+
+    func testReclaimTwo() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            .overlay(alignment: .top) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: F.reclaims) }, height: 640)
     }
 
     func testBoardHostMenu() {

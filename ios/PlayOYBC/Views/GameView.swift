@@ -22,7 +22,16 @@ struct GameView: View {
         // The subscription hangs off this unary wrapper, not the stage branches below, so a
         // stage switch never restarts or stops it; `.task` cancels it when the screen goes away.
         ZStack { content }
+            // The host's reclaim toast floats over Lobby, Board and Ended alike; outside its
+            // own frame touches reach the screen beneath.
+            .overlay(alignment: .top) { reclaimToast }
             .task { await vm.run() }
+    }
+
+    @ViewBuilder private var reclaimToast: some View {
+        if let snap = vm.snapshot, snap.game.hostSeatId == snap.mySeatId {
+            ReclaimPromptView(service: service, gameId: vm.gameId, reclaims: snap.reclaims)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -39,7 +48,7 @@ struct GameView: View {
                          onToggle: { i in _Concurrency.Task { await vm.toggle(cell: i) } },
                          onDismissBanner: { vm.dismissBanner() })
             case .ended:
-                EndedView(service: service, snapshot: snap, gameId: vm.gameId, onHome: onHome)
+                EndedView(snapshot: snap, onHome: onHome)
             }
         } else {
             RisoPage { MutedText("Loading") }

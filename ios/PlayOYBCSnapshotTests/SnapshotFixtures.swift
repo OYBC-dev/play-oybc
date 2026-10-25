@@ -97,6 +97,14 @@ enum SnapshotFixtures {
         BingoDoc(seq: 4, seatId: "s3", name: "Pat", line: "row_4", playerBingoNumber: 2, at: fixedNow + 3_000_000, status: .announced),
     ]
 
+    /// Ten bingos with 24+ character names; one player reaches #12.
+    static let longNameBingos: [BingoDoc] = (1...10).map { (i: Int) -> BingoDoc in
+        let name: String = i % 2 == 0 ? "Bartholomew Fitzgerald-Smythe" : "Maximilian Featherstonehaugh"
+        let number: Int = i == 10 ? 12 : (i % 3 == 0 ? 2 : 1)
+        let at: Double = fixedNow + Double(i) * 420_000
+        return BingoDoc(seq: i, seatId: "s\(i)", name: name, line: "row_0", playerBingoNumber: number, at: at, status: .announced)
+    }
+
     /// Every task square at the 120-character maximum (the clamp check).
     static func longTextBoard() -> BoardDoc {
         var b = board()

@@ -1,26 +1,34 @@
 import SwiftUI
 
-/// After the host ends the game: the leaderboard and your final board (web `EndedScreen`).
-/// iOS adds Home, since there is no address bar to leave by.
+/// After the host ends the game (web `EndedScreen`): "Ended · CODE" kicker, the final
+/// leaderboard, your final board read-only, and New game. The host's reclaim toast is
+/// mounted over every stage by `GameView`.
 struct EndedView: View {
-    let service: GameService
     let snapshot: GameSnapshot
-    let gameId: String
     var onHome: () -> Void = {}
     var timeZone: TimeZone = .current
 
     var body: some View {
-        RisoPage {
-            if snapshot.game.hostSeatId == snapshot.mySeatId {
-                ReclaimPromptView(service: service, gameId: gameId, reclaims: snapshot.reclaims)
+        RisoPage(gutter: Riso.gutter, top: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ended · \(snapshot.game.code)").risoKicker().accessibilityAddTraits(.isHeader)
+                Text("Final leaderboard")
+                    .font(.risoHead(30, .extraBold)).tracking(-0.6)
+                    .foregroundStyle(Color.risoInk)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            SectionLabel("Leaderboard")
             LeaderboardView(bingos: snapshot.bingos, timeZone: timeZone)
+                .padding(Riso.cardPadding)
+                .risoCard()
+                .risoHardShadow(Riso.Shadow.card)
             if let board = snapshot.board {
-                SectionLabel("Your board")
-                BoardGridView(board: board, readOnly: true)
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("Your board")
+                    BoardGridView(board: board, readOnly: true)
+                }
             }
-            RisoButton(title: "Home", fullWidth: true, action: onHome)
+            RisoButton(title: "New game", kind: .dark, fullWidth: true, action: onHome)
+                .accessibilityIdentifier("new-game")
         }
         .accessibilityIdentifier("stage-ended")
     }

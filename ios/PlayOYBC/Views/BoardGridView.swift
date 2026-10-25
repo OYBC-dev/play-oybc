@@ -19,6 +19,9 @@ struct BoardGridView: View {
 
     static let longPressSeconds = 0.45
 
+    /// Whether a tap flips the square: never on a final board, the Free square, or a square in flight.
+    static func acceptsTap(readOnly: Bool, free: Bool, pending: Bool) -> Bool { !readOnly && !free && !pending }
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Width of the grid, for the line clamp (one cell = a fifth, less gaps).
     @State private var gridWidth: CGFloat = 0
@@ -75,7 +78,7 @@ struct BoardGridView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: style.pending)
         .contentShape(Rectangle())
         .onTapGesture {
-            if !readOnly, !free, !pending.contains(i) { onToggle(i) }
+            if Self.acceptsTap(readOnly: readOnly, free: free, pending: pending.contains(i)) { onToggle(i) }
         }
         .onLongPressGesture(minimumDuration: Self.longPressSeconds) {
             if !free { detail = text }
