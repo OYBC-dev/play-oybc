@@ -65,6 +65,7 @@ struct GameErrorView: View {
         RisoPage {
             ErrorText(message)
             RisoButton(title: "Home", small: true, action: onHome)
+                .risoHitSlop(6)
         }
     }
 }

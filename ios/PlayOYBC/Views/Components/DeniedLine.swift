@@ -5,7 +5,7 @@ struct DeniedLine: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(Color.risoRed).frame(width: 8, height: 8)
-            Text("The host said no").font(.risoBody(14, .bold)).foregroundStyle(Color.risoRed)
+            Text("The host said no").font(.risoBody(14, .bold)).foregroundStyle(Color.risoDanger)
         }
         .accessibilityElement(children: .combine)
     }

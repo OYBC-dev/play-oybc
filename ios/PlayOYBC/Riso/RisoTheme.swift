@@ -111,8 +111,9 @@ extension Color {
     static let risoTeal = Color("RisoTeal", bundle: .riso)
     /// Modal scrim — web `--riso-scrim`: static warm ink at 45% in both modes.
     static let risoScrim = Color("RisoScrim", bundle: .riso)
-    /// Destructive text on a card (the host menu's "End game"): `risoRed` in light; in dark,
-    /// web's `color-mix(red, ink 35%)`, since the dark rust on the dark card is ~2.5:1.
+    /// Small red TEXT (the host menu's "End game", errors, shortfalls, kickers, "The host said
+    /// no"): `risoRed` in light; in dark #C27D5F (web `--riso-red-text`, = color-mix(red, ink
+    /// 35%)) — 5.75:1 on paper, 5.26:1 on paper-2, where the dark rust is ~3:1. Fills stay `risoRed`.
     static let risoDanger = Color("RisoDanger", bundle: .riso)
 }
 

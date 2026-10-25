@@ -48,6 +48,8 @@
   --riso-ink: #1c140c;
   --riso-muted: #776650;
   --riso-red: #9c3d1c;
+  /* Small red TEXT (errors, shortfalls, kickers, "The host said no"). Fills stay --riso-red. */
+  --riso-red-text: #9c3d1c;
   --riso-blue: #56652a;
   --riso-blue-scrim: rgba(86, 101, 42, 0.16);
   --riso-gold: #d9a21b;
@@ -64,6 +66,9 @@
   --riso-ink: #f3e8d6;
   --riso-muted: #ae9d86;
   --riso-red: #a8431f;
+  /* Dark rust is ~3:1 on dark paper; this is color-mix(in srgb, #a8431f, #f3e8d6 35%) —
+     5.75:1 on --riso-paper, 5.26:1 on --riso-paper-2. Mirrors iOS RisoDanger (dark). */
+  --riso-red-text: #c27d5f;
   --riso-blue: #5e6e2e;
   --riso-blue-scrim: rgba(94, 110, 46, 0.16);
   --riso-achievement: #5e6e2e;

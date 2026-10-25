@@ -39,7 +39,7 @@ struct ErrorText: View {
     var body: some View {
         Text(message)
             .font(.risoBody(15, .semibold))
-            .foregroundStyle(Color.risoRed)
+            .foregroundStyle(Color.risoDanger)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isStaticText)
     }

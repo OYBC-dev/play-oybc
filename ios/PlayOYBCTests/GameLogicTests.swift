@@ -20,6 +20,15 @@ final class MentionsTests: XCTestCase {
         XCTAssertEqual(Mentions.active(in: "@Mary  J", caret: 8)?.partial, "Mary J")
     }
 
+    /// game-core's scanner lets the longest match win, so a seat named "Someone Else" is
+    /// mentionable; the picker must keep offering it ahead of the keyword, and keep the keywords.
+    func testSeatNameLongerThanKeywordIsOfferedFirst() {
+        XCTAssertEqual(Mentions.active(in: "@Someone E", caret: 10)?.partial, "Someone E")
+        XCTAssertEqual(Mentions.options(partial: "Someone E", seatNames: ["Someone Else"]), ["Someone Else"])
+        XCTAssertEqual(Mentions.options(partial: "someone", seatNames: ["Someone Else", "Pat"]), ["Someone Else", "someone"])
+        XCTAssertEqual(Mentions.options(partial: "any", seatNames: ["Someone Else"]), ["anyone"])
+    }
+
     func testPickReplacesMentionAndCapsLength() {
         let m = Mentions.active(in: "hi @co", caret: 6)!
         let r = Mentions.pick("Cody", mention: m, in: "hi @co", caret: 6)
@@ -173,5 +182,39 @@ final class HostMenuModelTests: XCTestCase {
     func testNonHostNeverSeesButton() {
         let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
         XCTAssertFalse(HostMenuModel(snapshot: snapshot(me: "s2", seats: seats), canEnd: true).showsButton)
+    }
+}
+
+/// Small red text uses `risoDanger`: the fill red in light, a lift that reads on dark paper.
+final class RisoRedTextTests: XCTestCase {
+    private func hex(_ name: String, _ style: UIUserInterfaceStyle) -> String {
+        let traits = UITraitCollection(userInterfaceStyle: style)
+        let c = UIColor(named: name, in: .riso, compatibleWith: traits)!.resolvedColor(with: traits)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(format: "%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+
+    private func luminance(_ hex: String) -> Double {
+        let v = Int(hex, radix: 16)!
+        let lin = [(v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF].map { (c: Int) -> Double in
+            let s = Double(c) / 255
+            return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    }
+
+    private func contrast(_ a: String, _ b: String) -> Double {
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    func testDangerMatchesWebRedTextAndReadsOnDarkPaper() {
+        XCTAssertEqual(hex("RisoDanger", .light), hex("RisoRed", .light))
+        XCTAssertEqual(hex("RisoDanger", .dark), "C27D5F")   // web --riso-red-text (dark)
+        for paper in ["RisoPaper", "RisoPaper2"] {
+            XCTAssertGreaterThanOrEqual(contrast(hex("RisoDanger", .dark), hex(paper, .dark)), 4.5, paper)
+            XCTAssertGreaterThanOrEqual(contrast(hex("RisoDanger", .light), hex(paper, .light)), 4.5, paper)
+        }
     }
 }

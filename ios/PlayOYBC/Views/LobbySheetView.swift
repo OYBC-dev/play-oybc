@@ -54,12 +54,13 @@ struct LobbySheetView: View {
                         .risoDisabled(!ready || busy)
                 } else {
                     CopyLinkButton(link: link, small: true)
+                        .risoHitSlop(6)
                 }
             }
             if let error {
                 Text(error)
                     .font(.risoBody(13, .semibold))
-                    .foregroundStyle(ready ? Color.risoOnColor : Color.risoRed)
+                    .foregroundStyle(ready ? Color.risoOnColor : Color.risoDanger)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -97,7 +98,7 @@ struct LobbySheetView: View {
                             Text(line)
                                 .font(.risoBody(12.5, .bold))
                                 .lineSpacing(Self.shortfallLeading)
-                                .foregroundStyle(Color.risoRed)
+                                .foregroundStyle(Color.risoDanger)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }

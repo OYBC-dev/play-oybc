@@ -13,7 +13,7 @@
 .joinHead { display: flex; align-items: center; gap: 14px; }
 .joinCode { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; margin-top: 4px; }
 .joinHead p { margin: 0; }
-.denied { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--riso-red); font-family: var(--riso-font-body); font-weight: 700; font-size: 14px; }
+.denied { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--riso-red-text); font-family: var(--riso-font-body); font-weight: 700; font-size: 14px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--riso-red); }
 .waiting {
   box-sizing: border-box; height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px;
