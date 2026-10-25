@@ -30,6 +30,8 @@ targets:
       path: PlayOYBC/Info.plist
       properties:
         CFBundleDisplayName: Play OYBC
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
