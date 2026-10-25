@@ -49,7 +49,8 @@ struct HomeView: View {
     /// Brand mark over the wordmark, centred (web `.hero`).
     private var hero: some View {
         VStack(spacing: 18) {
-            PlayBrandMark(size: .home)
+            // Decorative here: the wordmark beside it names the app.
+            PlayBrandMark(size: .home).accessibilityHidden(true)
             Wordmark()
         }
         .padding(.top, 16)

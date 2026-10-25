@@ -25,6 +25,9 @@ const CYCLE = [
  * whitespace-separated word of the name, uppercased; an empty or
  * whitespace-only name gives "?". The letter is taken by code point so emoji
  * are not split.
+ * Divergence: iOS (`AvatarFor.swift`) takes the first grapheme cluster, so a
+ * multi-scalar emoji (flag, skin tone, ZWJ family) is whole there and only its
+ * first code point here.
  *
  * @param seat Anything with a `name`.
  * @param index Join-order index of the seat.

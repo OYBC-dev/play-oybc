@@ -10,10 +10,17 @@ final class ScreenSnapshotTests: XCTestCase {
     private typealias F = SnapshotFixtures
 
     /// Asserts one baseline per colour scheme (`<test>.light.png` / `<test>.dark.png`).
-    private func assertBoth<V: View>(_ view: V, height: CGFloat, file: StaticString = #filePath, testName: String = #function, line: UInt = #line) {
+    /// `drawHierarchy` renders through the window so SwiftUI blur filters show (the lobby's
+    /// hidden rows); the default layer render drops them. Window renders go through the GPU
+    /// blur, which differs by a few levels between machines, so they compare perceptually.
+    private func assertBoth<V: View>(_ view: V, height: CGFloat, drawHierarchy: Bool = false, file: StaticString = #filePath, testName: String = #function, line: UInt = #line) {
+        let precision: Float = drawHierarchy ? 0.99 : 1
+        let perceptualPrecision: Float = drawHierarchy ? 0.98 : 1
         for (name, style, scheme) in [("light", UIUserInterfaceStyle.light, ColorScheme.light), ("dark", .dark, .dark)] {
             let v = view.environment(\.colorScheme, scheme)
-            assertSnapshot(of: v, as: .image(layout: .fixed(width: 393, height: height), traits: UITraitCollection(userInterfaceStyle: style)),
+            assertSnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, precision: precision,
+                                             perceptualPrecision: perceptualPrecision, layout: .fixed(width: 393, height: height),
+                                             traits: UITraitCollection(userInterfaceStyle: style)),
                            named: name, record: recordMode, file: file, testName: testName, line: line)
         }
     }
@@ -52,19 +59,57 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testKit() {
-        assertBoth(KitGallery(), height: 640)
+        assertBoth(KitGallery(), height: 820)
     }
 
+    /// Lobby frames are full iPhone 17 screens so the sheet sits pinned at the bottom.
+    private let screen: CGFloat = 852
+
     func testLobbyHost() {
-        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1"), height: 1360)
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1", playersOpen: true), height: screen, drawHierarchy: true)
     }
 
     func testLobbyGuest() {
-        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s2"), gameId: "g1"), height: 760)
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s2"), gameId: "g1"), height: screen, drawHierarchy: true)
+    }
+
+    func testLobbyHostEmpty() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyEmpty(), gameId: "g1", animateWaiting: false), height: screen)
+    }
+
+    func testLobbyHostFilling() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyFilling(), gameId: "g1", playersOpen: true), height: screen, drawHierarchy: true)
+    }
+
+    func testLobbyHostReady() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(), gameId: "g1"), height: screen, drawHierarchy: true)
+    }
+
+    /// The QR tile's share sheet at its medium detent.
+    func testLobbyShareSheet() {
+        assertBoth(ShareSheetView(code: "HX7KQ", onDone: {}), height: 420)
     }
 
     func testPlayWithLineAndBanner() {
-        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", banner: F.bingos[2]), height: 470)
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", banners: [F.bingos[2]], bannerMotion: false), height: 470)
+    }
+
+    private static let longBingoName = "Bartholomew Fitzgerald-Smythe"
+
+    /// Three bingos at once: three equal-height names so the offset slivers show the stack.
+    func testBingoStack3() {
+        let stack = [
+            BingoDoc(seq: 5, seatId: "s3", name: "Pat", line: "col_2", playerBingoNumber: 2, at: 1, status: .announced),
+            BingoDoc(seq: 6, seatId: "s4", name: "Dee", line: "diag_main", playerBingoNumber: 1, at: 2, status: .announced),
+            BingoDoc(seq: 7, seatId: "s2", name: "Cody", line: "row_4", playerBingoNumber: 1, at: 3, status: .announced),
+        ]
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", banners: stack, bannerMotion: false), height: 520)
+    }
+
+    /// A 29-character name wraps inside the front card.
+    func testBingoBannerLongName() {
+        let long = BingoDoc(seq: 8, seatId: "s2", name: Self.longBingoName, line: "row_4", playerBingoNumber: 1, at: 3, status: .announced)
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", banners: [long], bannerMotion: false), height: 520)
     }
 
     func testPlayGuestWithError() {
@@ -74,32 +119,101 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testLeaderboard() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.bingos, timeZone: F.utc) }, height: 380)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.bingos, timeZone: F.utc) }, height: 420)
     }
 
     func testLeaderboardEmpty() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: []) }, height: 160)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: []) }, height: 260)
+    }
+
+    /// Ten rows, 24+ character names and a double-digit bingo number: names truncate, pills stay whole.
+    func testLeaderboardLongNames() {
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.longNameBingos, timeZone: F.utc) }, height: 760)
     }
 
     func testEnded() {
-        assertBoth(EndedView(service: FakeGameService(), snapshot: F.ended(), gameId: "g1", timeZone: F.utc), height: 760)
+        assertBoth(EndedView(snapshot: F.ended(), timeZone: F.utc), height: 900)
     }
 
     func testReclaimPrompt() {
-        assertBoth(RisoPage { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: F.reclaims) }, height: 220)
+        assertBoth(RisoPage(top: 10) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: [F.reclaims[0]]) }, height: 200)
     }
 
-    func testHostMenuSheet() {
-        assertBoth(HostMenuSheet(service: FakeGameService(), gameId: "g1", snapshot: F.lobby(mySeatId: "s1"), onClose: {}), height: 340)
+    /// The toast floats over the play screen; the header stays visible beneath it.
+    func testReclaimOverBoard() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            .overlay(alignment: .top) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: [F.reclaims[0]]) }
+            .padding(.top, 0), height: 640)
     }
 
-    func testHostMenuConfirm() {
-        assertBoth(HostMenuSheet(service: FakeGameService(), gameId: "g1", snapshot: F.lobby(mySeatId: "s1"), onClose: {}, target: F.seats[1]), height: 260)
+    func testReclaimTwo() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            .overlay(alignment: .top) { ReclaimPromptView(service: FakeGameService(), gameId: "g1", reclaims: F.reclaims) }, height: 640)
+    }
+
+    func testBoardHostMenu() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", hostMenu: .menu), height: 470)
+    }
+
+    func testMakeHostDialog() {
+        let others = Array(F.seats.dropFirst())
+        assertBoth(ZStack {
+            PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1")
+            MakeHostDialog(service: FakeGameService(), gameId: "g1", candidates: others, onClose: {}, pickedId: "s2")
+        }, height: 470)
+    }
+
+    func testEndGameDialog() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", hostMenu: .endGame), height: 470)
+    }
+
+    /// Square 7 (marked) is in flight past 250 ms: dimmed, shadow dropped.
+    func testBoardPendingCell() {
+        assertBoth(PlayView(service: FakeGameService(), snapshot: F.playing(), gameId: "g1", pendingCells: [7], slowCells: [7]), height: 470)
+    }
+
+    /// 120-character squares clamp (four lines at this width).
+    func testBoardLongText() {
+        var snap = F.playing(mySeatId: "s2")
+        snap.board = F.longTextBoard()
+        assertBoth(PlayView(service: FakeGameService(), snapshot: snap, gameId: "g1"), height: 470)
+    }
+
+    func testLobbyHostMenu() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1", hostMenu: .menu), height: screen, drawHierarchy: true)
+    }
+
+    /// Lobby header at an accessibility text size: title, count, avatars and dots stay whole.
+    func testLobbyHeaderAccessibilitySize() {
+        assertBoth(HeaderHarness { focus in
+            LobbyHeaderView(poolCount: 18, seats: F.seats, playersOpen: false, showsMenu: true, menuFocus: focus, onTogglePlayers: {}, onMenu: {})
+        }.environment(\.dynamicTypeSize, .accessibility2), height: 220)
+    }
+
+    /// Board header at an accessibility text size: code pill, Leaderboard and dots stay whole.
+    func testBoardHeaderAccessibilitySize() {
+        assertBoth(HeaderHarness { focus in
+            BoardHeaderView(code: "HX7KQ", showsMenu: true, menuFocus: focus, onLeaderboard: {}, onMenu: {})
+        }.environment(\.dynamicTypeSize, .accessibility2), height: 200)
     }
 
     func testListenerError() {
         let denied = AppError(code: "permission-denied", token: nil, underlying: nil)
         assertBoth(GameErrorView(message: ErrorMessages.listenerMessage(for: denied, wasSeated: true), onHome: {}), height: 160)
+    }
+}
+
+/// Hosts a header that needs a VoiceOver focus binding, on the page background.
+private struct HeaderHarness<Content: View>: View {
+    @AccessibilityFocusState private var focus: Bool
+    let content: (AccessibilityFocusState<Bool>.Binding) -> Content
+
+    init(@ViewBuilder content: @escaping (AccessibilityFocusState<Bool>.Binding) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        RisoPage(gutter: Riso.gutter, top: 20) { content($focus) }
     }
 }
 
@@ -130,6 +244,17 @@ private struct KitGallery: View {
             HStack(spacing: 10) {
                 RisoButton(title: "Host a game", kind: .primary) {}
                 RisoButton(title: "Join", kind: .blue) {}
+            }
+            // Capsule controls (edge-stub check).
+            HStack(spacing: 10) {
+                RisoChip(title: "All", isOn: true) {}
+                RisoChip(title: "Mine") {}
+                RisoToolbarPill(title: "Done") {}
+            }
+            WaitingPill(title: "Waiting for players", style: .compact, animated: false)
+            HStack(spacing: 10) {
+                RisoSegmented(options: [(0, "Pool"), (1, "Players")], selection: .constant(0), style: .pill)
+                RisoSegmented(options: [(0, "One"), (1, "Split")], selection: .constant(1), style: .pill, size: .compact)
             }
         }
     }

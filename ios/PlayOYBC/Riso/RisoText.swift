@@ -5,7 +5,7 @@ import SwiftUI
 /// (em × size).
 extension View {
     /// Kicker — Bricolage 700, 13px, +.22em caps, red by default (web `RisoSectionLabel` kicker).
-    func risoKicker(_ color: Color = .risoRed) -> some View {
+    func risoKicker(_ color: Color = .risoDanger) -> some View {
         self.font(.risoHead(13, .bold))
             .tracking(2.86)
             .textCase(.uppercase)

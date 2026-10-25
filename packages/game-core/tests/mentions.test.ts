@@ -58,6 +58,20 @@ describe('parseMentions', () => {
     expect(h.ok && h.mentions.seatIds).toEqual(['a']);
     expect(parseMentions("@Josh'x", seats).ok).toBe(false);
   });
+  it('longest match wins over keywords', () => {
+    const party = [seat('e', 'Someone Else'), seat('n', 'Anyone Here')];
+    const a = parseMentions('@Someone Else dances', party);
+    expect(a).toEqual({ ok: true, mentions: { seatIds: ['e'], someone: false, anyone: false } });
+    const b = parseMentions('@someone dances', party);
+    expect(b).toEqual({ ok: true, mentions: { seatIds: [], someone: true, anyone: false } });
+    const c = parseMentions('@anyone dances', party);
+    expect(c).toEqual({ ok: true, mentions: { seatIds: [], someone: false, anyone: true } });
+    const d = parseMentions('@anyone here', party);
+    expect(d.ok && d.mentions.seatIds).toEqual(['n']);
+    // A seat named exactly like a keyword ties on length: the keyword wins.
+    const tie = parseMentions('@someone', [seat('k', 'Someone')]);
+    expect(tie.ok && tie.mentions).toEqual({ seatIds: [], someone: true, anyone: false });
+  });
   it('punctuation boundaries', () => {
     const a = parseMentions('hey @Josh, go', seats);
     expect(a.ok && a.mentions.seatIds).toEqual(['s2']);

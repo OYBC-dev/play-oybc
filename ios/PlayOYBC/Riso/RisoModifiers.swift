@@ -160,6 +160,8 @@ private struct RisoHalftone: ViewModifier {
     /// painted under a layer at this opacity. The two alphas are intentional
     /// (faithful to the source), not a double-application bug.
     var layerOpacity: Double = 0.55
+    /// Alpha of each dot (web `.riso-halftone` paints its dots at 0.27).
+    var dotOpacity: Double = 0.5
     func body(content: Content) -> some View {
         content.overlay(
             Canvas { ctx, size in
@@ -167,7 +169,7 @@ private struct RisoHalftone: ViewModifier {
                 // Non-inverting ink: the overprint must DARKEN the (colored)
                 // completed cell in both modes. Plain `risoInk` is cream in
                 // dark mode, which under `.multiply` would erase the dots.
-                let paint = GraphicsContext.Shading.color(Color.risoInkStatic.opacity(0.5))
+                let paint = GraphicsContext.Shading.color(Color.risoInkStatic.opacity(dotOpacity))
                 var y: CGFloat = 0
                 while y < size.height {
                     var x: CGFloat = 0
@@ -190,7 +192,7 @@ private struct RisoHalftone: ViewModifier {
 
 extension View {
     /// Radial-dot overprint screen drawn over a completed (ink-filled) cell.
-    func risoHalftone(tile: CGFloat = 7, layerOpacity: Double = 0.55) -> some View {
-        modifier(RisoHalftone(tile: tile, layerOpacity: layerOpacity))
+    func risoHalftone(tile: CGFloat = 7, layerOpacity: Double = 0.55, dotOpacity: Double = 0.5) -> some View {
+        modifier(RisoHalftone(tile: tile, layerOpacity: layerOpacity, dotOpacity: dotOpacity))
     }
 }

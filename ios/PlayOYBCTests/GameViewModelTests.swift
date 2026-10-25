@@ -239,22 +239,41 @@ final class GameViewModelTests: XCTestCase {
         }
     }
 
-    func testBannerShowsForOthersOnlyAndDismissesOnTimer() async {
+    func testBannersStackAndOnlyTheFrontClockRuns() async {
         let fake = FakeGameService()
         let sleeper = ManualSleeper()
-        let vm = await started(fake, sleeper: sleeper.sleep)
-        XCTAssertNil(vm.banner)
-        let own = BingoDoc(seq: 1, seatId: "s1", name: "Me", line: "row_0", playerBingoNumber: 1, at: 1, status: .announced)
-        let cody = BingoDoc(seq: 2, seatId: "s2", name: "Cody", line: "row_1", playerBingoNumber: 1, at: 2, status: .announced)
+        var now: TimeInterval = 100
+        let vm = GameViewModel(service: fake, gameId: "g1", seatId: "s1", sleeper: sleeper.sleep, clock: { now })
+        vm.start()
+        fake.emit(snapshot(bingos: []))
+        await settle()
+        XCTAssertTrue(vm.banners.isEmpty)
+        func bingo(_ seq: Int, _ seat: String, _ name: String) -> BingoDoc {
+            BingoDoc(seq: seq, seatId: seat, name: name, line: "row_0", playerBingoNumber: 1, at: Double(seq), status: .announced)
+        }
+        let own = bingo(1, "s1", "Me"), cody = bingo(2, "s2", "Cody"), dee = bingo(3, "s3", "Dee")
         fake.emit(snapshot(bingos: [own]))
         await settle()
-        XCTAssertNil(vm.banner)
+        XCTAssertTrue(vm.banners.isEmpty)
         fake.emit(snapshot(bingos: [own, cody]))
         await settle()
-        XCTAssertEqual(vm.banner?.name, "Cody")
+        XCTAssertEqual(vm.banners.map(\.name), ["Cody"])
+        now = 101
+        fake.emit(snapshot(bingos: [own, cody, dee]))
+        await settle()
+        XCTAssertEqual(vm.banners.map(\.name), ["Cody", "Dee"])
+        now = 104
         sleeper.fire()
         await settle()
-        XCTAssertNil(vm.banner)
+        XCTAssertEqual(vm.banners.map(\.name), ["Dee"])   // Dee's 4 s start now, at 104
+        now = 105
+        sleeper.fire()
+        await settle()
+        XCTAssertEqual(vm.banners.map(\.name), ["Dee"])
+        now = 108
+        sleeper.fire()
+        await settle()
+        XCTAssertTrue(vm.banners.isEmpty)
     }
 
     func testResumeStoreRoundTrip() {

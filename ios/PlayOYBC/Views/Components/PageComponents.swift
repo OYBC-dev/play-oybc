@@ -39,7 +39,7 @@ struct ErrorText: View {
     var body: some View {
         Text(message)
             .font(.risoBody(15, .semibold))
-            .foregroundStyle(Color.risoRed)
+            .foregroundStyle(Color.risoDanger)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isStaticText)
     }
@@ -76,7 +76,8 @@ struct SectionLabel: View {
     var body: some View { Text(title).risoSectionLabel().accessibilityAddTraits(.isHeader) }
 }
 
-/// Bottom-sheet body with a title and Close (web `play/Sheet`). Present inside `.sheet`.
+/// Bottom-sheet body with a title and a ghost Done (web `play/Sheet`). Present inside
+/// `.sheet`; opens at the medium detent and can pull up to large.
 struct RisoSheet<Content: View>: View {
     let title: String
     let onClose: () -> Void
@@ -84,21 +85,29 @@ struct RisoSheet<Content: View>: View {
 
     var body: some View {
         ZStack {
-            RisoPaperBackground()
+            Color.risoPaper2.ignoresSafeArea()
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text(title).risoH2().accessibilityAddTraits(.isHeader)
-                        Spacer()
-                        RisoButton(title: "Close", small: true, action: onClose)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text(title)
+                            .font(.risoHead(26, .extraBold)).tracking(-0.52)
+                            .foregroundStyle(Color.risoInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: 0)
+                        RisoButton(title: "Done", kind: .ghost, small: true, action: onClose)
+                            .risoHitSlop(6)
                     }
                     content
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 24)
             }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(Color.risoPaper2)
     }
 }
 

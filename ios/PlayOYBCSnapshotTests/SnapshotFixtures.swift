@@ -22,7 +22,7 @@ enum SnapshotFixtures {
     /// Pool as seen by `viewer`; the entry mentioning the viewer arrives without text.
     static func pool(viewer: String) -> [PoolViewEntry] {
         [
-            PoolViewEntry(taskId: "t1", authorName: "Stephen", text: "Someone spills a drink", mine: viewer == "s1"),
+            PoolViewEntry(taskId: "t1", authorName: "Stephen", text: "Someone bobs for apples", mine: viewer == "s1"),
             PoolViewEntry(taskId: "t2", authorName: "Cody", text: nil, mine: false),
             PoolViewEntry(taskId: "t3", authorName: "Pat", text: "A costume needs emergency tape repair", mine: viewer == "s3"),
             PoolViewEntry(taskId: "t4", authorName: "Mary Jane", text: "@Cody does the Monster Mash", mine: viewer == "s4"),
@@ -36,8 +36,37 @@ enum SnapshotFixtures {
                      view: pool(viewer: mySeatId), board: nil, bingos: [], reclaims: [])
     }
 
+    /// Just opened: only the host, an empty pool, nobody short yet.
+    static func lobbyEmpty() -> GameSnapshot {
+        GameSnapshot(game: game(stage: .lobby), mySeatId: "s1", seats: [seats[0]], view: [], board: nil, bingos: [], reclaims: [])
+    }
+
+    /// A 29-character name (past Join's 20 cap, a worst case): wraps in the sheet's shortfall block.
+    static let longNameSeat = Seat(seatId: "s5", doc: SeatDoc(name: "Bartholomew Fitzgerald-Smythe", nameKey: "bartholomew fitzgerald-smythe",
+                                                              joinedAt: fixedNow + 4000))
+
+    /// A task at the 120-character maximum.
+    static let maxLengthTask = "Someone attempts the full Thriller dance in the kitchen, knocks over the candy bowl, then says it was part of the show!!"
+
+    /// Filling up: five players, four short (more lines than the sheet shows), a max-length row.
+    static func lobbyFilling() -> GameSnapshot {
+        let view = [PoolViewEntry(taskId: "t0", authorName: "Bartholomew Fitzgerald-Smythe", text: maxLengthTask, mine: false)] + pool(viewer: "s1")
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 12, "s5": 7]), mySeatId: "s1",
+                            seats: seats + [longNameSeat], view: view, board: nil, bingos: [], reclaims: [])
+    }
+
+    /// Ready to launch: a full pool and nobody short.
+    static func lobbyReady() -> GameSnapshot {
+        let authors = seats.map(\.name)
+        let view = taskTexts.enumerated().map { i, text in
+            PoolViewEntry(taskId: "r\(i)", authorName: authors[i % authors.count], text: i == 3 ? nil : text, mine: i % authors.count == 0)
+        }
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 0, "s3": 0, "s4": 0]), mySeatId: "s1", seats: seats,
+                            view: view, board: nil, bingos: [], reclaims: [])
+    }
+
     static let taskTexts = [
-        "Someone spills a drink", "Fog machine sets off the smoke alarm", "A costume needs emergency tape repair",
+        "Someone bobs for apples", "Fog machine sets off the smoke alarm", "A costume needs emergency tape repair",
         "The dog steals candy", "Two people in the same costume", "Monster Mash plays", "Someone trips on a cape",
         "A pumpkin gets knocked over", "Cody does the Monster Mash", "Neighbor rings the doorbell",
         "Someone asks 'what are you supposed to be?'", "Fake blood on the couch", "A mask comes off for good",
@@ -67,6 +96,21 @@ enum SnapshotFixtures {
         BingoDoc(seq: 3, seatId: "s4", name: "Mary Jane", line: "diag_main", playerBingoNumber: 1, at: fixedNow + 2_400_000, status: .announced),
         BingoDoc(seq: 4, seatId: "s3", name: "Pat", line: "row_4", playerBingoNumber: 2, at: fixedNow + 3_000_000, status: .announced),
     ]
+
+    /// Ten bingos with 24+ character names; one player reaches #12.
+    static let longNameBingos: [BingoDoc] = (1...10).map { (i: Int) -> BingoDoc in
+        let name: String = i % 2 == 0 ? "Bartholomew Fitzgerald-Smythe" : "Maximilian Featherstonehaugh"
+        let number: Int = i == 10 ? 12 : (i % 3 == 0 ? 2 : 1)
+        let at: Double = fixedNow + Double(i) * 420_000
+        return BingoDoc(seq: i, seatId: "s\(i)", name: name, line: "row_0", playerBingoNumber: number, at: at, status: .announced)
+    }
+
+    /// Every task square at the 120-character maximum (the clamp check).
+    static func longTextBoard() -> BoardDoc {
+        var b = board()
+        b.cells = b.cells.enumerated().map { i, c in c == .free ? c : .task(taskId: "l\(i)", text: maxLengthTask) }
+        return b
+    }
 
     static func playing(mySeatId: String = "s1") -> GameSnapshot {
         GameSnapshot(game: game(stage: .playing), mySeatId: mySeatId, seats: seats, view: [], board: board(),

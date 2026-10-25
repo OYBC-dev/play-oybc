@@ -27,7 +27,7 @@ struct AvatarStack: View {
                     }
                 }
             }
-            .frame(minHeight: 44)
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

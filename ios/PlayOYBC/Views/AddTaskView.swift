@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Task entry with @mention autocomplete (web `AddTaskForm` + `MentionAutocomplete`).
+/// The lobby composer: task field + neutral Add, with @mention autocomplete floating under
+/// the field (web `AddTaskForm` + `MentionAutocomplete`).
 /// The caret is taken to be the end of the text (SwiftUI exposes no selection for TextField).
 struct AddTaskView: View {
     let service: GameService
@@ -32,49 +33,67 @@ struct AddTaskView: View {
     private var canSubmit: Bool { !busy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Something that might happen", text: $text)
-                .accessibilityLabel("Task")
-                .focused($focused)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .onSubmit { if let first = options.first { pick(first) } else { submit() } }
-                .font(.risoBody(16, .medium))
-                .foregroundStyle(Color.risoInk)
-                .tint(Color.risoBlue)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 48)
-                .background(RoundedRectangle(cornerRadius: Riso.cardRadius).fill(Color.risoPaper2))
-                .overlay(RoundedRectangle(cornerRadius: Riso.cardRadius).strokeBorder(Color.risoInk, lineWidth: 2))
-                .onChange(of: text) { _, v in
-                    if v.count > GameConstants.maxTaskLength { text = String(v.prefix(GameConstants.maxTaskLength)) }
-                    dismissed = false
-                }
-            if !options.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(options, id: \.self) { name in
-                        Button { pick(name) } label: {
-                            Text(name)
-                                .font(.risoBody(15, .bold))
-                                .foregroundStyle(Color.risoInk)
-                                .padding(.horizontal, 14)
-                                .frame(minHeight: 44)
-                                .risoCard(radius: 16, fill: .risoPaper)
-                                .fixedSize()
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .risoCard()
-                .risoHardShadow(Riso.Shadow.button)
-                .accessibilityLabel("Mentions")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                field
+                RisoButton(title: "Add") { submit() }
+                    .risoDisabled(!canSubmit)
             }
-            if let error { ErrorText(error) }
-            RisoButton(title: "Add", kind: .primary, fullWidth: true) { submit() }
-                .risoDisabled(!canSubmit)
+            .overlay(alignment: .topLeading) {
+                if !options.isEmpty { autocomplete.offset(y: 56) }
+            }
+            .zIndex(1)
+            // The mention card floats where the error sits; the error shows again once it closes.
+            if let error, options.isEmpty { ErrorText(error) }
         }
+    }
+
+    private var field: some View {
+        TextField("", text: $text,
+                  prompt: Text("Add to the pool").font(.risoBody(15, .semibold)).foregroundStyle(Color.risoMuted))
+            .accessibilityLabel("Task")
+            .focused($focused)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .onSubmit { if let first = options.first { pick(first) } else { submit() } }
+            .font(.risoBody(15, .medium))
+            .foregroundStyle(Color.risoInk)
+            .tint(Color.risoBlue)
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .background(RoundedRectangle(cornerRadius: Riso.cardRadius).fill(Color.risoPaper2))
+            .overlay(RoundedRectangle(cornerRadius: Riso.cardRadius).strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+            .onChange(of: text) { _, v in
+                if v.count > GameConstants.maxTaskLength { text = String(v.prefix(GameConstants.maxTaskLength)) }
+                dismissed = false
+            }
+    }
+
+    /// Suggestion card floating under the field (web `MentionAutocomplete`).
+    private var autocomplete: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(options, id: \.self) { name in
+                Button { pick(name) } label: {
+                    HStack(spacing: 10) {
+                        // Muted, not blue: blue is never text on paper.
+                        Text("@").foregroundStyle(Color.risoMuted).accessibilityHidden(true)
+                        Text(name).foregroundStyle(Color.risoInk).lineLimit(1)
+                    }
+                    .font(.risoHead(15, .bold))
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .frame(minWidth: 210, alignment: .leading)
+        .fixedSize()
+        .risoCard()
+        .risoHardShadow(Riso.Shadow.small)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Mentions")
     }
 
     private func pick(_ name: String) {

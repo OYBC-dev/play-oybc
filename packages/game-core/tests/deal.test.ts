@@ -93,6 +93,10 @@ describe('resolveMentionDisplay', () => {
     expect(resolveMentionDisplay('@ANYONE hugs @someone', party, 'Josh')).toBe('Anyone hugs Josh');
     expect(resolveMentionDisplay('@anyone hugs @someone', party, null)).toBe('Anyone hugs @someone');
   });
+  it('a seat name longer than a keyword wins the display, the bare keyword still resolves', () => {
+    const withElse: Seat[] = [...party, { seatId: 'd', name: 'Someone Else', joinedAt: 3 }];
+    expect(resolveMentionDisplay('@someone else and @someone wave', withElse, 'Jo')).toBe('Someone Else and Jo wave');
+  });
   it('keeps unknown mentions, embedded @ and text without mentions verbatim', () => {
     expect(resolveMentionDisplay('@Joshua waves at a@jo', party, null)).toBe('@Joshua waves at a@jo');
     expect(resolveMentionDisplay('Plain text, no tags', party, 'Jo')).toBe('Plain text, no tags');

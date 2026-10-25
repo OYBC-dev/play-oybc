@@ -31,9 +31,8 @@
 }
 .item:hover:not(:disabled) { background: var(--riso-paper); }
 .item:disabled { opacity: 0.45; cursor: not-allowed; }
-.danger { color: var(--riso-red); }
-/* Harvest-dark rust on the dark card is ~2.5:1; lift it toward ink so the label stays readable. */
-:global([data-theme='dark']) .danger { color: color-mix(in srgb, var(--riso-red), var(--riso-ink) 35%); }
+/* --riso-red-text lifts the harvest-dark rust (~2.9:1 on the dark card) to 5.26:1. */
+.danger { color: var(--riso-red-text); }
 .hairline { height: 1px; background: var(--riso-hair); margin: 4px 10px; }
 @keyframes menuFade { from { opacity: 0; } to { opacity: 1; } }
 

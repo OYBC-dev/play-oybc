@@ -46,8 +46,10 @@ export type MentionToken =
   | { kind: 'unknown'; start: number; end: number; token: string };
 
 /**
- * Scans `text` for @mention tokens: `@someone`, `@anyone`, or the longest
- * matching seat name (case- and whitespace-insensitive). An `@` preceded by a
+ * Scans `text` for @mention tokens: `@someone`, `@anyone`, or a seat name
+ * (case- and whitespace-insensitive). The longest match at a position wins, so a
+ * seat named "Someone Else" beats the `someone` keyword; on an equal-length tie
+ * the keyword wins. An `@` preceded by a
  * letter/digit, or not followed by a letter/digit, is plain text. Every other
  * `@word` is an `unknown` token spanning the word.
  */
@@ -65,14 +67,15 @@ export function scanMentions(text: string, seats: readonly Seat[]): MentionToken
       return end >= 0 && endsCleanly(text, end) ? end : -1;
     };
 
-    let token: MentionToken | null = null;
+    // Longest match at this position wins; keywords are offered first so they win ties.
+    const candidates: MentionToken[] = [];
     let end = tryKey('someone');
-    if (end >= 0) token = { kind: 'someone', start: i, end };
-    if (!token && (end = tryKey('anyone')) >= 0) token = { kind: 'anyone', start: i, end };
-    for (const s of token ? [] : byLength) {
-      end = tryKey(s.key);
-      if (end >= 0) { token = { kind: 'seat', seat: s.seat, start: i, end }; break; }
-    }
+    if (end >= 0) candidates.push({ kind: 'someone', start: i, end });
+    if ((end = tryKey('anyone')) >= 0) candidates.push({ kind: 'anyone', start: i, end });
+    const seatMatch = byLength.find((s) => (end = tryKey(s.key)) >= 0);
+    if (seatMatch) candidates.push({ kind: 'seat', seat: seatMatch.seat, start: i, end });
+    let token: MentionToken | null = null;
+    for (const c of candidates) if (!token || c.end > token.end) token = c;
     if (!token) {
       let stop = start;
       while (isWordChar(text[stop]) || isJoiner(text[stop])) stop++;
