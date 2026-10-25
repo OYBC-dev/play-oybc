@@ -11,11 +11,15 @@ final class ScreenSnapshotTests: XCTestCase {
 
     /// Asserts one baseline per colour scheme (`<test>.light.png` / `<test>.dark.png`).
     /// `drawHierarchy` renders through the window so SwiftUI blur filters show (the lobby's
-    /// hidden rows); the default layer render drops them.
+    /// hidden rows); the default layer render drops them. Window renders go through the GPU
+    /// blur, which differs by a few levels between machines, so they compare perceptually.
     private func assertBoth<V: View>(_ view: V, height: CGFloat, drawHierarchy: Bool = false, file: StaticString = #filePath, testName: String = #function, line: UInt = #line) {
+        let precision: Float = drawHierarchy ? 0.99 : 1
+        let perceptualPrecision: Float = drawHierarchy ? 0.98 : 1
         for (name, style, scheme) in [("light", UIUserInterfaceStyle.light, ColorScheme.light), ("dark", .dark, .dark)] {
             let v = view.environment(\.colorScheme, scheme)
-            assertSnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, layout: .fixed(width: 393, height: height),
+            assertSnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, precision: precision,
+                                             perceptualPrecision: perceptualPrecision, layout: .fixed(width: 393, height: height),
                                              traits: UITraitCollection(userInterfaceStyle: style)),
                            named: name, record: recordMode, file: file, testName: testName, line: line)
         }
