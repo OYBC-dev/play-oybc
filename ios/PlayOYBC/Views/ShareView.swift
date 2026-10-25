@@ -23,10 +23,11 @@ struct ShareView: View {
                         .interpolation(.none)
                         .resizable()
                         .frame(width: 176, height: 176)
+                        .blendMode(.multiply)  // white modules take the cream tile
                         .padding(4)
-                        .background(Color.white)
+                        .background(Riso.QR.cream)
                         .clipShape(RoundedRectangle(cornerRadius: Riso.cardRadius))
-                        .overlay(RoundedRectangle(cornerRadius: Riso.cardRadius).strokeBorder(Color.risoInk, lineWidth: 2))
+                        .overlay(RoundedRectangle(cornerRadius: Riso.cardRadius).strokeBorder(Riso.QR.ink, lineWidth: Riso.QR.border))
                         .accessibilityLabel("QR code")
                 }
                 Text(link)
@@ -43,7 +44,7 @@ struct ShareView: View {
     }
 }
 
-/// QR rendering via `CIFilter.qrCodeGenerator`; the view adds white padding as quiet zone.
+/// QR rendering via `CIFilter.qrCodeGenerator`; the view adds cream padding as quiet zone.
 enum QRCode {
     private static let context = CIContext()
 

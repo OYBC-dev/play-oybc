@@ -13,6 +13,10 @@ enum RisoButtonKind {
                     // (e.g. the closing-out banner's Seal action). Uses
                     // risoInkStatic (never adaptive risoInk) so the label
                     // stays legible on gold in dark mode.
+    case ghost     // transparent / ink — outline secondary: 2pt ink keyline,
+                    // no hard shadow, no press translate
+    case dark      // ink / paper — intentionally ADAPTIVE (flips in dark mode,
+                    // like the web Apple sign-in slab)
 
     var fill: Color {
         switch self {
@@ -22,12 +26,17 @@ enum RisoButtonKind {
         case .green: return .risoGreen
         case .teal: return .risoTeal
         case .gold: return .risoGold
+        case .ghost: return .clear
+        case .dark: return .risoInk
         }
     }
+    /// Ghost is flat: no hard shadow.
+    var hasShadow: Bool { self != .ghost }
     var foreground: Color {
         switch self {
         case .neutral: return .risoInk
         case .gold: return .risoInkStatic
+        case .ghost: return .risoInk
         default: return .risoPaper
         }
     }
@@ -64,7 +73,7 @@ struct RisoButton: View {
             .padding(.horizontal, hPad)
             .risoCard(fill: kind.fill)
         }
-        .buttonStyle(RisoButtonStyle())
+        .buttonStyle(RisoButtonStyle(showsShadow: kind.hasShadow))
     }
 }
 

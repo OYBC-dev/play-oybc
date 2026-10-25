@@ -29,7 +29,7 @@ private struct RisoHardShadow: ViewModifier {
     func body(content: Content) -> some View {
         content.background(
             RoundedRectangle(cornerRadius: radius)
-                .fill(Color.risoInk)
+                .fill(Color.risoShadowInk)
                 .offset(x: offset, y: offset)
         )
     }
@@ -42,7 +42,7 @@ private struct RisoHardShadowShape<S: Shape>: ViewModifier {
     func body(content: Content) -> some View {
         content.background(
             shape
-                .fill(Color.risoInk)
+                .fill(Color.risoShadowInk)
                 .offset(x: offset, y: offset)
         )
     }
@@ -92,14 +92,17 @@ extension View {
 struct RisoButtonStyle: ButtonStyle {
     var offset: CGFloat = Riso.Shadow.button
     var radius: CGFloat = Riso.cardRadius
+    /// False for flat kinds (ghost): no shadow and no press translate.
+    var showsShadow: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
-        let pressed = configuration.isPressed
+        let pressed = configuration.isPressed && showsShadow
         return configuration.label
             .background(
                 RoundedRectangle(cornerRadius: radius)
-                    .fill(Color.risoInk)
+                    .fill(Color.risoShadowInk)
                     .offset(x: pressed ? 0 : offset, y: pressed ? 0 : offset)
+                    .opacity(showsShadow ? 1 : 0)
             )
             .offset(x: pressed ? offset : 0, y: pressed ? offset : 0)
             .animation(.easeOut(duration: Riso.pressDuration), value: pressed)
