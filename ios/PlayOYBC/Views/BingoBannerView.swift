@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Stacked "<Name> got a bingo!" banners (web `BingoBanner`). `banners` is front-first: the
 /// front one is tappable and rotated, the others sit behind it (+12 pt, -4.5% scale each).
-/// A confetti burst plays per new banner; under Reduce Motion there is no confetti and
+/// A confetti burst plays as each banner reaches the front (web); under Reduce Motion there is no confetti and
 /// banners swap instantly. `animates: false` also suppresses motion (snapshots).
 struct BingoBannerView: View {
     let banners: [BingoDoc]
@@ -69,14 +69,17 @@ struct BingoBannerView: View {
         }
     }
 
-    /// Announces and bursts each banner once, however many arrive together.
+    /// Bursts confetti once per banner as it reaches the front, and announces each banner
+    /// once, however many arrive together.
     private func sync() {
+        if let front = banners.first?.seq, !burstSeen.contains(front) {
+            burstSeen.insert(front)
+            if motion { bursts.append(front) }
+        }
         let fresh = banners.map(\.seq).filter { !announced.contains($0) }
         guard !fresh.isEmpty else { return }
         announced.formUnion(fresh)
         let names = banners.filter { fresh.contains($0.seq) }.map(\.name)
-        if motion { for seq in fresh where !burstSeen.contains(seq) { bursts.append(seq) } }
-        burstSeen.formUnion(fresh)
         // One combined announcement (web's single live region): overlapping ones are dropped.
         announcement?.cancel()
         let message = names.map { "\($0) got a bingo!" }.joined(separator: " ")

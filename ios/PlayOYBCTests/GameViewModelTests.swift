@@ -239,7 +239,7 @@ final class GameViewModelTests: XCTestCase {
         }
     }
 
-    func testBannersStackAndLeaveOnTheirOwnClocks() async {
+    func testBannersStackAndOnlyTheFrontClockRuns() async {
         let fake = FakeGameService()
         let sleeper = ManualSleeper()
         var now: TimeInterval = 100
@@ -265,8 +265,12 @@ final class GameViewModelTests: XCTestCase {
         now = 104
         sleeper.fire()
         await settle()
-        XCTAssertEqual(vm.banners.map(\.name), ["Dee"])
+        XCTAssertEqual(vm.banners.map(\.name), ["Dee"])   // Dee's 4 s start now, at 104
         now = 105
+        sleeper.fire()
+        await settle()
+        XCTAssertEqual(vm.banners.map(\.name), ["Dee"])
+        now = 108
         sleeper.fire()
         await settle()
         XCTAssertTrue(vm.banners.isEmpty)

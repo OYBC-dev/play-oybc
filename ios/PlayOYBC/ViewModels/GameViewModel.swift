@@ -149,8 +149,8 @@ final class GameViewModel: ObservableObject {
         snapshot = s
     }
 
-    /// Publishes the stack and re-arms the single wait for the earliest banner deadline; each
-    /// banner leaves on its own 4 s clock, so the wait re-arms after every change.
+    /// Publishes the stack and re-arms the single wait for the front banner's deadline; only
+    /// the front's 4 s clock runs, so the wait re-arms after every change.
     private func refreshBanners() {
         if queue.banners != banners { banners = queue.banners }
         bannerTask?.cancel()
