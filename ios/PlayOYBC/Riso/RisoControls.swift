@@ -108,6 +108,8 @@ struct RisoToolbarPill: View {
                 .padding(.horizontal, 14)
                 .background(Capsule().fill(fill))
                 .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+                // Clip to the capsule: short capsule strokes draw flat stubs at their ends.
+                .clipShape(Capsule())
         }
         .buttonStyle(RisoButtonStyle(offset: Riso.Shadow.small, radius: 999))
     }
@@ -159,6 +161,8 @@ struct RisoChip: View {
                 .padding(.horizontal, 13)
                 .background(Capsule().fill(isOn ? Color.risoInk : Color.risoPaper2))
                 .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+                // Clip to the capsule: short capsule strokes draw flat stubs at their ends.
+                .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -297,6 +301,8 @@ struct RisoSegmented<T: Hashable>: View {
         .padding(4)
         .background(Capsule().fill(Color.risoPaper))
         .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+        // Clip to the capsule: short capsule strokes draw flat stubs at their ends.
+        .clipShape(Capsule())
     }
 
     /// `.pill` at `.compact`: a 22pt capsule with NO internal padding —
@@ -330,6 +336,8 @@ struct RisoSegmented<T: Hashable>: View {
         .background(Color.risoPaper)
         .clipShape(Capsule())
         .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.dense))
+        // Clip the keyline too: short capsule strokes draw flat stubs at their ends.
+        .clipShape(Capsule())
     }
 }
 

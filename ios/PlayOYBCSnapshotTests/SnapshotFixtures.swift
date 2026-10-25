@@ -36,6 +36,35 @@ enum SnapshotFixtures {
                      view: pool(viewer: mySeatId), board: nil, bingos: [], reclaims: [])
     }
 
+    /// Just opened: only the host, an empty pool, nobody short yet.
+    static func lobbyEmpty() -> GameSnapshot {
+        GameSnapshot(game: game(stage: .lobby), mySeatId: "s1", seats: [seats[0]], view: [], board: nil, bingos: [], reclaims: [])
+    }
+
+    /// A 29-character name: wraps in the sheet's shortfall block and truncates in its chip.
+    static let longNameSeat = Seat(seatId: "s5", doc: SeatDoc(name: "Bartholomew Fitzgerald-Smythe", nameKey: "bartholomew fitzgerald-smythe",
+                                                              joinedAt: fixedNow + 4000))
+
+    /// A task at the 120-character maximum.
+    static let maxLengthTask = "Someone attempts the full Thriller dance in the kitchen, knocks over the candy bowl, then says it was part of the show!!"
+
+    /// Filling up: five players, four short (more lines than the sheet shows), a max-length row.
+    static func lobbyFilling() -> GameSnapshot {
+        let view = [PoolViewEntry(taskId: "t0", authorName: "Bartholomew Fitzgerald-Smythe", text: maxLengthTask, mine: false)] + pool(viewer: "s1")
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 12, "s5": 7]), mySeatId: "s1",
+                            seats: seats + [longNameSeat], view: view, board: nil, bingos: [], reclaims: [])
+    }
+
+    /// Ready to launch: a full pool and nobody short.
+    static func lobbyReady() -> GameSnapshot {
+        let authors = seats.map(\.name)
+        let view = taskTexts.enumerated().map { i, text in
+            PoolViewEntry(taskId: "r\(i)", authorName: authors[i % authors.count], text: i == 3 ? nil : text, mine: i % authors.count == 0)
+        }
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 0, "s3": 0, "s4": 0]), mySeatId: "s1", seats: seats,
+                            view: view, board: nil, bingos: [], reclaims: [])
+    }
+
     static let taskTexts = [
         "Someone spills a drink", "Fog machine sets off the smoke alarm", "A costume needs emergency tape repair",
         "The dog steals candy", "Two people in the same costume", "Monster Mash plays", "Someone trips on a cape",

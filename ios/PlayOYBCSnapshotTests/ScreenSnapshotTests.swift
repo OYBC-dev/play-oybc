@@ -10,10 +10,13 @@ final class ScreenSnapshotTests: XCTestCase {
     private typealias F = SnapshotFixtures
 
     /// Asserts one baseline per colour scheme (`<test>.light.png` / `<test>.dark.png`).
-    private func assertBoth<V: View>(_ view: V, height: CGFloat, file: StaticString = #filePath, testName: String = #function, line: UInt = #line) {
+    /// `drawHierarchy` renders through the window so SwiftUI blur filters show (the lobby's
+    /// hidden rows); the default layer render drops them.
+    private func assertBoth<V: View>(_ view: V, height: CGFloat, drawHierarchy: Bool = false, file: StaticString = #filePath, testName: String = #function, line: UInt = #line) {
         for (name, style, scheme) in [("light", UIUserInterfaceStyle.light, ColorScheme.light), ("dark", .dark, .dark)] {
             let v = view.environment(\.colorScheme, scheme)
-            assertSnapshot(of: v, as: .image(layout: .fixed(width: 393, height: height), traits: UITraitCollection(userInterfaceStyle: style)),
+            assertSnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, layout: .fixed(width: 393, height: height),
+                                             traits: UITraitCollection(userInterfaceStyle: style)),
                            named: name, record: recordMode, file: file, testName: testName, line: line)
         }
     }
@@ -52,15 +55,35 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testKit() {
-        assertBoth(KitGallery(), height: 640)
+        assertBoth(KitGallery(), height: 820)
     }
 
+    /// Lobby frames are full iPhone 17 screens so the sheet sits pinned at the bottom.
+    private let screen: CGFloat = 852
+
     func testLobbyHost() {
-        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1"), height: 1360)
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1", playersOpen: true), height: screen, drawHierarchy: true)
     }
 
     func testLobbyGuest() {
-        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s2"), gameId: "g1"), height: 760)
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s2"), gameId: "g1"), height: screen, drawHierarchy: true)
+    }
+
+    func testLobbyHostEmpty() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyEmpty(), gameId: "g1", animateWaiting: false), height: screen)
+    }
+
+    func testLobbyHostFilling() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyFilling(), gameId: "g1", playersOpen: true), height: screen, drawHierarchy: true)
+    }
+
+    func testLobbyHostReady() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(), gameId: "g1"), height: screen, drawHierarchy: true)
+    }
+
+    /// The QR tile's share sheet at its medium detent.
+    func testLobbyShareSheet() {
+        assertBoth(ShareSheetView(code: "HX7KQ", onDone: {}), height: 420)
     }
 
     func testPlayWithLineAndBanner() {
@@ -130,6 +153,17 @@ private struct KitGallery: View {
             HStack(spacing: 10) {
                 RisoButton(title: "Host a game", kind: .primary) {}
                 RisoButton(title: "Join", kind: .blue) {}
+            }
+            // Capsule controls (edge-stub check).
+            HStack(spacing: 10) {
+                RisoChip(title: "All", isOn: true) {}
+                RisoChip(title: "Mine") {}
+                RisoToolbarPill(title: "Done") {}
+            }
+            WaitingPill(title: "Waiting for players", style: .compact, animated: false)
+            HStack(spacing: 10) {
+                RisoSegmented(options: [(0, "Pool"), (1, "Players")], selection: .constant(0), style: .pill)
+                RisoSegmented(options: [(0, "One"), (1, "Split")], selection: .constant(1), style: .pill, size: .compact)
             }
         }
     }

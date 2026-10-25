@@ -7,6 +7,8 @@ import SwiftUI
 /// is the first character of the first whitespace-separated word of the name, uppercased;
 /// an empty or whitespace-only name gives "?". Characters are grapheme clusters, so emoji
 /// are never split.
+/// Divergence: web takes the first code point instead, so a multi-scalar emoji (flag, skin
+/// tone, ZWJ family) is one whole glyph here and only its first scalar on web.
 enum AvatarFor {
     /// One fill slot of the cycle.
     enum Slot: CaseIterable {

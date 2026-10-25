@@ -1,37 +1,32 @@
 import SwiftUI
 
-/// Everyone in the game in join order, host and you marked (web `PlayerList`).
+/// Every player as a 38pt chip in join order; the host's chip carries the Host badge
+/// (web `PlayerList`).
 struct PlayerListView: View {
     let snapshot: GameSnapshot
 
     var body: some View {
         FlowLayout(spacing: 8) {
             ForEach(LobbyLogic.seatsByJoin(snapshot.seats)) { seat in
-                HStack(spacing: 6) {
-                    Text(seat.name).font(.risoBody(15, .bold)).foregroundStyle(Color.risoInk)
-                    if seat.seatId == snapshot.game.hostSeatId { badge("Host") }
-                    if seat.seatId == snapshot.mySeatId { badge("You") }
+                HStack(spacing: 8) {
+                    Text(seat.name)
+                        .font(.risoHead(14, .bold))
+                        .foregroundStyle(Color.risoInk)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if seat.seatId == snapshot.game.hostSeatId { RisoBadge("Host", kind: .expiring) }
                 }
                 .padding(.horizontal, 12)
-                .frame(minHeight: 36)
-                // Radius under half the height: a true capsule stroke renders with flat-edge
-                // artifacts in snapshot rendering.
-                .risoCard(radius: 14, fill: .risoPaper2)
+                .frame(height: 38)
+                .background(Capsule().fill(Color.risoPaper2))
+                .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
+                // Clip to the capsule: short capsule strokes draw flat stubs at their ends.
+                .clipShape(Capsule())
                 .fixedSize()
                 .accessibilityElement(children: .combine)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Players")
-    }
-
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.risoBody(11, .extraBold))
-            .tracking(0.66)
-            .textCase(.uppercase)
-            .foregroundStyle(Color.risoInkStatic)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.risoGold))
     }
 }

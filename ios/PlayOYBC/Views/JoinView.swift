@@ -55,9 +55,11 @@ struct JoinView: View {
                 RisoButton(title: "Home", kind: .ghost, action: onHome)
             }
             RisoCardBox {
-                SectionLabel("Your name")
-                RisoInputField(placeholder: "Your name", text: $name, maxLength: 20, readOnly: waiting,
-                               contentType: .nickname) { submit() }
+                // The label names the field once: the field itself carries the VoiceOver name and
+                // no placeholder, so neither the screen nor VoiceOver repeats "Your name".
+                SectionLabel("Your name").accessibilityHidden(true)
+                RisoInputField(placeholder: "", text: $name, maxLength: 20, readOnly: waiting,
+                               contentType: .nickname, accessibilityName: "Your name") { submit() }
                 if let error = model.error { ErrorText(error) }
                 if model.denied { DeniedLine() }
                 if waiting {
