@@ -31,5 +31,11 @@ echo "GoogleService-Info.plist materialized."
 sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*;/CURRENT_PROJECT_VERSION = ${CI_BUILD_NUMBER};/g" "$PBXPROJ"
 echo "CURRENT_PROJECT_VERSION stamped to ${CI_BUILD_NUMBER}."
 
+# Xcode Cloud disables package resolution globally; lift that for this one
+# resolve so the pins can be brought in line, then the build runs as usual.
+xcodebuild -version
+swift --version
+defaults write com.apple.dt.Xcode IDEPackageOnlyUseVersionsFromResolvedFile -bool NO
+defaults write com.apple.dt.Xcode IDEDisableAutomaticPackageResolution -bool NO
 xcodebuild -resolvePackageDependencies -project "$REPO/ios/PlayOYBC.xcodeproj" -scheme PlayOYBC
-echo "Package dependencies resolved for $(xcodebuild -version | head -1)."
+echo "Package dependencies resolved."
