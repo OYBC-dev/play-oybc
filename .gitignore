@@ -9,8 +9,6 @@ node_modules
 .env.local
 .env.*.local
 ios/PlayOYBC/GoogleService-Info.plist
-ios/*.xcodeproj
-ios/PlayOYBC.xcodeproj/
 ios/build/
 xcuserdata/
 .firebase
