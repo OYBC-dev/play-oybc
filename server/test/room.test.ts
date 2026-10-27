@@ -266,6 +266,40 @@ describe('GameRoom', () => {
     expect(await later.closed).toBe(CLOSE.NOT_FOUND);
   });
 
+  it('a failure after the ack never sends a second ack and other sockets still get their push', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { a, b, c, code } = await threeSeats();
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(code));
+    await runInDurableObject(stub, (_r: GameRoom, state) => {
+      const bob = state.getWebSockets().find((ws) => (ws.deserializeAttachment() as { uid: string } | null)?.uid === 'ub')!;
+      bob.send = () => { throw new Error('socket send failed'); };
+    });
+    let [fa, fb, fc] = [a.frames.length, b.frames.length, c.frames.length];
+    const first = await a.act('addTask', { taskId: 'k1', text: 'first' });
+    expect(first).toMatchObject({ ok: true });
+    expect((await c.waitFor<StateMsg>(isState, fc)).view).toHaveLength(1);
+    expect((await a.waitFor<StateMsg>(isState, fa)).view).toHaveLength(1);
+    await Promise.all([a.sync(), c.sync()]);
+    expect(a.since(fa).filter((f) => f.t === 'ack' && f.id === first.id)).toHaveLength(1);
+    expect(b.since(fb).filter(isState)).toEqual([]);
+    expect(errSpy.mock.calls.map((x) => JSON.parse(String(x[0])).error)).toEqual(['broadcast-failed']);
+
+    errSpy.mockClear();
+    await runInDurableObject(stub, (_r: GameRoom, state) => {
+      state.storage.setAlarm = () => { throw new Error('alarm failed'); };
+    });
+    [fa, fc] = [a.frames.length, c.frames.length];
+    const ack = await a.act('addTask', { taskId: 'k2', text: 'second' });
+    expect(ack).toMatchObject({ ok: true });
+    expect((await c.waitFor<StateMsg>(isState, fc)).view).toHaveLength(2);
+    await a.sync();
+    expect(a.since(fa).filter((f) => f.t === 'ack' && f.id === ack.id)).toHaveLength(1);
+    expect(errSpy.mock.calls.map((x) => JSON.parse(String(x[0])).error)).toContain('after-mutation-failed');
+    const logged = errSpy.mock.calls.map((x) => String(x[0])).join('\n');
+    expect(logged).not.toContain('second');
+    expect(logged).not.toContain('Ann');
+  });
+
   it('logs one structured line per act without names, text or tokens', async () => {
     const g = await createGame('ua', 'Ann');
     const a = await wsClient(g.code, 'ua');

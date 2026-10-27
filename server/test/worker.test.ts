@@ -93,12 +93,22 @@ describe('Worker routes', () => {
     expect(statuses[10]).toBe(429);
   });
 
-  it('a game accepts at most 100 sockets', async () => {
+  it('at 100 sockets a bare upgrade evicts the oldest hello-less socket (4001); all attached refuses 429', async () => {
     const g = await createGame('ua', 'Ann');
-    const open = await Promise.all(Array.from({ length: 100 }, () => connect(g.code)));
-    const res = await SELF.fetch(`https://api.test/ws/${g.code}`, { headers: { Upgrade: 'websocket', 'CF-Connecting-IP': randomIp() } });
-    expect(res.status).toBe(429);
-    for (const c of open) c.close();
+    const bare = [];
+    for (let i = 0; i < 100; i++) bare.push(await connect(g.code));
+    const extra = await connect(g.code);
+    expect(await extra.hello(tokenFor('ua'))).toMatchObject({ t: 'welcome' });
+    expect(await bare[0].closed).toBe(4001);
+    for (const c of [...bare.slice(1), extra]) c.close();
+
+    const full = await createGame('ub', 'Bob');
+    const attached = [];
+    for (let i = 0; i < 100; i++) attached.push(await wsClient(full.code, `spectator-${i}`));
+    const refused = await SELF.fetch(`https://api.test/ws/${full.code}`, { headers: { Upgrade: 'websocket', 'CF-Connecting-IP': randomIp() } });
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ code: 'resource-exhausted' });
+    for (const c of attached) c.close();
   });
 
   it('createGame answers a CORS preflight', async () => {

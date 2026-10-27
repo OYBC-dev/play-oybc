@@ -3,7 +3,7 @@ import { AppError, toAck } from '../errors';
 import type { Env } from '../index';
 import { CLOSE, MAX_FRAME_BYTES, type ClientMsg } from '../protocol';
 import { MAX_SOCKETS, TokenBucket } from './limits';
-import { OPS, adminSeats, adminTransferHost, claimGame, type OpCtx, type Push } from './ops';
+import { OPS, adminSeats, adminTransferHost, claimGame, type OpCtx, type OpOut, type Push } from './ops';
 import { SqlPersistence } from './persistence';
 import { ALL_SECTIONS, buildSections } from './sections';
 import { attachmentOf, broadcast, send, type Attachment } from './sockets';
@@ -36,6 +36,8 @@ export class GameRoom implements DurableObject {
   private state!: GameState;
   /** Per-socket act limiter; in memory only (see `TokenBucket`). */
   private readonly buckets = new WeakMap<WebSocket, TokenBucket>();
+  /** Tie-breaker for sockets accepted in the same millisecond (see `acceptedAt`). */
+  private acceptSeq = 0;
 
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {
     void ctx.blockConcurrencyWhile(async () => {
@@ -47,9 +49,9 @@ export class GameRoom implements DurableObject {
   /** Upgrades a WebSocket, or serves the Worker-only `/internal/*` routes. */
   async fetch(req: Request): Promise<Response> {
     if (req.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-      if (this.ctx.getWebSockets().length >= MAX_SOCKETS) return json({ code: 'resource-exhausted' }, 429);
+      if (!this.makeRoomForSocket()) return json({ code: 'resource-exhausted' }, 429);
       const pair = new WebSocketPair();
-      this.ctx.acceptWebSocket(pair[1]);
+      this.ctx.acceptWebSocket(pair[1], [`at:${Date.now()}:${++this.acceptSeq}`]);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     const { pathname } = new URL(req.url);
@@ -62,7 +64,7 @@ export class GameRoom implements DurableObject {
       if (req.method === 'POST' && pathname === '/internal/admin/transferHost') {
         const { seatId } = (await req.json()) as { seatId: string };
         const out = adminTransferHost(this.state, { now: Date.now() }, { seatId });
-        await this.afterMutation(out.push);
+        await this.afterMutation(out.push, 'adminTransferHost');
         return json(out.result);
       }
     } catch (e) {
@@ -71,6 +73,27 @@ export class GameRoom implements DurableObject {
       throw e;
     }
     return new Response('not found', { status: 404 });
+  }
+
+  /**
+   * Keeps open sockets under `MAX_SOCKETS`: at the cap, closes the oldest socket that never said `hello`
+   * (4001) so bare upgrades cannot lock a room. Returns false only when every open socket is attached.
+   */
+  private makeRoomForSocket(): boolean {
+    const open = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.READY_STATE_OPEN);
+    if (open.length < MAX_SOCKETS) return true;
+    const idle = open.filter((ws) => !attachmentOf(ws)).sort((x, y) => this.acceptedAt(x) - this.acceptedAt(y))[0];
+    if (!idle) return false;
+    idle.close(CLOSE.BAD_TOKEN, 'hello-required');
+    return true;
+  }
+
+  /** When the socket was accepted (its `at:` tag), with the same-millisecond sequence as a fraction. */
+  private acceptedAt(ws: WebSocket): number {
+    const tag = this.ctx.getTags(ws).find((t) => t.startsWith('at:'));
+    if (!tag) return 0;
+    const [, ms, seq] = tag.split(':');
+    return Number(ms) + Number(seq) / 1e6;
   }
 
   /**
@@ -83,7 +106,7 @@ export class GameRoom implements DurableObject {
     try {
       const out = claimGame(this.state, this.opCtx(uid), { gameId, code, name });
       this.log('createGame', 'ok', t0);
-      await this.afterMutation(out.push);
+      await this.afterMutation(out.push, 'createGame');
       return json({ seatId: out.result.seatId });
     } catch (e) {
       if (!(e instanceof AppError)) throw e;
@@ -170,7 +193,8 @@ export class GameRoom implements DurableObject {
 
   /**
    * Runs one operation and answers exactly one `ack`. On success: ack, then broadcast. On an `AppError` carrying
-   * a push (state committed before the throw): broadcast first, then the failed ack. Writes are never rolled back.
+   * a push (state committed before the throw): broadcast first, then the failed ack. A non-`AppError` is logged
+   * and answered `unknown`. Writes are never rolled back, and nothing after the ack can send a second one.
    */
   private async act(ws: WebSocket, uid: string, msg: Extract<ClientMsg, { t: 'act' }>): Promise<void> {
     if (typeof msg.id !== 'string' || !msg.id) {
@@ -185,24 +209,42 @@ export class GameRoom implements DurableObject {
       send(ws, toAck(msg.id, new AppError('invalid-argument')));
       return;
     }
+    let out: OpOut<unknown>;
     try {
-      const out = handler(this.state, this.opCtx(uid), args);
-      this.log(msg.op, 'ok', t0);
-      send(ws, { t: 'ack', id: msg.id, ok: true, result: out.result });
-      await this.afterMutation(out.push);
+      out = handler(this.state, this.opCtx(uid), args);
     } catch (e) {
       this.log(msg.op, e instanceof AppError ? e.code : 'unknown', t0);
-      if (e instanceof AppError && e.push) await this.afterMutation(e.push);
+      if (!(e instanceof AppError)) this.logFault('op-threw', msg.op, e);
+      if (e instanceof AppError && e.push) await this.afterMutation(e.push, msg.op);
       send(ws, toAck(msg.id, e));
+      return;
+    }
+    this.log(msg.op, 'ok', t0);
+    send(ws, { t: 'ack', id: msg.id, ok: true, result: out.result });
+    await this.afterMutation(out.push, msg.op);
+  }
+
+  /**
+   * Broadcasts a push and re-arms the purge alarm for the game's current deadline. Never throws: the op is
+   * already durable and acked, so a delivery or alarm failure is logged (`console.error`) and never re-acked.
+   * One socket's delivery failure does not stop the others.
+   * @param op The operation name, for the error log only.
+   */
+  private async afterMutation(push: Push, op: string): Promise<void> {
+    const g = this.state.game;
+    if (!g) return;
+    try {
+      broadcast(this.ctx, this.state, push, g.rev, (e) => this.logFault('broadcast-failed', op, e));
+      await this.ctx.storage.setAlarm(purgeAt(g));
+    } catch (e) {
+      this.logFault('after-mutation-failed', op, e);
     }
   }
 
-  /** Broadcasts a push and re-arms the purge alarm for the game's current deadline. */
-  private async afterMutation(push: Push): Promise<void> {
-    const g = this.state.game;
-    if (!g) return;
-    broadcast(this.ctx, this.state, push, g.rev);
-    await this.ctx.storage.setAlarm(purgeAt(g));
+  /** An unexpected failure: op, game code and stack only (no names, task text or tokens). */
+  private logFault(error: string, op: string, e: unknown): void {
+    const stack = e instanceof Error ? e.stack ?? e.message : String(e);
+    console.error(JSON.stringify({ error, op, gameCode: this.state.game?.code ?? null, stack }));
   }
 
   /** The only sources of time, randomness and ids an operation sees. */
