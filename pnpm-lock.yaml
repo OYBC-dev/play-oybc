@@ -62,9 +62,6 @@ importers:
       firebase:
         specifier: ^12.16.0
         version: 12.19.0
-      firebase-admin:
-        specifier: ^14.0.0
-        version: 14.5.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
 
   server:
     dependencies:

@@ -8,7 +8,6 @@
     "forceHost": "node --experimental-strip-types forceHost.ts"
   },
   "dependencies": {
-    "firebase": "^12.16.0",
-    "firebase-admin": "^14.0.0"
+    "firebase": "^12.16.0"
   }
 }
