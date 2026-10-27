@@ -41,6 +41,10 @@ const BACKOFF_MAX_MS = 8_000;
 const BACKOFF_JITTER = 0.2;
 const PING_EVERY_MS = 25_000;
 const PONG_WITHIN_MS = 10_000;
+/** How long a wake probe (`ping` on `visibilitychange` → visible / `online` while ready) waits for `pong`. */
+export const WAKE_PONG_WITHIN_MS = 3_000;
+/** Close reason the server gives a uid's oldest socket when a fifth one says hello: stay down, do not loop. */
+const SUPERSEDED_REASON = 'superseded';
 /** How long an act (or hello) may wait for a ready socket before it fails `offline`. */
 const SEND_DEADLINE_MS = 10_000;
 /** How long a room with no listeners and nothing pending stays open before it closes itself. */
@@ -95,7 +99,10 @@ export function getRoom(opts: RoomOptions): RoomConnection {
  * `welcome` (10 s from enqueue, then `offline`). A close rejects sent-but-unacked acts with `offline` and
  * reconnects with backoff (0.5 s doubling to 8 s, ±20 %), at once on `visibilitychange` → visible or `online`.
  * Closes 4001 / 4003 / 4004 are fatal: `onFatal` fires and the room stays closed. A `ping` goes out every
- * 25 s; no `pong` within 10 s drops the socket and reconnects.
+ * 25 s; no `pong` within 10 s drops the socket and reconnects. A wake while ready (a phone unlocking onto
+ * a socket that died while it slept) probes at once with a `ping` and a 3 s deadline. A close with reason
+ * `superseded` (this uid opened too many sockets) parks the room: no automatic reconnect, so tabs cannot
+ * evict each other in a loop; the next act, hello, listener or wake reopens it.
  *
  * Lifetime: the socket opens on first use (`hello`, `act`, `onSnapshot`, `onReclaim`). When no snapshot or
  * reclaim listener is attached and nothing is pending, the room closes itself after `IDLE_CLOSE_MS` — so a
@@ -133,8 +140,18 @@ export class RoomConnection {
   private pingTimer: unknown = null;
   private pongTimer: unknown = null;
   private idleTimer: unknown = null;
+  /** The server superseded the last socket: reconnect only on demand, never by backoff. */
+  private parked = false;
   private readonly wake = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (this.state === 'ready' && this.ws) {
+      this.probe(this.ws);
+      return;
+    }
+    if (this.parked) {
+      if (this.busy()) this.connect();
+      return;
+    }
     if (this.reconnectTimer === null) return;
     this.clearT(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -258,6 +275,7 @@ export class RoomConnection {
   private connect(): void {
     if (this.state === 'closed' || this.ws) return;
     if (this.reconnectTimer !== null) return;
+    this.parked = false;
     const ws = new this.WS(`${this.opts.url.replace(/\/+$/, '')}/ws/${this.code}`);
     this.ws = ws;
     this.state = 'connecting';
@@ -270,7 +288,7 @@ export class RoomConnection {
       if (this.ws === ws) this.receive(ev.data);
     };
     ws.onclose = (ev: CloseEvent) => {
-      if (this.ws === ws) this.dropped(ev.code);
+      if (this.ws === ws) this.dropped(ev.code, ev.reason);
     };
   }
 
@@ -296,8 +314,8 @@ export class RoomConnection {
     this.ws!.send(JSON.stringify({ t: 'act', id: entry.id, op: entry.op, args: entry.args }));
   }
 
-  /** The socket closed (or was abandoned): fail what was sent, then reconnect or end. */
-  private dropped(code: number): void {
+  /** The socket closed (or was abandoned): fail what was sent, then reconnect, park, or end. */
+  private dropped(code: number, reason = ''): void {
     const ws = this.ws;
     this.ws = null;
     if (ws) detach(ws);
@@ -312,6 +330,11 @@ export class RoomConnection {
     if (!this.busy()) {
       // Nobody needs the room any more: end it instead of reconnecting.
       this.shutdown(appError('offline'));
+      return;
+    }
+    if (reason === SUPERSEDED_REASON) {
+      this.state = 'idle';
+      this.parked = true;
       return;
     }
     this.state = 'connecting';
@@ -356,6 +379,9 @@ export class RoomConnection {
         this.reclaimListeners.get(msg.id)?.forEach((l) => l(msg.status));
         return;
       case 'error':
+        // `try-again` (the server could not check the token just now) precedes a 1013 close and a reconnect,
+        // so a waiting hello keeps waiting for that reconnect's welcome.
+        if (msg.code === 'try-again') return;
         // Fatal errors are followed by their close; this only answers a waiting hello.
         this.failHello(appError(msg.code));
         return;
@@ -467,6 +493,16 @@ export class RoomConnection {
       this.pingTimer = this.setT(tick, PING_EVERY_MS);
     };
     this.pingTimer = this.setT(tick, PING_EVERY_MS);
+  }
+
+  /** Pings `ws` now and abandons it unless `pong` arrives within `WAKE_PONG_WITHIN_MS`. */
+  private probe(ws: WebSocket): void {
+    try { ws.send('ping'); } catch { /* the close event follows */ }
+    if (this.pongTimer !== null) this.clearT(this.pongTimer);
+    this.pongTimer = this.setT(() => {
+      this.pongTimer = null;
+      if (this.ws === ws) this.abandon(ws);
+    }, WAKE_PONG_WITHIN_MS);
   }
 
   /** A dead link may never deliver `close`: drop the socket ourselves and reconnect. */

@@ -174,6 +174,67 @@ describe('RoomConnection', () => {
     expect(FakeSocket.instances).toHaveLength(2);
   });
 
+  it('a wake while ready probes at once and reconnects when no pong comes within 3 s', async () => {
+    const room = makeRoom();
+    room.onSnapshot(() => {});
+    const sock = FakeSocket.last();
+    await handshake(sock);
+    // A live socket answers the probe and stays.
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sock.sent.filter((s) => s === 'ping')).toHaveLength(1);
+    sock.serverSend('pong');
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(sock.closeCalls).toHaveLength(0);
+    // A socket that died while the phone slept never answers: dropped after 3 s, then a reconnect.
+    window.dispatchEvent(new Event('online'));
+    expect(sock.sent.filter((s) => s === 'ping')).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(sock.closeCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sock.closeCalls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(500);
+    // Rooms left open by earlier tests also hear the events; count only this room's sockets.
+    expect(FakeSocket.instances.filter((s) => s.url === sock.url)).toHaveLength(2);
+    room.close();
+  });
+
+  it('a close with reason superseded parks the room until something needs it again', async () => {
+    const room = makeRoom();
+    room.onSnapshot(() => {});
+    const fatal = vi.fn();
+    room.onFatal(fatal);
+    const first = FakeSocket.last();
+    await handshake(first);
+    first.serverClose(1000, 'superseded');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    expect(fatal).not.toHaveBeenCalled();
+    expect(room.status).toBe('idle');
+    // A user action (or a wake) reopens it.
+    const act = room.act('mark', { cellIndex: 0, marked: true });
+    expect(FakeSocket.instances).toHaveLength(2);
+    const second = FakeSocket.last();
+    await handshake(second);
+    const sent = second.frames().find((f) => f.t === 'act') as { id: string };
+    second.serverSend({ t: 'ack', id: sent.id, ok: true, result: {} });
+    await expect(act).resolves.toEqual({});
+  });
+
+  it('error try-again then close 1013 reconnects and the waiting hello resolves on the next welcome', async () => {
+    const room = makeRoom();
+    const hello = room.hello('g1');
+    const first = FakeSocket.last();
+    first.open();
+    await flush();
+    first.serverSend({ t: 'error', code: 'try-again' });
+    first.serverClose(1013, 'try-again');
+    await vi.advanceTimersByTimeAsync(500);
+    const second = FakeSocket.last();
+    expect(second).not.toBe(first);
+    await handshake(second);
+    await expect(hello).resolves.toMatchObject({ gameId: 'g1' });
+  });
+
   it('reconnect welcome with seatId null after a seat fires permission-denied', async () => {
     const room = makeRoom();
     room.onSnapshot(() => {});

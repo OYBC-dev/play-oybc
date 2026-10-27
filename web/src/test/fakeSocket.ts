@@ -62,9 +62,9 @@ export class FakeSocket {
     this.onmessage?.(new MessageEvent('message', { data }));
   }
 
-  /** Delivers a close event with `code`. */
-  serverClose(code = 1006): void {
+  /** Delivers a close event with `code` (and `reason`). */
+  serverClose(code = 1006, reason = ''): void {
     this.readyState = FakeSocket.CLOSED;
-    this.onclose?.(new CloseEvent('close', { code }));
+    this.onclose?.(new CloseEvent('close', { code, reason }));
   }
 }
