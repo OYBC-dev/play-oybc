@@ -24,36 +24,6 @@ enum FirebaseCoding {
     }
 }
 
-/// Single-flight anonymous sign-in: waits for Auth's first state callback before deciding.
-actor AuthGate {
-    private var inFlight: _Concurrency.Task<Void, Error>?
-
-    func ensureSignedIn() async throws {
-        if let inFlight { return try await inFlight.value }
-        let t = _Concurrency.Task<Void, Error> {
-            try await Self.restoreOrSignIn()
-        }
-        inFlight = t
-        do { try await t.value } catch { inFlight = nil; throw error }
-    }
-
-    private static func restoreOrSignIn() async throws {
-        let auth = Auth.auth()
-        // The first listener callback reports the restored session (or nil).
-        let existing: User? = await withCheckedContinuation { cont in
-            var handle: AuthStateDidChangeListenerHandle?
-            var done = false
-            handle = auth.addStateDidChangeListener { _, user in
-                guard !done else { return }
-                done = true
-                if let handle { auth.removeStateDidChangeListener(handle) }
-                cont.resume(returning: user)
-            }
-        }
-        if existing == nil { _ = try await auth.signInAnonymously() }
-    }
-}
-
 /// Real GameService: callables for writes, Firestore listeners for reads.
 final class FirebaseGameService: GameService {
     static let region = "us-central1"

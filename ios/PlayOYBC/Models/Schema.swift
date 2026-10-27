@@ -98,6 +98,8 @@ struct ReclaimDoc: Codable, Equatable {
     var seatId: String
     var status: ReclaimStatus
     var createdAt: Double
+    /// When the host approved or denied it; absent while pending.
+    var resolvedAt: Double?
 }
 
 /// A pending reclaim plus its document id.

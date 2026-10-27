@@ -29,4 +29,17 @@ struct AppError: Error, Equatable {
     }
 
     static let gameNotFound = AppError(code: "game-not-found", token: nil, underlying: nil)
+    /// The game server could not be reached (or the socket dropped before an answer came back).
+    static let offline = AppError(code: "offline", token: nil, underlying: nil)
+
+    /// Maps a game-server WebSocket close code: 4003 (seat taken over) → `permission-denied`,
+    /// 4004 → `game-not-found`, 4001 (bad token) → `unauthenticated`; any other code → `offline`.
+    static func fromClose(code: Int) -> AppError {
+        switch code {
+        case 4003: return AppError(code: "permission-denied", token: nil, underlying: nil)
+        case 4004: return gameNotFound
+        case 4001: return AppError(code: "unauthenticated", token: nil, underlying: nil)
+        default: return offline
+        }
+    }
 }
