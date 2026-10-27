@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 5173;
+const SERVER_PORT = 8787;
 
 export default defineConfig({
   testDir: '.',
@@ -21,7 +22,13 @@ export default defineConfig({
     name: 'chromium',
     use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, launchOptions: { args: ['--disable-gpu'] } },
   }],
-  webServer: {
+  webServer: [{
+    // The game server (reads server/.dev.vars: emulator auth against demo-play-oybc).
+    command: `pnpm --filter server exec wrangler dev --port ${SERVER_PORT} --ip 127.0.0.1`,
+    url: `http://127.0.0.1:${SERVER_PORT}/health`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  }, {
     command: `pnpm exec vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: false,
@@ -32,6 +39,7 @@ export default defineConfig({
       VITE_FIREBASE_API_KEY: 'demo-api-key',
       VITE_FIREBASE_AUTH_DOMAIN: 'demo-play-oybc.firebaseapp.com',
       VITE_FIREBASE_APP_ID: '1:000000000000:web:0000000000000000',
+      VITE_GAME_SERVER_URL: `ws://127.0.0.1:${SERVER_PORT}`,
     },
-  },
+  }],
 });
