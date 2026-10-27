@@ -1,5 +1,8 @@
-import type { Env } from '../src/index';
+import type { Env as ServerEnv } from '../src/index';
 
-declare module 'cloudflare:test' {
-  interface ProvidedEnv extends Env {}
+declare global {
+  namespace Cloudflare {
+    // The test-visible bindings are exactly the production Env.
+    interface Env extends ServerEnv {}
+  }
 }

@@ -16,12 +16,10 @@
     "jose": "^6.0.0"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.0",
-    "@cloudflare/workers-types": "^4.0.0",
-    "@vitest/runner": "~3.2.7",
-    "@vitest/snapshot": "~3.2.7",
+    "@cloudflare/vitest-plugin": "^1.4.8",
+    "@cloudflare/workers-types": "^5.20261023.1",
     "typescript": "^6.0.3",
-    "vitest": "~3.2.7",
+    "vitest": "^4.1.11",
     "wrangler": "^4.0.0"
   }
 }
