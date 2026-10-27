@@ -133,8 +133,11 @@ protocol Transport: AnyObject, Sendable {
     func cancel()
 }
 
-/// The connection ended with this WebSocket close code (1006 when none was received).
-struct TransportClosed: Error, Equatable { var code: Int }
+/// The connection ended with this WebSocket close code (1006 when none was received) and close reason, if any.
+struct TransportClosed: Error, Equatable {
+    var code: Int
+    var reason: String? = nil
+}
 
 /// `Transport` over `URLSessionWebSocketTask`.
 final class URLSessionTransport: Transport, @unchecked Sendable {
@@ -156,7 +159,8 @@ final class URLSessionTransport: Transport, @unchecked Sendable {
             }
         } catch {
             let code = task.closeCode.rawValue
-            throw TransportClosed(code: code == URLSessionWebSocketTask.CloseCode.invalid.rawValue ? 1006 : code)
+            throw TransportClosed(code: code == URLSessionWebSocketTask.CloseCode.invalid.rawValue ? 1006 : code,
+                                  reason: task.closeReason.map { String(decoding: $0, as: UTF8.self) })
         }
     }
 
@@ -171,7 +175,8 @@ final class URLSessionTransport: Transport, @unchecked Sendable {
 /// ready, else queued until the next `welcome` (10 s from enqueue, then `offline`). A close rejects
 /// sent-but-unacked acts with `offline` and reconnects with backoff (0.5 s doubling to 8 s, ±20 %), at once
 /// on `wake()` (network back) or `resume()` (foreground). Closes 4001 / 4003 / 4004 are fatal: `fatal()`
-/// streams yield the error and the room stays closed. A `ping` goes out every 25 s; no `pong` within 10 s
+/// streams yield the error and the room stays closed. A close with reason `superseded` parks the room until
+/// something needs it again. A `ping` goes out every 25 s; no `pong` within 10 s
 /// drops the socket and reconnects. `suspend()` (background) drops the socket and every timer.
 ///
 /// Lifetime: the socket opens on first use. With no snapshot or reclaim stream attached and nothing
@@ -190,6 +195,8 @@ actor RoomConnection {
     static let idleClose = 15.0
     /// Close codes that end the room for good (see `AppError.fromClose`).
     static let fatalCloseCodes: Set<Int> = [4001, 4003, 4004]
+    /// Close reason the server gives a uid's oldest socket when a fifth one says hello: stay down, do not loop.
+    static let supersededReason = "superseded"
 
     enum Status { case idle, connecting, ready, closed }
 
@@ -428,7 +435,8 @@ actor RoomConnection {
                     let text = try await t.receive()
                     self.received(text, generation: gen)
                 } catch {
-                    self.dropped(generation: gen, code: (error as? TransportClosed)?.code ?? 1006)
+                    let closed = error as? TransportClosed
+                    self.dropped(generation: gen, code: closed?.code ?? 1006, reason: closed?.reason)
                     return
                 }
             }
@@ -480,8 +488,10 @@ actor RoomConnection {
         write(entry.frame)
     }
 
-    /// The socket closed (or was abandoned): fail what was sent, then reconnect or end.
-    private func dropped(generation gen: Int, code: Int) {
+    /// The socket closed (or was abandoned): fail what was sent, then reconnect, park, or end. A `superseded`
+    /// close parks the room (no backoff reconnect, so this uid's sockets cannot evict each other in a loop);
+    /// the next act, hello, `wake()` or `resume()` reopens it.
+    private func dropped(generation gen: Int, code: Int, reason: String? = nil) {
         guard gen == generation, transport != nil else { return }
         dropSocket()
         failInFlight(AppError.offline)
@@ -492,6 +502,10 @@ actor RoomConnection {
         guard busy else {
             // Nobody needs the room any more: end it instead of reconnecting.
             shutdown(AppError.offline)
+            return
+        }
+        if reason == Self.supersededReason {
+            status = .idle
             return
         }
         status = .connecting
@@ -545,6 +559,8 @@ actor RoomConnection {
         case let .reclaim(id, status):
             for listener in reclaimListeners.values where listener.id == id { listener.cont.yield(status) }
         case let .error(code):
+            // `try-again` precedes a 1013 close and a reconnect: a waiting hello keeps waiting for that welcome.
+            if code == "try-again" { break }
             // `game-not-found` / `unauthenticated` precede their fatal close; any other code only answers a waiting hello.
             let err = AppError(code: code, token: nil, underlying: nil)
             failHello(err)

@@ -66,8 +66,8 @@ final class FakeTransport: Transport, @unchecked Sendable {
 
     /// Delivers a server frame.
     func push(_ text: String) { inbox.put(.success(text)) }
-    /// The server closes the socket with `code`.
-    func close(code: Int) { inbox.put(.failure(TransportClosed(code: code))) }
+    /// The server closes the socket with `code` (and `reason`).
+    func close(code: Int, reason: String? = nil) { inbox.put(.failure(TransportClosed(code: code, reason: reason))) }
     /// The next frame the room sent, as JSON.
     func nextSent() async throws -> [String: Any] {
         let text = try await outbox.take()
@@ -288,5 +288,46 @@ final class RoomConnectionTests: XCTestCase {
         t.push(fullState(rev: 1))
         let snap = try await snaps.take()
         XCTAssertEqual(snap.mySeatId, "s1")
+    }
+
+    func testSupersededCloseParksUntilTheNextAct() async throws {
+        let (room, dialer) = makeRoom()
+        let fatal = collect(await room.fatal())
+        let snaps = await room.snapshots() // held, so a plain close would reconnect
+        let t1 = try await dialer.made.take()
+        _ = try await t1.nextSent()
+        t1.push(welcome(seat: "s1"))
+        t1.close(code: 1000, reason: "superseded")
+        do {
+            _ = try await dialer.made.take(timeout: 1.5)
+            XCTFail("a superseded room must not reconnect by itself")
+        } catch is AsyncQueue<FakeTransport>.Timeout {}
+        do {
+            _ = try await fatal.take(timeout: 0.1)
+            XCTFail("superseded is not fatal")
+        } catch is AsyncQueue<AppError>.Timeout {}
+        let act = _Concurrency.Task { () async throws -> ToggleMarkRes in try await room.act("mark", ["cellIndex": 2, "marked": true]) }
+        let t2 = try await dialer.made.take()
+        _ = try await t2.nextSent()
+        t2.push(welcome(seat: "s1"))
+        let sent = try await t2.nextSent()
+        t2.push(#"{"t":"ack","id":"\#(sent["id"] as? String ?? "")","ok":true,"result":{"marks":[],"completedLines":[],"newBingoSeqs":[]}}"#)
+        _ = try await act.value
+        withExtendedLifetime(snaps) {}
+    }
+
+    func testTryAgainThenClose1013ReconnectsAndTheWaitingHelloResolves() async throws {
+        let (room, dialer) = makeRoom()
+        let hello = _Concurrency.Task { try await room.hello(gameId: "g1") }
+        let t1 = try await dialer.made.take()
+        _ = try await t1.nextSent()
+        t1.push(#"{"t":"error","code":"try-again"}"#)
+        t1.close(code: 1013, reason: "try-again")
+        let t2 = try await dialer.made.take()
+        let again = try await t2.nextSent()
+        XCTAssertEqual(again["gameId"] as? String, "g1")
+        t2.push(welcome(seat: "s1"))
+        let w = try await hello.value
+        XCTAssertEqual(w.seatId, "s1")
     }
 }
