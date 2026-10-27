@@ -34,7 +34,8 @@ export interface GameClient {
     onChange: (s: GameSnapshot) => void,
     onError: (e: Error) => void,
   ): () => void;
-  addTask(gameId: string, text: string): Promise<void>;
+  /** Adds a task; `taskId` (client-generated, idempotent on retry) lets the caller match the row it shows early. */
+  addTask(gameId: string, text: string, taskId?: string): Promise<void>;
   deleteTask(gameId: string, taskId: string): Promise<void>;
   launch(gameId: string): Promise<void>;
   /** Sets the square to `marked` (idempotent on retry). */

@@ -53,7 +53,9 @@ export class FakeGameClient implements GameClient {
     this.snapshotListeners.forEach((l) => l(s));
   }
 
-  addTask(gameId: string, text: string) { return this.result('addTask', [gameId, text], undefined); }
+  addTask(gameId: string, text: string, taskId?: string) {
+    return this.result('addTask', taskId === undefined ? [gameId, text] : [gameId, text, taskId], undefined);
+  }
   deleteTask(gameId: string, taskId: string) { return this.result('deleteTask', [gameId, taskId], undefined); }
   launch(gameId: string) { return this.result('launch', [gameId], undefined); }
   end(gameId: string) { return this.result('end', [gameId], undefined); }
