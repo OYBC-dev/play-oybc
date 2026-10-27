@@ -78,11 +78,12 @@ Only after the owner's go. Prerequisite: `cp .setup-secrets/web.env.local web/.e
 
 ```bash
 cp .setup-secrets/web.env.local web/.env.local   # gitignored
+npx firebase hosting:clone play-oybc:live play-oybc:legacy --project play-oybc   # snapshot the current live release first
 VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
 npx firebase deploy --only hosting --project play-oybc
 ```
 
-Rollback (restores the previous live release, the Firebase-backend web app): `npx firebase hosting:rollback --project play-oybc`, or Firebase Console → Hosting → release history → Roll back.
+Rollback (restores the snapshot taken above, the Firebase-backend web app): `npx firebase hosting:clone play-oybc:legacy play-oybc:live --project play-oybc`, or Firebase Console → Hosting → release history → Roll back. (There is no `hosting:rollback` command.)
 
 ### Legacy Firebase deploy (only from a pre-merge `dev` checkout)
 
