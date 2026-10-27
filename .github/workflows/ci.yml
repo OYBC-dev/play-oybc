@@ -1,11 +1,51 @@
 name: CI
 
+# The org's Actions pool is shared with oybc and metered (macOS minutes count
+# ×10), so the macOS `ios` job is path-gated (2026-10-27, oybc#688): it runs
+# only when `ios/**` or this workflow changed. There is deliberately NO
+# trigger-level `paths:` filter — `ts`, `e2e` and `ios` are the REQUIRED
+# checks on `dev`, and a required check whose workflow never triggers blocks
+# the PR forever. The `changes` job decides instead; a job skipped by its
+# `if:` reports success. If `changes` itself fails, `ios` still runs and
+# fails on its first step, so a broken gate can never pass silently.
+
 on:
   pull_request:
   push:
     branches: [main, dev]
 
+# A newer push to the same branch cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned XcodeGen release, checksum-verified (xcodegen is not on the
+  # macos-15 image; `brew install` cost 1–3 macOS minutes per run). To bump:
+  # pick a tag from https://github.com/yonaskolb/XcodeGen/releases, download
+  # its `xcodegen.zip`, `shasum -a 256` it, and update both vars.
+  XCODEGEN_VERSION: "2.45.4"
+  XCODEGEN_ZIP_SHA256: "090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef"
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'ios/**'
+              - '.github/workflows/ci.yml'
+
   ts:
     runs-on: ubuntu-latest
     steps:
@@ -55,17 +95,38 @@ jobs:
           retention-days: 7
 
   ios:
+    needs: changes
+    # Runs when iOS inputs changed — or when the gate itself did not succeed,
+    # in which case the first step fails the job loudly instead of letting a
+    # skipped required check count as a pass.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ios == 'true')
     runs-on: macos-15
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
+      - name: Fail if the path gate did not run
+        if: needs.changes.result != 'success'
+        run: |
+          echo "::error::changes job: ${{ needs.changes.result }} — the path gate did not run, so nothing was decided"
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.spm
           key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
-      - run: brew install xcodegen
+      - name: Install xcodegen
+        run: |
+          set -euo pipefail
+          curl -sSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          computed_sha256=$(shasum -a 256 "$RUNNER_TEMP/xcodegen.zip" | awk '{print $1}')
+          if [ "$computed_sha256" != "$XCODEGEN_ZIP_SHA256" ]; then
+            echo "::error::xcodegen.zip checksum mismatch: expected $XCODEGEN_ZIP_SHA256, got $computed_sha256"
+            exit 1
+          fi
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-install"
+          echo "$RUNNER_TEMP/xcodegen-install/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Dummy GoogleService-Info.plist
         run: cp ios/PlayOYBC/GoogleService-Info.template.plist ios/PlayOYBC/GoogleService-Info.plist
       - run: cd ios && xcodegen generate
