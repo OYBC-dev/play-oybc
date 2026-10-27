@@ -10,7 +10,7 @@ const NOW = 1_700_000_000_000;
 let clock = NOW;
 let counter = 0;
 const ctxFor = (uid: string, now = clock): OpCtx => ({ uid, now, rng: () => 0.5, newId: () => `id${++counter}` });
-const fresh = () => new GameState(new MemoryPersistence());
+const fresh = () => new GameState(new MemoryPersistence(), { now: () => clock });
 const codeOf = (fn: () => unknown): string | undefined => {
   try { fn(); } catch (e) { if (e instanceof AppError) return e.code; throw e; }
   return undefined;
@@ -39,6 +39,7 @@ describe('claimGame', () => {
     const out = claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' });
     const { gameId, code, seatId } = out.result;
     expect(state.game).toMatchObject({ gameId, stage: 'lobby', hostSeatId: seatId, bingoCount: 0, code, reviewGate: false, createdAt: NOW });
+    expect(state.game!.lastMutationAt).toBe(NOW);
     expect(state.seatOf('u1')).toBe(seatId);
     expect(buildSections(state, seatId, ['view']).view).toEqual([]);
     expect(out.push.all).toEqual(['game', 'seats', 'view']);

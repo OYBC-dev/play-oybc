@@ -26,8 +26,11 @@ export class GameState {
   bingos: BingoRow[] = [];
   reclaims = new Map<string, ReclaimRow>();
 
-  /** Loads everything from `p`. */
-  constructor(private p: Persistence) {
+  private readonly now: () => number;
+
+  /** Loads everything from `p`; `opts.now` is the clock stamped into `lastMutationAt` (default `Date.now`). */
+  constructor(private p: Persistence, opts: { now?: () => number } = {}) {
+    this.now = opts.now ?? Date.now;
     const l = p.load();
     this.game = l.game;
     for (const s of l.seats) this.seats.set(s.seatId, s);
@@ -41,7 +44,7 @@ export class GameState {
   /** Bumps `rev` and `lastMutationAt` on the stored game (no-op before a game exists). */
   private bump(): void {
     if (!this.game) return;
-    const next = { ...this.game, rev: this.game.rev + 1, lastMutationAt: Date.now() };
+    const next = { ...this.game, rev: this.game.rev + 1, lastMutationAt: this.now() };
     this.p.putGame(next);
     this.game = next;
   }
@@ -49,7 +52,7 @@ export class GameState {
   /** Creates or replaces the game row; the first write keeps the caller's `rev`, later ones bump the stored one. */
   putGame(g: GameRow): void {
     const rev = this.game ? this.game.rev + 1 : g.rev;
-    const next = { ...g, rev, lastMutationAt: Date.now() };
+    const next = { ...g, rev, lastMutationAt: this.now() };
     this.p.putGame(next);
     this.game = next;
   }
