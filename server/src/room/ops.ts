@@ -234,7 +234,7 @@ export function end(state: GameState, ctx: OpCtx, _args: Record<string, never>):
 
 /**
  * Host-only: approves or denies a pending seat reclaim; approval re-points the seat at the requester (any stage).
- * A requester who already holds a seat, or a claim on the host's own seat, commits a denial and then throws `wrong-stage`.
+ * A requester who already holds a seat, or a claim on the host's own seat, commits a denial and then throws `wrong-stage` carrying `push` (the requester's denial notice).
  * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `reclaim-not-found`, `invalid-argument`, `wrong-stage`.
  */
 export function resolveReclaim(state: GameState, ctx: OpCtx, args: { reclaimId: string; approve: boolean }): OpOut<Record<string, never>> {
@@ -256,7 +256,9 @@ export function resolveReclaim(state: GameState, ctx: OpCtx, args: { reclaimId: 
   }
   if (state.seatOf(reclaim.requesterUid) !== null || reclaim.seatId === hostSeat) {
     resolve(reclaim, 'denied');
-    throw new AppError('wrong-stage');
+    throw new AppError('wrong-stage', undefined, {
+      all: [], perSeat: { [hostSeat]: ['reclaims'] }, reclaimNotify: [{ uid: reclaim.requesterUid, id: reclaimId, status: 'denied' }],
+    });
   }
   const evictUids = [...state.members].filter(([, seat]) => seat === reclaim.seatId).map(([uid]) => uid);
   for (const uid of evictUids) state.deleteMember(uid);

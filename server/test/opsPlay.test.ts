@@ -307,6 +307,15 @@ describe('resolveReclaim', () => {
     resolveReclaim(state, ctxFor('u1'), { reclaimId: j2.reclaimId, approve: false });
     expect(state.reclaims.get(j2.reclaimId)!.status).toBe('denied');
   });
+  it('a conflicting approve throws wrong-stage carrying the requester\'s denial push', () => {
+    const { state, hostSeat, reclaimId } = withReclaim();
+    state.putMember('u9', 'other');
+    const e = errOf(() => resolveReclaim(state, ctxFor('u1'), { reclaimId, approve: true }));
+    expect(e.code).toBe('wrong-stage');
+    expect(e.push?.reclaimNotify).toContainEqual({ uid: 'u9', id: reclaimId, status: 'denied' });
+    expect(e.push?.perSeat).toEqual({ [hostSeat]: ['reclaims'] });
+    expect(state.reclaims.get(reclaimId)!.status).toBe('denied');
+  });
   it('approve evicts every uid holding the seat', () => {
     const { state, codySeat, reclaimId } = withReclaim();
     state.putMember('u2b', codySeat);
@@ -336,6 +345,11 @@ describe('transferHost', () => {
     for (const toSeatId of ['ghost', 'a/b', 5]) {
       expect(codeOf(() => transferHost(state, ctxFor('u1'), { toSeatId: toSeatId as string }))).toBe('unknown-seat');
     }
+  });
+  it('transferHost to self is allowed', () => {
+    const { state, ids } = lobby();
+    transferHost(state, ctxFor('u1'), { toSeatId: ids.u1 });
+    expect(state.game!.hostSeatId).toBe(ids.u1);
   });
   it('transferHost moves the reclaims section: push names old and new host', () => {
     const { state, ids } = lobby();

@@ -1,4 +1,5 @@
 import type { AckMsg } from './protocol';
+import type { Push } from './room/ops';
 
 /** Every error code a client may read (`details.code` on web, `AppError.code` on iOS). */
 export type AppErrorCode =
@@ -11,16 +12,20 @@ export type AppErrorCode =
 export class AppError extends Error {
   readonly code: AppErrorCode;
   readonly details?: Record<string, unknown>;
+  /** Broadcast the runner must send before the failed ack (state committed before the throw). */
+  readonly push?: Push;
 
   /**
    * @param code Client-visible error code.
    * @param details Optional structured context returned to the client.
+   * @param push Optional push for changes committed before the failure.
    */
-  constructor(code: AppErrorCode, details?: Record<string, unknown>) {
+  constructor(code: AppErrorCode, details?: Record<string, unknown>, push?: Push) {
     super(code);
     this.name = 'AppError';
     this.code = code;
     this.details = details;
+    this.push = push;
   }
 }
 
