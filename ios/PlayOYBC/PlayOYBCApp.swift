@@ -27,8 +27,15 @@ struct PlayOYBCApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(model: model)
-                // Background drops the game socket; foreground reconnects it.
-                .onChange(of: scenePhase) { _, phase in socketService?.setActive(phase == .active) }
+                // Background drops the game socket; foreground reconnects it. `.inactive` (Control Centre,
+                // app switcher, Face ID) keeps it: iOS always passes through it on the way to `.background`.
+                .onChange(of: scenePhase) { _, phase in
+                    switch phase {
+                    case .background: socketService?.setActive(false)
+                    case .active: socketService?.setActive(true)
+                    default: break
+                    }
+                }
         }
     }
 }

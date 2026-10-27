@@ -88,10 +88,10 @@ final class Dialer: @unchecked Sendable {
 final class RoomConnectionTests: XCTestCase {
     private let game = #"{"code":"ABCDE","stage":"playing","hostSeatId":"s1","createdAt":1,"bingoCount":0,"shortfalls":{},"reviewGate":false}"#
 
-    private func makeRoom() -> (RoomConnection, Dialer) {
+    private func makeRoom(startSuspended: Bool = false) -> (RoomConnection, Dialer) {
         let dialer = Dialer()
         let room = RoomConnection(url: URL(string: "ws://test.local")!, code: "ABCDE", tokenProvider: { "tok" },
-                                  makeTransport: { dialer.make($0) }, random: { 0.5 })
+                                  makeTransport: { dialer.make($0) }, random: { 0.5 }, startSuspended: startSuspended)
         return (room, dialer)
     }
 
@@ -271,5 +271,22 @@ final class RoomConnectionTests: XCTestCase {
         t2.push(welcome(seat: "s9"))
         let approved = try await statuses.take()
         XCTAssertEqual(approved, .approved)
+    }
+
+    func testStartSuspendedDoesNotConnectUntilResume() async throws {
+        let (room, dialer) = makeRoom(startSuspended: true)
+        let snaps = collect(await room.snapshots())
+        do {
+            _ = try await dialer.made.take(timeout: 0.5)
+            XCTFail("a room born suspended must not connect")
+        } catch is AsyncQueue<FakeTransport>.Timeout {}
+        await room.resume()
+        let t = try await dialer.made.take()
+        let hello = try await t.nextSent()
+        XCTAssertEqual(hello["t"] as? String, "hello")
+        t.push(welcome(seat: "s1"))
+        t.push(fullState(rev: 1))
+        let snap = try await snaps.take()
+        XCTAssertEqual(snap.mySeatId, "s1")
     }
 }

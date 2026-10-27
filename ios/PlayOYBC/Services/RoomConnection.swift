@@ -260,16 +260,21 @@ actor RoomConnection {
     ///   - code: the game's join code.
     ///   - tokenProvider: a fresh Firebase ID token for `hello`.
     ///   - session: the session that opens the socket.
-    init(url: URL, code: String, tokenProvider: @escaping () async throws -> String, session: URLSession = .shared) {
-        self.init(url: url, code: code, tokenProvider: tokenProvider, makeTransport: { URLSessionTransport(url: $0, session: session) })
+    ///   - startSuspended: true when the app is in the background: nothing connects until `resume()`.
+    init(url: URL, code: String, tokenProvider: @escaping () async throws -> String, session: URLSession = .shared,
+         startSuspended: Bool = false) {
+        self.init(url: url, code: code, tokenProvider: tokenProvider, makeTransport: { URLSessionTransport(url: $0, session: session) },
+                  startSuspended: startSuspended)
     }
 
     /// Test seam: injects the transport, the timer sleep and the backoff jitter source (in [0, 1)).
     init(url: URL, code: String, tokenProvider: @escaping () async throws -> String,
          makeTransport: @escaping (URL) -> Transport,
          sleeper: @escaping Sleeper = { try await _Concurrency.Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) },
-         random: @escaping () -> Double = { Double.random(in: 0..<1) }) {
+         random: @escaping () -> Double = { Double.random(in: 0..<1) },
+         startSuspended: Bool = false) {
         self.code = code
+        self.suspended = startSuspended
         self.socketURL = url.appendingPathComponent("ws").appendingPathComponent(code)
         self.tokenProvider = tokenProvider
         self.makeTransport = makeTransport
@@ -380,13 +385,13 @@ actor RoomConnection {
     func resume() {
         guard status != .closed else { return }
         suspended = false
-        attempt = 0
         wake()
     }
 
-    /// The network came back: skips a pending backoff wait.
+    /// The network came back: skips a pending backoff wait and restarts the backoff from its shortest delay.
     func wake() {
         guard status != .closed, !suspended else { return }
+        attempt = 0
         if reconnectTask != nil {
             cancel(&reconnectTask)
             connect()

@@ -58,7 +58,7 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
         return url
     }
 
-    /// Forwards a scene-phase change: anything but active suspends every room; active resumes them.
+    /// Forwards a scene-phase change: `false` (background) suspends every room; `true` (active) resumes them.
     func setActive(_ isActive: Bool) {
         let changed = lock.withLock { () -> Bool in
             defer { active = isActive }
@@ -71,14 +71,14 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
 
     /// The live room for `code`, opening a new one when none is.
     private func room(_ code: String) -> RoomConnection {
-        let (room, suspend) = lock.withLock { () -> (RoomConnection, Bool) in
-            if let live = rooms[code], !live.isClosed { return (live, false) }
-            let room = RoomConnection(url: baseURL, code: code, tokenProvider: { [session] in try await session.idToken() })
+        lock.withLock {
+            if let live = rooms[code], !live.isClosed { return live }
+            // Born suspended in the background, so no later suspend can race the next resume.
+            let room = RoomConnection(url: baseURL, code: code, tokenProvider: { [session] in try await session.idToken() },
+                                      startSuspended: !active)
             rooms[code] = room
-            return (room, !active)
+            return room
         }
-        if suspend { _Concurrency.Task { await room.suspend() } }
-        return room
     }
 
     private func liveRooms() -> [RoomConnection] {
