@@ -1,9 +1,10 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, dealBoard, nameKey, normalizeName, parseMentions,
-  type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc,
+  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, dealBoard, nameKey, normalizeName, parseMentions, shortfalls,
+  type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
-import type { Section } from '../protocol';
+import type { Op, Section } from '../protocol';
+import { ALL_SECTIONS } from './sections';
 import type { GameRow, GameState } from './state';
 
 /** Most seats a game may hold. */
@@ -150,3 +151,166 @@ export function deleteTask(state: GameState, ctx: OpCtx, args: { taskId: string 
   state.deleteTask(args.taskId);
   return { result: {}, push: { all: ['game', 'view'] } };
 }
+
+/** Throws `not-host` unless the caller holds the host seat; returns that seatId. */
+function requireHost(state: GameState, game: GameRow, uid: string): string {
+  const seatId = requireMember(state, uid);
+  if (seatId !== game.hostSeatId) throw new AppError('not-host');
+  return seatId;
+}
+
+/**
+ * Host-only: deals every seat a board and moves the lobby to `playing`.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`, `not-ready` (details.shortfalls).
+ */
+export function launch(state: GameState, ctx: OpCtx, _args: Record<string, never>): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  requireLobby(game);
+  const tasks = state.poolTasks();
+  const seats = state.seatList();
+  const short = shortfalls(tasks, seats);
+  if (Object.keys(short).length > 0) throw new AppError('not-ready', { shortfalls: short });
+  const perSeat: Record<string, Section[]> = {};
+  for (const seat of seats) {
+    const marks = Array<boolean>(25).fill(false);
+    marks[CENTER_INDEX] = true;
+    state.putBoard({ seatId: seat.seatId, cells: dealBoard(tasks, seats, seat.seatId, ctx.rng), marks, completedLines: [], announcedLines: [] });
+    perSeat[seat.seatId] = ['board'];
+  }
+  state.putGame({ ...game, stage: 'playing', launchedAt: ctx.now });
+  return { result: {}, push: { all: ['game'], perSeat } };
+}
+
+/**
+ * Sets (`marked` given) or flips (omitted) one square; each newly completed line appends an announced bingo.
+ * A set to the value already held changes nothing and pushes nothing.
+ * @throws AppError `invalid-cell`, `game-not-found`, `permission-denied`, `wrong-stage`.
+ */
+export function mark(state: GameState, ctx: OpCtx, args: { cellIndex: number; marked?: boolean }): OpOut<ToggleMarkRes> {
+  const { cellIndex, marked } = args;
+  if (typeof cellIndex !== 'number' || !Number.isInteger(cellIndex) || cellIndex < 0 || cellIndex > 24) throw new AppError('invalid-cell');
+  if (marked !== undefined && typeof marked !== 'boolean') throw new AppError('invalid-cell');
+  const game = requireGame(state);
+  const seatId = requireMember(state, ctx.uid);
+  const board = state.boards.get(seatId);
+  if (game.stage !== 'playing' || !board) throw new AppError('wrong-stage');
+  const applied = applyMark(board, cellIndex, marked);
+  if (!applied.changed && marked !== undefined) {
+    return { result: { marks: board.marks, completedLines: board.completedLines, newBingoSeqs: [] }, push: { all: [] } };
+  }
+  const announcedLines = [...board.announcedLines];
+  const newBingoSeqs: number[] = [];
+  let bingoCount = game.bingoCount;
+  const name = state.seats.get(seatId)?.name ?? '';
+  for (const line of applied.newLines) {
+    const seq = ++bingoCount;
+    state.appendBingo({
+      id: ctx.newId(), seq, seatId, name, line, playerBingoNumber: announcedLines.length + 1, at: ctx.now, status: 'announced',
+    });
+    announcedLines.push(line);
+    newBingoSeqs.push(seq);
+  }
+  state.putBoard({ ...board, marks: applied.marks, completedLines: applied.completedLines, announcedLines });
+  const push: Push = { all: [], perSeat: { [seatId]: ['board'] } };
+  if (newBingoSeqs.length) {
+    state.putGame({ ...game, bingoCount });
+    push.all = ['bingos', 'game'];
+  }
+  return { result: { marks: applied.marks, completedLines: applied.completedLines, newBingoSeqs }, push };
+}
+
+/**
+ * Host-only: ends a playing game.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`.
+ */
+export function end(state: GameState, ctx: OpCtx, _args: Record<string, never>): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  if (game.stage !== 'playing') throw new AppError('wrong-stage');
+  state.putGame({ ...game, stage: 'ended', endedAt: ctx.now });
+  return { result: {}, push: { all: ['game'] } };
+}
+
+/**
+ * Host-only: approves or denies a pending seat reclaim; approval re-points the seat at the requester (any stage).
+ * A requester who already holds a seat, or a claim on the host's own seat, commits a denial and then throws `wrong-stage`.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `reclaim-not-found`, `invalid-argument`, `wrong-stage`.
+ */
+export function resolveReclaim(state: GameState, ctx: OpCtx, args: { reclaimId: string; approve: boolean }): OpOut<Record<string, never>> {
+  const { reclaimId, approve } = args;
+  if (typeof reclaimId !== 'string' || !reclaimId || reclaimId.includes('/')) throw new AppError('reclaim-not-found');
+  if (typeof approve !== 'boolean') throw new AppError('invalid-argument');
+  const game = requireGame(state);
+  const hostSeat = requireHost(state, game, ctx.uid);
+  const reclaim = state.reclaims.get(reclaimId);
+  if (!reclaim) throw new AppError('reclaim-not-found');
+  if (reclaim.status !== 'pending') throw new AppError('wrong-stage');
+  const resolve = (r: typeof reclaim, status: 'approved' | 'denied') => state.putReclaim({ ...r, status, resolvedAt: ctx.now });
+  if (!approve) {
+    resolve(reclaim, 'denied');
+    return {
+      result: {},
+      push: { all: [], perSeat: { [hostSeat]: ['reclaims'] }, reclaimNotify: [{ uid: reclaim.requesterUid, id: reclaimId, status: 'denied' }] },
+    };
+  }
+  if (state.seatOf(reclaim.requesterUid) !== null || reclaim.seatId === hostSeat) {
+    resolve(reclaim, 'denied');
+    throw new AppError('wrong-stage');
+  }
+  const evictUids = [...state.members].filter(([, seat]) => seat === reclaim.seatId).map(([uid]) => uid);
+  for (const uid of evictUids) state.deleteMember(uid);
+  state.putMember(reclaim.requesterUid, reclaim.seatId);
+  resolve(reclaim, 'approved');
+  const reclaimNotify: NonNullable<Push['reclaimNotify']> = [{ uid: reclaim.requesterUid, id: reclaimId, status: 'approved' }];
+  for (const other of [...state.reclaims.values()]) {
+    if (other.id !== reclaimId && other.seatId === reclaim.seatId && other.status === 'pending') {
+      resolve(other, 'denied');
+      reclaimNotify.push({ uid: other.requesterUid, id: other.id, status: 'denied' });
+    }
+  }
+  return {
+    result: {},
+    push: { all: [], perSeat: { [hostSeat]: ['reclaims'], [reclaim.seatId]: ALL_SECTIONS.slice() }, evictUids, reclaimNotify },
+  };
+}
+
+/** Sets the host seat and builds the push that moves the reclaims section from the old host to the new one. */
+function setHost(state: GameState, game: GameRow, toSeatId: string): OpOut<Record<string, never>> {
+  if (typeof toSeatId !== 'string' || !toSeatId || toSeatId.includes('/') || !state.seats.has(toSeatId)) throw new AppError('unknown-seat');
+  const oldHost = game.hostSeatId;
+  state.putGame({ ...game, hostSeatId: toSeatId });
+  return { result: {}, push: { all: ['game'], perSeat: { [oldHost]: ['reclaims'], [toSeatId]: ['reclaims'] } } };
+}
+
+/**
+ * Host-only: hands the host role to another seat (any stage).
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `unknown-seat`.
+ */
+export function transferHost(state: GameState, ctx: OpCtx, args: { toSeatId: string }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  return setHost(state, game, args.toSeatId);
+}
+
+/**
+ * Operator action: like `transferHost` with no caller and no host check.
+ * @throws AppError `game-not-found`, `unknown-seat`.
+ */
+export function adminTransferHost(state: GameState, _ctx: { now: number }, args: { seatId: string }): OpOut<Record<string, never>> {
+  return setHost(state, requireGame(state), args.seatId);
+}
+
+/** Every seat with whether some uid holds it and whether it is the host's. */
+export function adminSeats(state: GameState): Array<{ seatId: string; name: string; occupied: boolean; host: boolean }> {
+  const held = new Set(state.members.values());
+  return [...state.seats.values()].map((s) => ({
+    seatId: s.seatId, name: s.name, occupied: held.has(s.seatId), host: s.seatId === state.game?.hostSeatId,
+  }));
+}
+
+/** Every client-callable operation by its protocol name. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const OPS: Record<Op, (state: GameState, ctx: OpCtx, args: any) => OpOut<unknown>> = {
+  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost,
+};
