@@ -113,6 +113,8 @@ export class RoomConnection {
   private ws: WebSocket | null = null;
   private state: RoomStatus = 'idle';
   private epoch: string | undefined;
+  /** The gameId of the last `welcome` (the epoch the merged sections belong to). */
+  private welcomedGameId: string | undefined;
   private seatId: string | null = null;
   private lastRev = -1;
   private sections: Sections = {};
@@ -304,9 +306,7 @@ export class RoomConnection {
     this.inFlight.clear();
     const fatal = FATAL_CLOSE[code];
     if (fatal) {
-      const err = appError(fatal);
-      this.shutdown(err);
-      this.fatalListeners.forEach((l) => l(err));
+      this.fail(appError(fatal));
       return;
     }
     if (!this.busy()) {
@@ -364,8 +364,17 @@ export class RoomConnection {
     }
   }
 
+  /**
+   * Adopts a `welcome`. Seat changes that happened while this socket was away surface here, because the
+   * server's `evicted` / `reclaim` notices only reach sockets open at the time: in the same game, a seat
+   * that became null is an eviction (fatal `permission-denied`, as 4003), and a seat that appeared while a
+   * reclaim is watched is that reclaim approved (only on a reconnect's own hello, not one a caller awaits).
+   */
   private welcome(w: Welcome & { t: 'welcome' }): void {
-    if (this.epoch !== undefined && this.epoch !== w.gameId) this.sections = {};
+    const sameGame = this.welcomedGameId === w.gameId;
+    if (this.welcomedGameId !== undefined && !sameGame) this.sections = {};
+    const prevSeat = sameGame ? this.seatId : null;
+    this.welcomedGameId = w.gameId;
     this.epoch = w.gameId;
     this.seatId = w.seatId;
     this.lastRev = -1;
@@ -378,11 +387,30 @@ export class RoomConnection {
       this.clearT(h.deadline);
       h.resolve(welcome);
     }
+    if (prevSeat && !w.seatId) {
+      this.fail(appError('permission-denied'));
+      return;
+    }
+    if (sameGame && !prevSeat && w.seatId && waiters.length === 0) {
+      for (const set of this.reclaimListeners.values()) set.forEach((l) => l('approved'));
+    }
     const queued = this.queue;
     this.queue = [];
     queued.forEach((q) => this.send(q));
     this.startPing();
     this.checkIdle();
+  }
+
+  /** Ends the room for good with `err`: closes the socket, fails pending work, tells `onFatal` listeners. */
+  private fail(err: Error): void {
+    this.shutdown(err);
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) {
+      detach(ws);
+      try { ws.close(1000); } catch { /* already closed */ }
+    }
+    this.fatalListeners.forEach((l) => l(err));
   }
 
   /** A successful `join` seats this uid: later snapshots are that seat's. */

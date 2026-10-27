@@ -158,6 +158,22 @@ describe('LobbyScreen', () => {
     expect(screen.queryByText('Doomed', { selector: 'span' })).toBeNull();
   });
 
+  it('retrying a failed add sends the same taskId', async () => {
+    const { client } = setup(snap());
+    const ids: string[] = [];
+    client.addTask = ((_g: string, _t: string, taskId?: string) => {
+      ids.push(taskId ?? '');
+      return Promise.reject(appError('offline'));
+    }) as never;
+    await userEvent.type(screen.getByLabelText('Task'), 'Again');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe('');
+    expect(ids[1]).toBe(ids[0]);
+  });
+
   it('closes the autocomplete on blur and leaves Tab alone', async () => {
     setup(snap());
     const input = screen.getByLabelText('Task');

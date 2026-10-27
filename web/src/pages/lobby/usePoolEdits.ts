@@ -11,7 +11,8 @@ interface PendingAdd { taskId: string; text: string; acked: boolean; viewAtAck: 
 /**
  * Optimistic pool edits over the server's `view`. An add shows its row at once (`pending`) until a view
  * carries its `taskId` — or, once acked, until the next view (it was deleted meanwhile); a failed add drops
- * the row and rethrows for the composer's error line. A delete hides its row at once and keeps it hidden
+ * the row and rethrows for the composer's error line; retrying the same text reuses its `taskId`, so an add
+ * that did land before an `offline` failure is not added twice. A delete hides its row at once and keeps it hidden
  * until a view drops it; a failed delete restores the row and sets `deleteError`.
  */
 export function usePoolEdits(client: GameClient, gameId: string, view: PoolViewEntry[]) {
@@ -20,6 +21,8 @@ export function usePoolEdits(client: GameClient, gameId: string, view: PoolViewE
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const latestView = useRef(view);
   latestView.current = view;
+  /** The taskId an unconfirmed text was sent with: a retry of the same text replays it (idempotent). */
+  const idForText = useRef(new Map<string, string>());
 
   useEffect(() => {
     const ids = new Set(view.map((e) => e.taskId));
@@ -37,16 +40,19 @@ export function usePoolEdits(client: GameClient, gameId: string, view: PoolViewE
   }, [view]);
 
   const add = async (text: string): Promise<void> => {
-    const taskId = crypto.randomUUID();
-    setAdds((a) => [...a, { taskId, text, acked: false, viewAtAck: null }]);
+    let taskId = idForText.current.get(text);
+    if (!taskId) idForText.current.set(text, (taskId = crypto.randomUUID()));
+    const id = taskId;
+    setAdds((a) => [...a.filter((x) => x.taskId !== id), { taskId: id, text, acked: false, viewAtAck: null }]);
     try {
-      await client.addTask(gameId, text, taskId);
+      await client.addTask(gameId, text, id);
     } catch (e) {
-      setAdds((a) => a.filter((x) => x.taskId !== taskId));
+      setAdds((a) => a.filter((x) => x.taskId !== id));
       throw e;
     }
+    idForText.current.delete(text);
     const seen = latestView.current;
-    setAdds((a) => a.map((x) => (x.taskId === taskId ? { ...x, acked: true, viewAtAck: seen } : x)));
+    setAdds((a) => a.map((x) => (x.taskId === id ? { ...x, acked: true, viewAtAck: seen } : x)));
   };
 
   const remove = async (taskId: string): Promise<void> => {

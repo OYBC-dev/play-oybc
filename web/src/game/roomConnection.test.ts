@@ -174,6 +174,53 @@ describe('RoomConnection', () => {
     expect(FakeSocket.instances).toHaveLength(2);
   });
 
+  it('reconnect welcome with seatId null after a seat fires permission-denied', async () => {
+    const room = makeRoom();
+    room.onSnapshot(() => {});
+    const fatal = vi.fn();
+    room.onFatal(fatal);
+    const first = FakeSocket.last();
+    await handshake(first);
+    first.serverClose(1006);
+    await vi.advanceTimersByTimeAsync(500);
+    const second = FakeSocket.last();
+    await handshake(second, { ...WELCOME, seatId: null });
+    expect(fatal).toHaveBeenCalledTimes(1);
+    expect(appErrorCode(fatal.mock.calls[0][0])).toBe('permission-denied');
+    expect(second.closeCalls).toHaveLength(1);
+    expect(room.status).toBe('closed');
+  });
+
+  it('reconnect welcome with a seat notifies pending reclaim watchers approved', async () => {
+    const room = makeRoom();
+    const statuses: string[] = [];
+    room.onReclaim('r1', (s) => statuses.push(s));
+    const first = FakeSocket.last();
+    await handshake(first, { ...WELCOME, seatId: null });
+    expect(statuses).toEqual([]);
+    first.serverClose(1006);
+    await vi.advanceTimersByTimeAsync(500);
+    await handshake(FakeSocket.last());
+    expect(statuses).toEqual(['approved']);
+  });
+
+  it('a welcome for a different game clears the old sections, even when that game was requested', async () => {
+    const room = makeRoom();
+    const snaps: GameSnapshot[] = [];
+    room.onSnapshot((s) => snaps.push(s));
+    const sock = FakeSocket.last();
+    await handshake(sock);
+    sock.serverSend(FULL);
+    expect(snaps).toHaveLength(1);
+    const again = room.hello('g2');
+    await flush();
+    sock.serverSend({ ...WELCOME, gameId: 'g2', rev: 0 });
+    await again;
+    // Only a view arrives for g2: nothing of g1 may complete the snapshot.
+    sock.serverSend({ t: 'state', rev: 1, view: [] });
+    expect(snaps).toHaveLength(1);
+  });
+
   it('getRoom returns the same connection for the same code', () => {
     const opts = { url: 'ws://srv', code: 'SAME1', getToken: async () => 'tok', WebSocketImpl: FakeSocket as unknown as typeof WebSocket };
     const a = getRoom(opts);
