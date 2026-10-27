@@ -2,13 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { verifyIdToken } from '../src/auth';
 import { AppError } from '../src/errors';
-
-const b64url = (o: unknown): string => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-/** An unsigned JWT: base64url header + payload and an empty signature. */
-function unsignedJwt(payload: Record<string, unknown>): string {
-  return `${b64url({ alg: 'none', typ: 'JWT' })}.${b64url(payload)}.`;
-}
+import { unsignedJwt } from './helpers';
 
 describe('verifyIdToken', () => {
   it('emulator mode accepts an unsigned token with the right aud/iss', async () => {

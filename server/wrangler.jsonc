@@ -6,5 +6,10 @@
   "vars": { "FIREBASE_PROJECT_ID": "play-oybc", "AUTH_MODE": "firebase" },
   "durable_objects": { "bindings": [{ "name": "GAME_ROOM", "class_name": "GameRoom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+  // Workers rate-limit bindings (per CF-Connecting-IP); namespace_id is any account-unique integer string.
+  "ratelimits": [
+    { "name": "CREATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "WS_LIMITER", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
+  ],
   "observability": { "enabled": true }
 }
