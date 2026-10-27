@@ -41,26 +41,31 @@ export class GameState {
   /** Bumps `rev` and `lastMutationAt` on the stored game (no-op before a game exists). */
   private bump(): void {
     if (!this.game) return;
-    this.game = { ...this.game, rev: this.game.rev + 1, lastMutationAt: Date.now() };
-    this.p.putGame(this.game);
+    const next = { ...this.game, rev: this.game.rev + 1, lastMutationAt: Date.now() };
+    this.p.putGame(next);
+    this.game = next;
   }
 
   /** Creates or replaces the game row; the first write keeps the caller's `rev`, later ones bump the stored one. */
   putGame(g: GameRow): void {
     const rev = this.game ? this.game.rev + 1 : g.rev;
-    this.game = { ...g, rev, lastMutationAt: Date.now() };
-    this.p.putGame(this.game);
+    const next = { ...g, rev, lastMutationAt: Date.now() };
+    this.p.putGame(next);
+    this.game = next;
   }
-  putSeat(s: SeatRow): void { this.seats.set(s.seatId, s); this.p.putSeat(s); this.bump(); }
+  putSeat(s: SeatRow): void { this.p.putSeat(s); this.seats.set(s.seatId, s); this.bump(); }
   /** Membership is not visible state: does not bump `rev`. */
-  putMember(uid: string, seatId: string): void { this.members.set(uid, seatId); this.p.putMember(uid, seatId); }
+  putMember(uid: string, seatId: string): void { this.p.putMember(uid, seatId); this.members.set(uid, seatId); }
   /** Membership is not visible state: does not bump `rev`. */
-  deleteMember(uid: string): void { this.members.delete(uid); this.p.deleteMember(uid); }
-  putTask(t: TaskRow): void { this.tasks.set(t.taskId, t); this.p.putTask(t); this.bump(); }
-  deleteTask(taskId: string): void { this.tasks.delete(taskId); this.p.deleteTask(taskId); this.bump(); }
-  putBoard(b: BoardRow): void { this.boards.set(b.seatId, b); this.p.putBoard(b); this.bump(); }
-  appendBingo(b: BingoRow): void { this.bingos.push(b); this.p.appendBingo(b); this.bump(); }
-  putReclaim(r: ReclaimRow): void { this.reclaims.set(r.id, r); this.p.putReclaim(r); this.bump(); }
+  deleteMember(uid: string): void { this.p.deleteMember(uid); this.members.delete(uid); }
+  putTask(t: TaskRow): void { this.p.putTask(t); this.tasks.set(t.taskId, t); this.bump(); }
+  deleteTask(taskId: string): void { this.p.deleteTask(taskId); this.tasks.delete(taskId); this.bump(); }
+  putBoard(b: BoardRow): void { this.p.putBoard(b); this.boards.set(b.seatId, b); this.bump(); }
+  appendBingo(b: BingoRow): void { this.p.appendBingo(b);
+    const i = this.bingos.findIndex((x) => x.id === b.id);
+    if (i >= 0) this.bingos[i] = b; else this.bingos.push(b);
+    this.bump(); }
+  putReclaim(r: ReclaimRow): void { this.p.putReclaim(r); this.reclaims.set(r.id, r); this.bump(); }
 
   /** Deletes every row of every table and forgets the game. */
   purge(): void {

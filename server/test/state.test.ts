@@ -89,4 +89,35 @@ describe('GameState', () => {
       expect(new GameState(new SqlPersistence(state.storage.sql)).game).toBeNull();
     });
   });
+
+  it('SqlPersistence round-trips optionals, booleans and JSON columns exactly', async () => {
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName('T2b'));
+    await runInDurableObject(stub, (_i, state) => {
+      const s = new GameState(new SqlPersistence(state.storage.sql));
+      s.putGame(game({ stage: 'ended', reviewGate: true, launchedAt: 7, endedAt: 9, bingoCount: 2 }));
+      s.putBoard(board());
+      const bingo = { id: 'b1', seq: 1, seatId: 'A', name: 'Ann', line: 'r0', playerBingoNumber: 1, at: 3, status: 'announced' as const };
+      s.appendBingo(bingo);
+      s.appendBingo(bingo); // duplicate id is an upsert, not a throw
+      const denied = { id: 'r1', requesterUid: 'u2', name: 'Ann', seatId: 'A', status: 'denied' as const, createdAt: 1, resolvedAt: 4 };
+      const pending = { id: 'r2', requesterUid: 'u3', name: 'Bo', seatId: 'B', status: 'pending' as const, createdAt: 2 };
+      s.putReclaim(denied);
+      s.putReclaim(pending);
+      const again = new GameState(new SqlPersistence(state.storage.sql));
+      expect(again.game).toEqual(s.game);
+      expect(again.game?.reviewGate).toBe(true);
+      expect(again.boards.get('A')).toEqual(board());
+      expect(again.bingos).toEqual([bingo]);
+      expect(s.bingos).toEqual([bingo]);
+      expect(again.reclaims.get('r1')).toEqual(denied);
+      expect(again.reclaims.get('r2')).toEqual(pending);
+      expect('resolvedAt' in again.reclaims.get('r2')!).toBe(false);
+      // absent optionals stay absent
+      s.putGame(game());
+      const plain = new GameState(new SqlPersistence(state.storage.sql)).game!;
+      expect('launchedAt' in plain).toBe(false);
+      expect('endedAt' in plain).toBe(false);
+      expect(plain.reviewGate).toBe(false);
+    });
+  });
 });

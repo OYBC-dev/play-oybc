@@ -45,7 +45,10 @@ export class MemoryPersistence implements Persistence {
   putTask(t: TaskRow): void { this.tasks.set(t.taskId, structuredClone(t)); }
   deleteTask(taskId: string): void { this.tasks.delete(taskId); }
   putBoard(b: BoardRow): void { this.boards.set(b.seatId, structuredClone(b)); }
-  appendBingo(b: BingoRow): void { this.bingos.push(structuredClone(b)); }
+  appendBingo(b: BingoRow): void {
+    const i = this.bingos.findIndex((x) => x.id === b.id);
+    if (i >= 0) this.bingos[i] = structuredClone(b); else this.bingos.push(structuredClone(b));
+  }
   putReclaim(r: ReclaimRow): void { this.reclaims.set(r.id, structuredClone(r)); }
   purge(): void {
     this.game = null;
@@ -132,7 +135,7 @@ export class SqlPersistence implements Persistence {
   }
   appendBingo(b: BingoRow): void {
     this.sql.exec(
-      'INSERT INTO bingos (id, seq, seatId, name, line, playerBingoNumber, at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO bingos (id, seq, seatId, name, line, playerBingoNumber, at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       b.id, b.seq, b.seatId, b.name, b.line, b.playerBingoNumber, b.at, b.status,
     );
   }
