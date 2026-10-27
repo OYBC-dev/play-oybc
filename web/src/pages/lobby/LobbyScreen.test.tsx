@@ -78,7 +78,7 @@ describe('LobbyScreen', () => {
     expect(screen.getByLabelText('Task')).toHaveValue('Hi @Cody ');
     await userEvent.type(screen.getByLabelText('Task'), 'dances');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
-    expect(client.calls).toContainEqual(['addTask', 'g1', 'Hi @Cody dances']);
+    expect(client.calls).toContainEqual(['addTask', 'g1', 'Hi @Cody dances', expect.any(String)]);
   });
 
   it('offers someone and anyone, and picks with the keyboard', async () => {
@@ -101,16 +101,61 @@ describe('LobbyScreen', () => {
     expect(await screen.findByText("You can't mention yourself")).toBeInTheDocument();
   });
 
-  it('surfaces a failed delete and disables the row while in flight', async () => {
+  it('a delete hides the row at once; a failed delete restores it and shows the error', async () => {
     const { client } = setup(snap());
     let reject!: (e: Error) => void;
     client.deleteTask = (() => new Promise<void>((_, r) => { reject = r; })) as never;
-    const btn = screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' });
-    await userEvent.click(btn);
-    expect(btn).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' }));
+    expect(screen.queryByText('Someone carves the pumpkin')).toBeNull();
     await act(async () => reject(appError('not-host')));
     expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();
-    expect(btn).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' })).toBeEnabled();
+  });
+
+  it('a successful delete keeps the row hidden until the server view drops it', async () => {
+    const s = snap();
+    const { client, rerender } = setup(s);
+    let resolve!: () => void;
+    client.deleteTask = (() => new Promise<void>((r) => { resolve = r; })) as never;
+    await userEvent.click(screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' }));
+    await act(async () => resolve());
+    expect(screen.queryByText('Someone carves the pumpkin')).toBeNull();
+    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: s.view.slice(1) }} gameId="g1" />);
+    expect(screen.queryByText('Someone carves the pumpkin')).toBeNull();
+  });
+
+  it('add shows an optimistic row that is replaced by the server view', async () => {
+    const s = snap();
+    const { client, rerender } = setup(s);
+    let resolve!: () => void;
+    let sentId = '';
+    client.addTask = ((_g: string, _t: string, taskId?: string) => {
+      sentId = taskId ?? '';
+      return new Promise<void>((r) => { resolve = r; });
+    }) as never;
+    await userEvent.type(screen.getByLabelText('Task'), 'Fresh task');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(sentId).not.toBe('');
+    const row = screen.getByText('Fresh task').closest('li')!;
+    expect(row).toHaveAttribute('data-pending', 'true');
+    expect(within(row).getByText('You')).toBeInTheDocument();
+    await act(async () => resolve());
+    expect(screen.getByText('Fresh task')).toBeInTheDocument();
+    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: [...s.view, { taskId: sentId, authorName: 'Me', text: 'Fresh task', mine: true }] }} gameId="g1" />);
+    expect(screen.getAllByText('Fresh task')).toHaveLength(1);
+    expect(screen.getByText('Fresh task').closest('li')).not.toHaveAttribute('data-pending');
+  });
+
+  it('a failed add removes its optimistic row and shows the error', async () => {
+    const { client } = setup(snap());
+    let reject!: (e: Error) => void;
+    client.addTask = (() => new Promise<void>((_, r) => { reject = r; })) as never;
+    await userEvent.type(screen.getByLabelText('Task'), 'Doomed');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByText('Doomed', { selector: 'span' })).toBeInTheDocument();
+    await act(async () => reject(appError('invalid-text')));
+    expect(await screen.findByText('Task text is empty or too long')).toBeInTheDocument();
+    expect(screen.queryByText('Doomed', { selector: 'span' })).toBeNull();
   });
 
   it('closes the autocomplete on blur and leaves Tab alone', async () => {
