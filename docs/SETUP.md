@@ -23,14 +23,46 @@ Set in `web/.env.local` (gitignored); template in `web/.env.example`:
 - `VITE_FIREBASE_AUTH_DOMAIN=`
 - `VITE_FIREBASE_PROJECT_ID=play-oybc`
 - `VITE_FIREBASE_APP_ID=1:793152912249:web:f3a365d6f7e07238cdcda8`
-- `VITE_USE_EMULATORS=` (`true` connects auth/firestore/functions emulators)
+- `VITE_USE_EMULATORS=` (`true` connects the Auth emulator; the legacy Firebase game backend also uses the Firestore/Functions emulators)
+- `VITE_GAME_SERVER_URL=` (`ws://127.0.0.1:8787` locally; `wss://play-oybc-api.oybc.workers.dev` for a production build)
 
-## Emulator commands
+Scripts read `PLAY_ADMIN_TOKEN` (or `.setup-secrets/ADMIN_TOKEN`) for the admin routes; `PLAY_API_URL` optionally overrides the Worker URL.
 
-- Start all: `firebase emulators:start`
-- (to fill in by later tasks)
+## Local server
+
+Design: `docs/REALTIME_SERVER.md`. The game runs on the Cloudflare Worker `play-oybc-api` in `server/` (one `GameRoom` Durable Object per join code).
+
+```bash
+pnpm --filter server dev              # wrangler dev on ws://127.0.0.1:8787; reads server/.dev.vars (AUTH_MODE=emulator, non-secret)
+firebase emulators:start --only auth  # anonymous Auth emulator
+pnpm --filter server test
+pnpm --filter server typecheck
+```
+
+`pnpm --filter web e2e` wraps Playwright in `firebase emulators:exec --only auth`; Playwright starts `wrangler dev` and Vite itself. Locally Java must be on PATH (`export PATH=/opt/homebrew/opt/openjdk/bin:$PATH`).
+
+Legacy (Firebase game backend, retired after the party): `firebase emulators:start` starts all emulators.
 
 ## Deploy
+
+Server (Worker):
+
+```bash
+cd server && npx wrangler deploy
+npx wrangler secret put ADMIN_TOKEN   # once; guards the admin routes
+npx wrangler tail                     # live logs
+```
+
+Worker URL: `https://play-oybc-api.oybc.workers.dev` (`GET /health`; WebSocket `wss://play-oybc-api.oybc.workers.dev/ws/<CODE>`). Rate limits: `createGame` 10/min and `/ws` upgrades 60/min per IP; per-socket 20 acts/s with burst 40. Rooms are purged 7 days after ending or after 30 days idle.
+
+Rehearsal web build on the Hosting preview channel `realtime` (expires 2026-11-10): `https://play-oybc--realtime-kd3r1anx.web.app`.
+
+```bash
+VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
+npx firebase hosting:channel:deploy realtime --project play-oybc --expires 14d
+```
+
+Live site `https://play-oybc.web.app` runs the Firebase backend until cutover. Legacy Firebase deploy (until cutover):
 
 ```bash
 cp .setup-secrets/web.env.local web/.env.local   # gitignored
@@ -38,11 +70,11 @@ pnpm --filter web build
 firebase deploy --only firestore:rules,firestore:indexes,functions,hosting
 ```
 
-Functions read `MIN_INSTANCES` from `functions/.env.play-oybc` (emulators use `functions/.env.demo-play-oybc`).
+Legacy: functions read `MIN_INSTANCES` from `functions/.env.play-oybc` (emulators use `functions/.env.demo-play-oybc`).
 
 ## Load check
 
-`scripts/loadTest.ts` joins 20 anonymous seats to a game on the deployed project, adds 60 tasks concurrently, launches, fires 200 random `toggleMark` calls, and asserts: no failed calls, `bingoCount` equals the number of bingo docs, seqs are 1..n with no gaps, median `toggleMark` under 800 ms. Failures are counted, never retried.
+`scripts/loadTest.ts` runs 20 seats against the Worker (`PLAY_API_URL` overrides the target): adds tasks concurrently, launches, fires random marks, and asserts no failed calls, consistent bingo counts and sequence numbers, and a latency bound. Failures are counted, never retried. Last result: `mark p50=53ms p95=245ms, 0 failures`.
 
 ```bash
 pnpm --filter scripts load
@@ -50,10 +82,22 @@ pnpm --filter scripts load
 
 ## Party-day runbook
 
-1. Morning of 10-31: set `MIN_INSTANCES=1` in `functions/.env.play-oybc`, then `firebase deploy --only functions`.
-2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --dir scripts forceHost <code>` to list the game's seats (seatId, name, occupied), then `pnpm --dir scripts forceHost <code> <seatId>` to make an occupied seat the host (needs `gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS` for project `play-oybc`).
+Two paths stay open until the owner's go/no-go after the Friday rehearsal.
+
+### Realtime (PR #8)
+
+1. Nothing to warm. Check `https://play-oybc-api.oybc.workers.dev/health`.
+2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --filter scripts forceHost <CODE>` to list the seats (seatId, name, occupied), then `pnpm --filter scripts forceHost <CODE> <seatId>` to make an occupied seat the host (needs `PLAY_ADMIN_TOKEN` or `.setup-secrets/ADMIN_TOKEN`).
 3. If a guest says they asked to get back in and the host phone shows no prompt, reload the host's game screen; the prompt list re-attaches.
-4. Next day: set `MIN_INSTANCES=0` and run `firebase deploy --only functions` again.
+4. Rehearsal URL: `https://play-oybc--realtime-kd3r1anx.web.app`. Watch live with `cd server && npx wrangler tail`.
+
+### Fallback (current app on play-oybc.web.app)
+
+1. `MIN_INSTANCES=1` has been deployed since 2026-10-26 (`functions/.env.play-oybc`, then `firebase deploy --only functions`).
+2. Host recovery: `scripts/forceHost` now targets the Worker admin route only; on the legacy backend keep the host seat on the host phone (no script path).
+3. Same reload advice as above.
+
+Next day, either path: set `MIN_INSTANCES=0` and run `firebase deploy --only functions`.
 
 ## Smoke test
 
@@ -78,7 +122,7 @@ Run on the hosted URL with the host plus at least 2 other phones.
 
 ## iOS manual test
 
-iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (real `GoogleService-Info.plist`), or a simulator with `-useEmulators YES` against `firebase emulators:start`.
+iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (real `GoogleService-Info.plist`), or a simulator with the launch argument `-gameServer ws://127.0.0.1:8787` against `pnpm --filter server dev` and `firebase emulators:start --only auth` (replaces `-useEmulators YES`). Without the argument the app uses Info.plist `GameServerURL` (the Worker URL). The app suspends its room on background and resumes on active.
 
 | # | Step | Expect |
 | --- | --- | --- |
@@ -105,6 +149,6 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | 21 | iOS: tap Home, relaunch the app | The home screen shows (the ended game is forgotten) |
 | 22 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
 
-## Known deploy issue: callables return 403
+## Known deploy issue (legacy Firebase backend): callables return 403
 
 If calls fail with `403 Forbidden` before reaching the function, the Cloud Run services lack the public invoker binding (an org policy such as domain-restricted sharing blocks `allUsers`). Fix once per function: grant `allUsers` the `roles/run.invoker` role (Console: Cloud Run > service > Security > Allow unauthenticated invocations), or lift the org policy for project `play-oybc`.

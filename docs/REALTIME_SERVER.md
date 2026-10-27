@@ -1,6 +1,6 @@
 # Play OYBC — Realtime Server Design
 
-Status: **approved in conversation 2026-10-26; in build** (owner: "go ahead", "progress on full
+Status: **built on `feature/realtime-server`; rehearsal pending (PR #8)** (approved 2026-10-26; owner: "go ahead", "progress on full
 server implementation"). Supersedes `docs/DESIGN.md` §5.1–§5.4 (Cloud Functions + Firestore). §4 of
 that document (requirements) and §7 (decisions) still hold. Rulings made overnight without the
 owner are marked *(ruling)* in §13 and are open to reversal.
@@ -272,6 +272,8 @@ Calendar: today Tue 10-27; party Sat 10-31.
    `docs/DESIGN.md`, `docs/SETUP.md`, `CLAUDE.md`; set `MIN_INSTANCES` back to 0 or remove the
    functions project entirely; add a `staging` Wrangler environment before the first non-owner
    hosts.
+
+URLs: Worker `https://play-oybc-api.oybc.workers.dev`; rehearsal channel `https://play-oybc--realtime-kd3r1anx.web.app` (expires 2026-11-10).
 
 ## 12. Risks and mitigations
 
