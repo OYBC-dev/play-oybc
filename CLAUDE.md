@@ -55,12 +55,13 @@ Timestamps are epoch milliseconds (numbers), so web and iOS decode them identica
 pnpm install
 pnpm test                          # pnpm -r test
 pnpm --filter game-core test       # pure game logic (Jest)
-pnpm --filter server dev            # local Worker on ws://127.0.0.1:8787 (server/.dev.vars; pair with firebase emulators:start --only auth)
+pnpm --filter server dev            # local Worker on ws://127.0.0.1:8787 (server/.dev.vars; pair with firebase emulators:start --only auth --project demo-play-oybc)
 pnpm --filter server test
 pnpm --filter server typecheck
 (cd server && npx wrangler deploy)  # deploy the Worker; npx wrangler tail for logs
 pnpm --filter scripts load         # 20-seat load test against the Worker
 pnpm --filter scripts forceHost <CODE> [<seatId>]   # needs PLAY_ADMIN_TOKEN or .setup-secrets/ADMIN_TOKEN
+pnpm --filter scripts forceHostLegacy <CODE> [<seatId>]   # legacy Firestore backend until cutover; needs gcloud application-default login
 pnpm --filter functions test        # legacy; needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
 pnpm --filter web dev              # web dev server
 pnpm --filter web e2e              # full-game Playwright test (Auth emulator + wrangler dev; needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)

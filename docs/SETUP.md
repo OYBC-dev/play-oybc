@@ -33,11 +33,16 @@ Scripts read `PLAY_ADMIN_TOKEN` (or `.setup-secrets/ADMIN_TOKEN`) for the admin 
 Design: `docs/REALTIME_SERVER.md`. The game runs on the Cloudflare Worker `play-oybc-api` in `server/` (one `GameRoom` Durable Object per join code).
 
 ```bash
-pnpm --filter server dev              # wrangler dev on ws://127.0.0.1:8787; reads server/.dev.vars (AUTH_MODE=emulator, non-secret)
-firebase emulators:start --only auth  # anonymous Auth emulator
+pnpm --filter server dev                                      # wrangler dev on ws://127.0.0.1:8787; reads server/.dev.vars (AUTH_MODE=emulator, FIREBASE_PROJECT_ID=demo-play-oybc)
+firebase emulators:start --only auth --project demo-play-oybc  # anonymous Auth emulator; --project is required (see below)
 pnpm --filter server test
 pnpm --filter server typecheck
 ```
+
+Local auth: the local server accepts only unsigned emulator tokens whose audience is `demo-play-oybc` (emulator mode refuses any project id that does not start with `demo-`). The Auth emulator stamps tokens with the project it was started for, not the client's configured project, so start it with `--project demo-play-oybc`; without the flag it uses `.firebaserc`'s `play-oybc` and every `hello` closes 4001.
+
+- Web against the local server: in `web/.env.local` set `VITE_USE_EMULATORS=true`, `VITE_FIREBASE_PROJECT_ID=demo-play-oybc` and `VITE_GAME_SERVER_URL=ws://127.0.0.1:8787` (the e2e config, `web/e2e/playwright.config.ts`, uses exactly these).
+- iOS simulator against the local server: launch arguments `-useEmulators YES -gameServer ws://127.0.0.1:8787`. `-useEmulators YES` is still needed: it points Auth at the emulator on 127.0.0.1:9099 (without it the app signs in to the real `play-oybc` Auth and the local server rejects the token). The bundled `GoogleService-Info.plist` (project `play-oybc`) is fine: the emulator resolves the project from the API key to its own `--project` (firebase-tools 15.13 `getProjectIdByApiKey`), so tokens carry `aud: demo-play-oybc`. A physical device cannot reach 127.0.0.1; test devices against the deployed Worker.
 
 `pnpm --filter web e2e` wraps Playwright in `firebase emulators:exec --only auth`; Playwright starts `wrangler dev` and Vite itself. Locally Java must be on PATH (`export PATH=/opt/homebrew/opt/openjdk/bin:$PATH`).
 
@@ -55,7 +60,7 @@ npx wrangler secret put ADMIN_TOKEN   # once; guards the admin routes
 npx wrangler tail                     # live logs
 ```
 
-Worker URL: `https://play-oybc-api.oybc.workers.dev` (`GET /health`; WebSocket `wss://play-oybc-api.oybc.workers.dev/ws/<CODE>`). Rate limits: `createGame` 10/min and `/ws` upgrades 60/min per IP; per-socket 20 acts/s with burst 40. Rooms are purged 7 days after ending or after 30 days idle.
+Worker URL: `https://play-oybc-api.oybc.workers.dev` (`GET /health`; WebSocket `wss://play-oybc-api.oybc.workers.dev/ws/<CODE>`). Rate limits: `createGame` 10/min and `/ws` upgrades 600/min per IP; per-socket 20 acts/s with burst 40. Rooms are purged 7 days after ending or after 30 days idle.
 
 Rehearsal web build on the Hosting preview channel `realtime` (expires 2026-11-10): `https://play-oybc--realtime-kd3r1anx.web.app`. Prerequisite: `web/.env.local` holds the real Firebase web keys.
 
@@ -65,7 +70,23 @@ VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=fal
 npx firebase hosting:channel:deploy realtime --project play-oybc --expires 14d
 ```
 
-Live site `https://play-oybc.web.app` runs the Firebase backend until cutover. Legacy Firebase deploy (until cutover):
+Live site `https://play-oybc.web.app` runs the Firebase backend until cutover.
+
+### Go: cut over the live site to the realtime server
+
+Only after the owner's go. Prerequisite: `cp .setup-secrets/web.env.local web/.env.local` (gitignored; real Firebase web keys), and the Worker deployed and healthy (`https://play-oybc-api.oybc.workers.dev/health`).
+
+```bash
+cp .setup-secrets/web.env.local web/.env.local   # gitignored
+VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
+npx firebase deploy --only hosting --project play-oybc
+```
+
+Rollback (restores the previous live release, the Firebase-backend web app): `npx firebase hosting:rollback --project play-oybc`, or Firebase Console → Hosting → release history → Roll back.
+
+### Legacy Firebase deploy (only from a pre-merge `dev` checkout)
+
+Run this only from a checkout of `dev` before this branch merged. From this branch it would build a web app with no `VITE_GAME_SERVER_URL` and ship a blank live site.
 
 ```bash
 cp .setup-secrets/web.env.local web/.env.local   # gitignored
@@ -97,7 +118,7 @@ Two paths stay open until the owner's go/no-go after the Friday rehearsal.
 ### Fallback (current app on play-oybc.web.app)
 
 1. `MIN_INSTANCES=1` has been deployed since 2026-10-26 (`functions/.env.play-oybc`, then `firebase deploy --only functions`).
-2. Host recovery: `scripts/forceHost` now targets the Worker admin route only; on the legacy backend keep the host seat on the host phone (no script path).
+2. Host recovery: keep the host seat on the host phone. If that phone is lost, run `pnpm --filter scripts forceHostLegacy <CODE>` to list the seats, then `pnpm --filter scripts forceHostLegacy <CODE> <seatId>` to make an occupied seat the host (writes the Firestore game directly; needs `gcloud auth application-default login` as before).
 3. Same reload advice as above.
 
 Next day, either path: set `MIN_INSTANCES=0` and run `firebase deploy --only functions`.
@@ -125,7 +146,7 @@ Run on the hosted URL with the host plus at least 2 other phones.
 
 ## iOS manual test
 
-iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (real `GoogleService-Info.plist`), or a simulator with the launch argument `-gameServer ws://127.0.0.1:8787` against `pnpm --filter server dev` and `firebase emulators:start --only auth` (replaces `-useEmulators YES`). Without the argument the app uses Info.plist `GameServerURL` (the Worker URL). The app suspends its room on background and resumes on active.
+iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (real `GoogleService-Info.plist`), or a simulator with the launch arguments `-useEmulators YES -gameServer ws://127.0.0.1:8787` against `pnpm --filter server dev` and `firebase emulators:start --only auth --project demo-play-oybc` (see Local server › Local auth). Without the argument the app uses Info.plist `GameServerURL` (the Worker URL). The app suspends its room on background and resumes on active.
 
 | # | Step | Expect |
 | --- | --- | --- |
