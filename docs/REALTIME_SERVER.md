@@ -150,7 +150,9 @@ Server → client
   `board` to the tapper only (~2 KB); a bingo adds `bingos` + `game` to everyone; a task add sends
   `view` + `game` to everyone. `reclaims` goes only to the host's sockets. A `state` with `rev` ≤
   the last applied is ignored.
-- `reclaim {id, status}` — to a pending requester's sockets (replaces `watchReclaim`).
+- `reclaim {id, status}` — to a pending requester's sockets (replaces `watchReclaim`). A `hello`
+  from a uid that holds no seat replays its pending reclaims and those resolved within the last hour;
+  a seated uid gets no replay (its `welcome` already names the seat).
 - `evicted {reason}` then close 4003; `error {code}` then close 4004 for `game-not-found`.
 
 Per-seat views are computed at push time from canonical state with the existing `buildPoolView`
@@ -166,7 +168,10 @@ the socket (`serializeAttachment`) so it survives hibernation.
 - Token lifetime: verified at `hello`; the socket is trusted for its lifetime. Every reconnect
   presents a fresh token. (Later: the server may request `reauth` on sockets older than 24 h.)
 - Close codes: 4001 bad token · 4003 evicted · 4004 game not found · 4008 rate limited · 4013
-  payload too large.
+  payload too large (4001/4003/4004 are fatal to a client) · 1013 `try-again` (preceded by
+  `error{code:'try-again'}`: Google's signing keys could not be fetched, so the token could not be
+  checked; clients reconnect with backoff) · 1000 `superseded` (this uid said `hello` on a fifth
+  socket and this was its oldest; clients do not auto-reconnect, only on the next action or wake).
 
 ## 6. Clients
 
@@ -186,6 +191,8 @@ that consume the seam do not change.
 - Actions while not `ready` queue for up to 10 s, then fail with code `offline`. Because actions are
   idempotent (§5.2), an action sent just before a drop is simply re-sent after reconnect.
 - Liveness: a `ping` every 25 s; no `pong` within 10 s ⇒ treat the socket as dead and reconnect.
+  On web, a `visibilitychange` → visible or `online` while `ready` pings at once with a 3 s deadline
+  (a phone unlocking onto a socket that died while it slept).
 - The spike's double-socket in React dev mode (StrictMode double-mount) is prevented by making the
   manager a module singleton keyed by code, not an effect-owned object.
 - Optimistic marks stay exactly as implemented today (`BoardGrid` overrides, `GameViewModel`
@@ -204,8 +211,9 @@ is not a precondition.
 ## 7. Safety for strangers
 
 - Caps enforced in the object: 50 seats per game, 500 live tasks, 120-char text (existing), 64 KB
-  max frame, 100 sockets per game.
-- Rate limits: 20 actions/s per socket (then 4008), `createGame` 10/min and socket upgrades 60/min
+  max frame, 100 sockets per game, 4 attached sockets per uid (a fifth `hello` closes that uid's
+  oldest with 1000 `superseded`), `taskId` a non-empty string of at most 64 chars.
+- Rate limits: 20 actions/s per socket (then 4008), `createGame` 10/min and socket upgrades 600/min
   per IP via the Worker (Cloudflare rate-limiting binding).
 - A frame before `hello`, or after a failed `hello`, closes the socket.
 - The Worker only verifies tokens and routes; it never reads or writes game state itself, so a

@@ -255,6 +255,19 @@ describe('deleteTask', () => {
   });
 });
 
+describe('taskId validation', () => {
+  it('addTask and deleteTask reject a missing, empty, non-string or over-64-char taskId', () => {
+    const { state } = setup();
+    for (const taskId of [undefined, '', 42, null, {}, 'x'.repeat(65)]) {
+      expect(codeOf(() => addTask(state, ctxFor('u2'), { taskId: taskId as never, text: 'hi' }))).toBe('invalid-argument');
+      expect(codeOf(() => deleteTask(state, ctxFor('u2'), { taskId: taskId as never }))).toBe('invalid-argument');
+    }
+    expect(state.tasks.size).toBe(0);
+    expect(addTask(state, ctxFor('u2'), { taskId: 'x'.repeat(64), text: 'hi' }).result).toEqual({ taskId: 'x'.repeat(64) });
+    expect(deleteTask(state, ctxFor('u2'), { taskId: 'x'.repeat(64) }).result).toEqual({});
+  });
+});
+
 describe('stage', () => {
   it('rejects add and delete outside the lobby', () => {
     const { state } = setup();

@@ -11,6 +11,8 @@ import type { GameRow, GameState } from './state';
 const MAX_SEATS = 50;
 /** Most pool tasks a game may hold. */
 const MAX_TASKS = 500;
+/** Longest client-chosen `taskId` (clients send UUIDs, 36 chars). */
+export const MAX_TASK_ID_LENGTH = 64;
 
 /** Who is acting and the only sources of time, randomness and ids an operation may use. */
 export interface OpCtx { uid: string; now: number; rng: () => number; newId: () => string }
@@ -37,6 +39,12 @@ function requireMember(state: GameState, uid: string): string {
   const seatId = state.seatOf(uid);
   if (!seatId) throw new AppError('permission-denied');
   return seatId;
+}
+
+/** Returns `taskId` when it is a non-empty string of at most `MAX_TASK_ID_LENGTH` chars, else throws `invalid-argument`. */
+function requireTaskId(taskId: unknown): string {
+  if (typeof taskId !== 'string' || !taskId || taskId.length > MAX_TASK_ID_LENGTH) throw new AppError('invalid-argument');
+  return taskId;
 }
 
 /** Throws `wrong-stage` unless the game is in the lobby. */
@@ -116,15 +124,17 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
 
 /**
  * Adds a pool task in the lobby; idempotent on a repeated `taskId` by the same author.
- * @throws AppError `permission-denied`, `wrong-stage`, `invalid-text`, `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
+ * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `invalid-text`,
+ *   `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
  */
 export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; text: string }): OpOut<AddTaskRes> {
   const game = requireGame(state);
   const seatId = requireMember(state, ctx.uid);
   requireLobby(game);
-  const prior = state.tasks.get(args.taskId);
+  const taskId = requireTaskId(args.taskId);
+  const prior = state.tasks.get(taskId);
   if (prior) {
-    if (prior.authorSeatId === seatId) return { result: { taskId: args.taskId }, push: { all: [] } };
+    if (prior.authorSeatId === seatId) return { result: { taskId }, push: { all: [] } };
     throw new AppError('invalid-argument');
   }
   const text = typeof args.text === 'string' ? args.text.trim() : '';
@@ -133,22 +143,23 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   const parsed = parseMentions(text, state.seatList());
   if (!parsed.ok) throw new AppError('unknown-mention', { token: parsed.token });
   if (parsed.mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
-  state.putTask({ taskId: args.taskId, text, authorSeatId: seatId, mentions: parsed.mentions, createdAt: ctx.now });
-  return { result: { taskId: args.taskId }, push: { all: ['game', 'view'] } };
+  state.putTask({ taskId, text, authorSeatId: seatId, mentions: parsed.mentions, createdAt: ctx.now });
+  return { result: { taskId }, push: { all: ['game', 'view'] } };
 }
 
 /**
  * Deletes a pool task in the lobby (author or host).
- * @throws AppError `permission-denied`, `wrong-stage`, `not-found`.
+ * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `not-found`.
  */
 export function deleteTask(state: GameState, ctx: OpCtx, args: { taskId: string }): OpOut<Record<string, never>> {
   const game = requireGame(state);
   const seatId = requireMember(state, ctx.uid);
   requireLobby(game);
-  const target = state.tasks.get(args.taskId);
+  const taskId = requireTaskId(args.taskId);
+  const target = state.tasks.get(taskId);
   if (!target) throw new AppError('not-found');
   if (target.authorSeatId !== seatId && game.hostSeatId !== seatId) throw new AppError('permission-denied');
-  state.deleteTask(args.taskId);
+  state.deleteTask(taskId);
   return { result: {}, push: { all: ['game', 'view'] } };
 }
 

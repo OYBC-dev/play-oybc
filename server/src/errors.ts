@@ -6,7 +6,8 @@ export type AppErrorCode =
   | 'invalid-name' | 'invalid-text' | 'game-not-found' | 'game-ended' | 'unknown-mention'
   | 'self-mention' | 'not-host' | 'wrong-stage' | 'not-ready' | 'invalid-cell'
   | 'unknown-seat' | 'reclaim-not-found' | 'reclaim-cooldown'
-  | 'unauthenticated' | 'permission-denied' | 'not-found' | 'invalid-argument' | 'resource-exhausted';
+  | 'unauthenticated' | 'permission-denied' | 'not-found' | 'invalid-argument' | 'resource-exhausted'
+  | 'try-again';
 
 /** A failure with a client-visible code; its message is the code and never carries internals. */
 export class AppError extends Error {

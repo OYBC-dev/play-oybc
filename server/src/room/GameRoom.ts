@@ -1,8 +1,8 @@
 import { verifyIdToken } from '../auth';
 import { AppError, toAck } from '../errors';
 import type { Env } from '../index';
-import { CLOSE, MAX_FRAME_BYTES, type ClientMsg } from '../protocol';
-import { MAX_SOCKETS, TokenBucket } from './limits';
+import { CLOSE, MAX_FRAME_BYTES, SUPERSEDED_REASON, type ClientMsg } from '../protocol';
+import { MAX_SOCKETS, MAX_SOCKETS_PER_UID, TokenBucket } from './limits';
 import { OPS, adminSeats, adminTransferHost, claimGame, type OpCtx, type OpOut, type Push } from './ops';
 import { SqlPersistence } from './persistence';
 import { ALL_SECTIONS, buildSections } from './sections';
@@ -40,6 +40,8 @@ export class GameRoom implements DurableObject {
   private readonly buckets = new WeakMap<WebSocket, TokenBucket>();
   /** Tie-breaker for sockets accepted in the same millisecond (see `acceptedAt`). */
   private acceptSeq = 0;
+  /** Token verifier; a field so tests can stub a transient key-fetch failure. */
+  private verify: (token: string, env: Env) => Promise<{ uid: string }> = verifyIdToken;
 
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {
     void ctx.blockConcurrencyWhile(async () => {
@@ -84,19 +86,29 @@ export class GameRoom implements DurableObject {
   private makeRoomForSocket(): boolean {
     const open = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.READY_STATE_OPEN);
     if (open.length < MAX_SOCKETS) return true;
-    const idle = open.filter((ws) => !attachmentOf(ws)).sort((x, y) => this.acceptedAt(x) - this.acceptedAt(y))[0];
+    const idle = open.filter((ws) => !attachmentOf(ws)).sort(this.byAcceptance)[0];
     if (!idle) return false;
     idle.close(CLOSE.BAD_TOKEN, 'hello-required');
     return true;
   }
 
-  /** When the socket was accepted (its `at:` tag), with the same-millisecond sequence as a fraction. */
-  private acceptedAt(ws: WebSocket): number {
+  /** When the socket was accepted (its `at:` tag) as `[ms, same-millisecond sequence]`. */
+  private acceptedAt(ws: WebSocket): [number, number] {
     const tag = this.ctx.getTags(ws).find((t) => t.startsWith('at:'));
-    if (!tag) return 0;
+    if (!tag) return [0, 0];
     const [, ms, seq] = tag.split(':');
-    return Number(ms) + Number(seq) / 1e6;
+    return [Number(ms), Number(seq)];
   }
+
+  /**
+   * Orders sockets oldest first. Compared as a pair, not `ms + seq / 1e6`: at epoch-ms magnitude a double
+   * cannot resolve that fraction, so sockets accepted in one (frozen) millisecond would tie.
+   */
+  private byAcceptance = (x: WebSocket, y: WebSocket): number => {
+    const [mx, sx] = this.acceptedAt(x);
+    const [my, sy] = this.acceptedAt(y);
+    return mx - my || sx - sy;
+  };
 
   /**
    * Creates the game on this (empty) room. A room that already holds a game answers 409 so the Worker retries
@@ -169,15 +181,21 @@ export class GameRoom implements DurableObject {
     await this.act(ws, who.uid, msg);
   }
 
-  /** Verifies the token, checks the game epoch, attaches `{uid, seatId}` and answers `welcome` (+ full `state` if seated, + missed `reclaim` notices). */
+  /**
+   * Verifies the token, checks the game epoch, attaches `{uid, seatId}` and answers `welcome` (+ full `state`
+   * if seated, + missed `reclaim` notices while unseated). A bad token closes 4001; a token that could not be
+   * checked because Google's keys were unreachable closes 1013 (`try-again`) so the client reconnects.
+   */
   private async hello(ws: WebSocket, msg: Extract<ClientMsg, { t: 'hello' }>): Promise<void> {
     let uid: string;
     try {
-      ({ uid } = await verifyIdToken(typeof msg.token === 'string' ? msg.token : '', this.env));
-    } catch {
+      ({ uid } = await this.verify(typeof msg.token === 'string' ? msg.token : '', this.env));
+    } catch (e) {
+      const transient = (e as { code?: unknown } | null)?.code === 'try-again';
       ws.serializeAttachment(null);
-      send(ws, { t: 'error', code: 'unauthenticated' });
-      ws.close(CLOSE.BAD_TOKEN, 'unauthenticated');
+      send(ws, { t: 'error', code: transient ? 'try-again' : 'unauthenticated' });
+      if (transient) ws.close(CLOSE.TRY_AGAIN, 'try-again');
+      else ws.close(CLOSE.BAD_TOKEN, 'unauthenticated');
       return;
     }
     const game = this.state.game;
@@ -189,14 +207,33 @@ export class GameRoom implements DurableObject {
     }
     const seatId = this.state.seatOf(uid);
     ws.serializeAttachment({ uid, seatId } satisfies Attachment);
+    this.capSocketsFor(uid, ws);
     send(ws, { t: 'welcome', uid, gameId: game.gameId, seatId, stage: game.stage, rev: game.rev });
     if (seatId) send(ws, { t: 'state', rev: game.rev, ...buildSections(this.state, seatId, ALL_SECTIONS) });
-    this.replayReclaims(ws, uid);
+    // A seated uid already knows its outcome; replaying `approved` to it would make a client re-hello in a loop.
+    else this.replayReclaims(ws, uid);
+  }
+
+  /**
+   * Keeps at most `MAX_SOCKETS_PER_UID` attached sockets per uid: closes the oldest others of `uid` (never
+   * `keep`) with 1000 `superseded`, which clients treat as "stay down" rather than fatal or reconnectable.
+   * This stops one uid's dead-but-attached sockets from filling the room's `MAX_SOCKETS`.
+   */
+  private capSocketsFor(uid: string, keep: WebSocket): void {
+    const mine = this.ctx.getWebSockets()
+      .filter((s) => s !== keep && s.readyState === WebSocket.READY_STATE_OPEN && attachmentOf(s)?.uid === uid)
+      .sort(this.byAcceptance);
+    const excess = mine.length + 1 - MAX_SOCKETS_PER_UID;
+    for (const old of mine.slice(0, Math.max(0, excess))) {
+      old.serializeAttachment(null);
+      try { old.close(CLOSE.SUPERSEDED, SUPERSEDED_REASON); } catch (e) { this.logFault('supersede-failed', 'hello', e); }
+    }
   }
 
   /**
    * The `reclaim{id,status}` notices a reconnecting requester may have missed (they are pushed only to sockets
    * open at resolution): every pending reclaim of `uid`, and every resolved one within `RECLAIM_REPLAY_MS`.
+   * Sent only while `uid` holds no seat.
    */
   private replayReclaims(ws: WebSocket, uid: string): void {
     const now = Date.now();
@@ -236,7 +273,12 @@ export class GameRoom implements DurableObject {
       return;
     }
     this.log(msg.op, 'ok', t0);
-    send(ws, { t: 'ack', id: msg.id, ok: true, result: out.result });
+    // The op is committed: a failed ack send must never skip its broadcast.
+    try {
+      send(ws, { t: 'ack', id: msg.id, ok: true, result: out.result });
+    } catch (e) {
+      this.logFault('ack-failed', msg.op, e);
+    }
     await this.afterMutation(out.push, msg.op);
   }
 

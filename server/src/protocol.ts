@@ -15,5 +15,13 @@ export type ServerMsg =
   | { t: 'reclaim'; id: string; status: ReclaimDoc['status'] }
   | { t: 'evicted'; reason: 'replaced' }
   | { t: 'error'; code: string };
-export const CLOSE = { BAD_TOKEN: 4001, EVICTED: 4003, NOT_FOUND: 4004, RATE_LIMITED: 4008, TOO_LARGE: 4013 } as const;
+/**
+ * Close codes. 4001 / 4003 / 4004 are fatal to a client; `TRY_AGAIN` (1013, the token could not be checked
+ * just now) and `SUPERSEDED` (1000 with reason `superseded`: the uid opened a fifth socket) are not.
+ */
+export const CLOSE = {
+  BAD_TOKEN: 4001, EVICTED: 4003, NOT_FOUND: 4004, RATE_LIMITED: 4008, TOO_LARGE: 4013, TRY_AGAIN: 1013, SUPERSEDED: 1000,
+} as const;
+/** The close reason that marks a superseded socket; clients must not auto-reconnect on it. */
+export const SUPERSEDED_REASON = 'superseded';
 export const MAX_FRAME_BYTES = 64 * 1024;

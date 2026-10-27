@@ -1,5 +1,6 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { verifyIdToken } from '../src/auth';
 import { CLOSE, type StateMsg } from '../src/protocol';
 import type { GameRoom } from '../src/room/GameRoom';
 import { connect, createGame, isState, tokenFor, wsClient, type WsClient } from './helpers';
@@ -143,6 +144,14 @@ describe('GameRoom', () => {
     expect((await b2.waitFor<StateMsg>(isState, f2)).view![0]).toMatchObject({ taskId: 'k1', text: 'from the phone' });
     await a.waitFor(isState, fa);
 
+    // a mark on one of Bob's sockets reaches his other socket with the board
+    await launch(a);
+    await Promise.all([b.sync(), b2.sync()]);
+    const fm = b2.frames.length;
+    expect(await b.act('mark', { cellIndex: 0, marked: true })).toMatchObject({ ok: true });
+    const marked = await b2.waitFor<StateMsg>((f) => isState(f) && !!f.board, fm);
+    expect(marked.board!.marks[0]).toBe(true);
+
     const d = await wsClient(code, 'ud', gameId);
     expect(d.welcome.seatId).toBeNull();
     const filed = await d.act('join', { name: 'bob' });
@@ -160,9 +169,41 @@ describe('GameRoom', () => {
     expect(Object.keys(full).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 't', 'view']);
     expect(full.view![0]).toMatchObject({ taskId: 'k1', text: 'from the phone' });
 
-    // hello again on the same socket is whoAmI: it now names the reclaimed seat
+    // hello again on the same socket is whoAmI: it now names the reclaimed seat, and (seated) replays no reclaim
+    const fAgain = d.frames.length;
     const again = await d.hello(tokenFor('ud'), gameId);
     expect(again).toMatchObject({ t: 'welcome', uid: 'ud', seatId: bobSeat });
+    await d.sync();
+    expect(d.since(fAgain).filter((f) => f.t === 'reclaim')).toEqual([]);
+  });
+
+  it("a uid's fifth socket supersedes its oldest (1000) and the other four keep their pushes", async () => {
+    const g = await createGame('ua', 'Ann');
+    const socks = [];
+    for (let i = 0; i < 4; i++) socks.push(await wsClient(g.code, 'ua', g.gameId));
+    const fifth = await wsClient(g.code, 'ua', g.gameId);
+    expect(await socks[0].closed).toBe(1000);
+    const from = socks.slice(1).map((s) => s.frames.length);
+    expect(await fifth.act('addTask', { taskId: 'k1', text: 'still here' })).toMatchObject({ ok: true });
+    for (const [i, s] of socks.slice(1).entries()) {
+      expect((await s.waitFor<StateMsg>(isState, from[i])).view![0]).toMatchObject({ taskId: 'k1' });
+    }
+    // another uid is unaffected by Ann's cap
+    const b = await wsClient(g.code, 'ub', g.gameId);
+    expect(b.welcome.uid).toBe('ub');
+  });
+
+  it('a token that cannot be checked (key fetch failed) closes 1013 try-again, not 4001', async () => {
+    const g = await createGame('ua', 'Ann');
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(g.code));
+    await runInDurableObject(stub, (room: GameRoom) => {
+      (room as unknown as { verify: typeof verifyIdToken }).verify = (t, e) =>
+        verifyIdToken(t, { ...e, AUTH_MODE: 'firebase' }, async () => { throw new TypeError('fetch failed'); });
+    });
+    const c = await connect(g.code);
+    const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+    expect(await c.hello(`${b64({ alg: 'RS256', kid: 'k1' })}.${b64({ sub: 'ua' })}.AAAA`)).toEqual({ t: 'error', code: 'try-again' });
+    expect(await c.closed).toBe(CLOSE.TRY_AGAIN);
   });
 
   it('reclaim: requester gets reclaim{status} and host gets reclaims section', async () => {
@@ -324,6 +365,27 @@ describe('GameRoom', () => {
     const logged = errSpy.mock.calls.map((x) => String(x[0])).join('\n');
     expect(logged).not.toContain('second');
     expect(logged).not.toContain('Ann');
+  });
+
+  it('a failed ack send is logged and the committed op is still broadcast', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { a, b, c, code } = await threeSeats();
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(code));
+    await runInDurableObject(stub, (_r: GameRoom, state) => {
+      const ann = state.getWebSockets().find((ws) => (ws.deserializeAttachment() as { uid: string } | null)?.uid === 'ua')!;
+      const real = ann.send.bind(ann);
+      ann.send = (m: string | ArrayBuffer | ArrayBufferView) => {
+        if (typeof m === 'string' && m.includes('"t":"ack"')) throw new Error('ack send failed');
+        real(m);
+      };
+    });
+    const [fa, fb, fc] = [a.frames.length, b.frames.length, c.frames.length];
+    a.send({ t: 'act', id: 'lost-ack', op: 'addTask', args: { taskId: 'k1', text: 'committed' } });
+    for (const [s, from] of [[a, fa], [b, fb], [c, fc]] as const) {
+      expect((await s.waitFor<StateMsg>(isState, from)).view).toEqual([expect.objectContaining({ taskId: 'k1' })]);
+    }
+    expect(a.since(fa).filter((f) => f.t === 'ack')).toEqual([]);
+    expect(errSpy.mock.calls.map((x) => JSON.parse(String(x[0])).error)).toEqual(['ack-failed']);
   });
 
   it('logs one structured line per act without names, text or tokens', async () => {

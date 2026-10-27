@@ -1,5 +1,6 @@
 import { generateGameCode } from 'game-core';
 import { verifyIdToken } from './auth';
+import { AppError } from './errors';
 
 export { GameRoom } from './room/GameRoom';
 
@@ -10,7 +11,7 @@ export interface Env {
   ADMIN_TOKEN?: string;
   /** Workers rate-limit binding: `createGame` 10/min per client IP. */
   CREATE_LIMITER: RateLimit;
-  /** Workers rate-limit binding: `/ws` upgrades 60/min per client IP. */
+  /** Workers rate-limit binding: `/ws` upgrades 600/min per client IP (a venue NAT puts a whole room behind one IP). */
   WS_LIMITER: RateLimit;
 }
 
@@ -60,14 +61,16 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 
 /**
  * `POST /api/createGame {name}` with a Firebase bearer token: claims a fresh code on its room, retrying on a
- * taken code (409), and answers `{gameId, code, seatId}`; `401`/`400 {code}`/`429 {code:'resource-exhausted'}` otherwise.
+ * taken code (409), and answers `{gameId, code, seatId}`; `401`/`400 {code}`/`429 {code:'resource-exhausted'}` otherwise,
+ * or `503 {code:'try-again'}` when Google's signing keys could not be fetched.
  */
 async function createGame(req: Request, env: Env): Promise<Response> {
   if (!(await env.CREATE_LIMITER.limit({ key: clientIp(req) })).success) return json({ code: 'resource-exhausted' }, 429, true);
   let uid: string;
   try {
     ({ uid } = await verifyIdToken(bearer(req) ?? '', env));
-  } catch {
+  } catch (e) {
+    if (e instanceof AppError && e.code === 'try-again') return json({ code: 'try-again' }, 503, true);
     return json({ code: 'unauthenticated' }, 401, true);
   }
   let name: unknown;

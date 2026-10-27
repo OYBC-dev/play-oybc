@@ -4,6 +4,8 @@ export const ACTS_PER_SECOND = 20;
 export const ACT_BURST = 40;
 /** Most sockets one game accepts at a time. */
 export const MAX_SOCKETS = 100;
+/** Most attached sockets one uid keeps in a game; a further `hello` closes that uid's oldest (`superseded`). */
+export const MAX_SOCKETS_PER_UID = 4;
 
 /**
  * A token bucket: holds up to `burst` tokens, refills at `perSecond`, and each `take` spends one.
