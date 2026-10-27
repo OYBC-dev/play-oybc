@@ -197,6 +197,32 @@ describe('GameRoom', () => {
     expect(pushIndex).toBeLessThan(ackIndex);
   });
 
+  it('a requester offline when the host resolves learns the outcome on its next hello', async () => {
+    const { a, code, gameId } = await threeSeats();
+    const d = await wsClient(code, 'ud', gameId);
+    const filed = await d.act('join', { name: 'Bob' });
+    const reclaimId = (filed as { result: { reclaimId: string } }).result.reclaimId;
+
+    // a reconnect while still pending replays the pending notice
+    const d2 = await connect(code);
+    expect(await d2.hello(tokenFor('ud'), gameId)).toMatchObject({ t: 'welcome', seatId: null });
+    expect(await d2.waitFor((f) => f.t === 'reclaim')).toEqual({ t: 'reclaim', id: reclaimId, status: 'pending' });
+    d.close();
+    d2.close();
+    await Promise.all([d.closed, d2.closed]);
+
+    expect(await a.act('resolveReclaim', { reclaimId, approve: false })).toMatchObject({ ok: true });
+
+    const d3 = await connect(code);
+    expect(await d3.hello(tokenFor('ud'), gameId)).toMatchObject({ t: 'welcome', seatId: null });
+    expect(await d3.waitFor((f) => f.t === 'reclaim')).toEqual({ t: 'reclaim', id: reclaimId, status: 'denied' });
+    // nobody else hears about it
+    const e = await connect(code);
+    expect(await e.hello(tokenFor('ue'), gameId)).toMatchObject({ t: 'welcome' });
+    await e.act('deleteTask', { taskId: 'probe' });
+    expect(e.frames.filter((f) => f.t === 'reclaim')).toEqual([]);
+  });
+
   it('reclaims section follows hostSeatId after transferHost', async () => {
     const { a, c, code, gameId, catSeat } = await threeSeats();
     const d = await wsClient(code, 'ud', gameId);

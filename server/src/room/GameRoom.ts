@@ -10,6 +10,8 @@ import { attachmentOf, broadcast, send, type Attachment } from './sockets';
 import { GameState, type GameRow } from './state';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A resolved reclaim is replayed to its requester on `hello` for this long after `resolvedAt`. */
+export const RECLAIM_REPLAY_MS = 60 * 60 * 1000;
 /** An ended game is purged this long after `endedAt`. */
 export const ENDED_TTL_MS = 7 * DAY_MS;
 /** Any game is purged this long after its last mutation. */
@@ -167,7 +169,7 @@ export class GameRoom implements DurableObject {
     await this.act(ws, who.uid, msg);
   }
 
-  /** Verifies the token, checks the game epoch, attaches `{uid, seatId}` and answers `welcome` (+ full `state` if seated). */
+  /** Verifies the token, checks the game epoch, attaches `{uid, seatId}` and answers `welcome` (+ full `state` if seated, + missed `reclaim` notices). */
   private async hello(ws: WebSocket, msg: Extract<ClientMsg, { t: 'hello' }>): Promise<void> {
     let uid: string;
     try {
@@ -189,6 +191,20 @@ export class GameRoom implements DurableObject {
     ws.serializeAttachment({ uid, seatId } satisfies Attachment);
     send(ws, { t: 'welcome', uid, gameId: game.gameId, seatId, stage: game.stage, rev: game.rev });
     if (seatId) send(ws, { t: 'state', rev: game.rev, ...buildSections(this.state, seatId, ALL_SECTIONS) });
+    this.replayReclaims(ws, uid);
+  }
+
+  /**
+   * The `reclaim{id,status}` notices a reconnecting requester may have missed (they are pushed only to sockets
+   * open at resolution): every pending reclaim of `uid`, and every resolved one within `RECLAIM_REPLAY_MS`.
+   */
+  private replayReclaims(ws: WebSocket, uid: string): void {
+    const now = Date.now();
+    for (const r of this.state.reclaims.values()) {
+      if (r.requesterUid !== uid) continue;
+      const recent = r.status === 'pending' || (r.resolvedAt !== undefined && now - r.resolvedAt <= RECLAIM_REPLAY_MS);
+      if (recent) send(ws, { t: 'reclaim', id: r.id, status: r.status });
+    }
   }
 
   /**
