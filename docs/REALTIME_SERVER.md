@@ -1,7 +1,9 @@
 # Play OYBC — Realtime Server Design
 
-Status: **design, awaiting owner approval** (2026-10-27). Supersedes `docs/DESIGN.md` §5.1–§5.4
-(Cloud Functions + Firestore). §4 of that document (requirements) and §7 (decisions) still hold.
+Status: **approved in conversation 2026-10-26; in build** (owner: "go ahead", "progress on full
+server implementation"). Supersedes `docs/DESIGN.md` §5.1–§5.4 (Cloud Functions + Firestore). §4 of
+that document (requirements) and §7 (decisions) still hold. Rulings made overnight without the
+owner are marked *(ruling)* in §13 and are open to reversal.
 
 ## 1. Intent
 
@@ -194,9 +196,10 @@ that consume the seam do not change.
 `ws://127.0.0.1:8787` for `wrangler dev`); iOS `GameServerURL` in Info.plist via `project.yml`, with
 a `-gameServer <url>` launch argument override replacing `-useEmulators`.
 
-**iOS background behaviour:** to be confirmed by the phone test on the spike build (steps 4–5 of
-the owner's checklist). The design assumes iOS kills the socket on backgrounding and the manager
-reconnects on foreground with a full `state`, which is the only behaviour the client depends on.
+**iOS background behaviour:** the manager does not depend on what iOS does to a backgrounded
+socket. On `scenePhase != .active` it cancels the socket itself; on `.active` it reconnects and
+receives a full `state`. The owner's phone test on the spike build confirms the reconnect path; it
+is not a precondition.
 
 ## 7. Safety for strangers
 
@@ -205,8 +208,17 @@ reconnects on foreground with a full `state`, which is the only behaviour the cl
 - Rate limits: 20 actions/s per socket (then 4008), `createGame` 10/min and socket upgrades 60/min
   per IP via the Worker (Cloudflare rate-limiting binding).
 - A frame before `hello`, or after a failed `hello`, closes the socket.
-- The Worker only verifies tokens; it never reads or writes game state, so a compromised client
-  can at most act as its own uid inside games it was admitted to.
+- The Worker only verifies tokens and routes; it never reads or writes game state itself, so a
+  compromised client can at most act as its own uid inside games it was admitted to.
+- **Admin path (replaces `scripts/forceHost.ts`):** `GET /admin/:code/seats` and
+  `POST /admin/:code/transferHost {seatId}`, accepted only with `Authorization: Bearer
+  <ADMIN_TOKEN>` where `ADMIN_TOKEN` is a Worker secret (`wrangler secret put`). The Worker forwards
+  to the object's admin handler, which performs the same host transfer as the host op but without
+  the host check. `scripts/forceHost.ts` is rewritten to call these; the party runbook step 2 keeps
+  working with a lost host phone.
+- If the Cloudflare rate-limiting binding is unavailable on the account's plan, the Worker falls
+  back to a per-IP counter in a small `RateLimiter` object; the limits in this section are the same
+  either way.
 
 ## 8. Lifecycle and cleanup
 
@@ -238,24 +250,35 @@ for `wrangler dev` + auth emulator; `ios` unchanged.
 
 ## 11. Rollout (party week)
 
-1. **Mon–Wed:** build on `feature/realtime-server`. Wrangler environments: `staging`
-   (`play-oybc-staging`) and `production` (`play-oybc-api`).
-2. **Separate hostname, nothing shared.** Web: a Firebase Hosting preview channel (`realtime`)
-   built with `VITE_GAME_SERVER_URL` = staging. iOS: a local TestFlight upload as **1.0.2** pointing
-   at staging; 1.0.1 (8) stays installable from TestFlight as the fallback.
-3. **Thursday rehearsal:** the 14-step smoke test with the owner + 2–3 real phones on the preview
-   hostname, plus the load test against staging. Go/no-go is the owner's call.
-4. **Party:** go ⇒ merge, deploy production Worker, deploy hosting; the next Xcode Cloud build
-   carries the production URL. No-go ⇒ the current app, untouched, runs the party.
+Calendar: today Tue 10-27; party Sat 10-31.
+
+1. **Tue–Thu:** build on `feature/realtime-server` in the order **server → web → iOS**, so a
+   half-built Thursday still yields a usable web game (guests are on web; the owner can host from
+   the web link if iOS is not ready). Deploys are by hand from the laptop (`wrangler deploy`,
+   `firebase hosting:channel:deploy`); CI deploy jobs come later.
+2. **One Worker this week:** `play-oybc-api` is both the rehearsal and the party backend; there
+   are no live games to protect yet, so a staging environment buys nothing until there are real
+   users. Web: a Firebase Hosting preview channel (`realtime`) built with `VITE_GAME_SERVER_URL`
+   pointing at it. iOS: a local TestFlight upload as **1.0.2** pointing at it; 1.0.1 (8) stays
+   installable from TestFlight as the fallback. Every phone on the new build or the preview URL is
+   on the same backend.
+3. **Friday rehearsal:** the 14-step smoke test with the owner + 2–3 real phones on the preview
+   hostname, plus the load test. Go/no-go is the owner's call.
+4. **Party:** go ⇒ deploy hosting to the live site and merge to `dev` (the Xcode Cloud build it
+   triggers is identical to 1.0.2 in behaviour). No-go ⇒ the current app, untouched, runs the
+   party. No game is migrated between backends; the party game is created on Saturday on whichever
+   backend is live.
 5. **After:** delete the game callables, Firestore rules/indexes and emulator config; update
    `docs/DESIGN.md`, `docs/SETUP.md`, `CLAUDE.md`; set `MIN_INSTANCES` back to 0 or remove the
-   functions project entirely.
+   functions project entirely; add a `staging` Wrangler environment before the first non-owner
+   hosts.
 
 ## 12. Risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| iOS sockets and backgrounding behave unexpectedly | spike test on the owner's phone before the plan is written; reconnect-with-full-state is the only behaviour the client relies on |
+| iOS sockets and backgrounding behave unexpectedly | the manager tears down on background and reconnects on foreground regardless; the owner's spike test confirms the path |
+| Only the owner uses iOS at the party; a late iOS build is the critical path | server → web → iOS build order; the owner can host from web; 1.0.2 points at the same single Worker as web |
 | Google's JWKS endpoint unavailable | `jose` caches keys per isolate; allow a cached set up to 24 h |
 | A remote player far from the room | the object lives near the host; cross-continent RTT 150–300 ms is still under today's warm path |
 | Clock: Thursday go/no-go with 5 days total | the fallback is the working app; nothing in B touches it until cutover |
@@ -275,6 +298,12 @@ for `wrangler dev` + auth emulator; `ios` unchanged.
 | Section-level state replacement, not diffs | Claude |
 | Idempotent actions with client ids; 10 s offline queue | Claude |
 | Caps, rate limits and purge timings in §7–§8 | Claude (owner may tune) |
+| Build order server → web → iOS; web-only is an acceptable party fallback | Claude *(ruling, 2026-10-27)* |
+| One Worker environment this week; staging deferred until real users | Claude *(ruling)* |
+| iOS manager tears down on background regardless of OS behaviour | Claude *(ruling)* |
+| Admin route + secret replaces `forceHost` | Claude *(ruling)* |
+| Manual deploys from the laptop this week | Claude *(ruling)* |
+| No game migration at cutover | Claude *(ruling)* |
 
 ## 14. Left to the builder
 
