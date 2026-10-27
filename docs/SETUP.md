@@ -41,7 +41,9 @@ pnpm --filter server typecheck
 
 `pnpm --filter web e2e` wraps Playwright in `firebase emulators:exec --only auth`; Playwright starts `wrangler dev` and Vite itself. Locally Java must be on PATH (`export PATH=/opt/homebrew/opt/openjdk/bin:$PATH`).
 
-Legacy (Firebase game backend, retired after the party): `firebase emulators:start` starts all emulators.
+### Legacy emulators (until cutover)
+
+`firebase emulators:start` starts all emulators for the Firebase game backend, retired after the party.
 
 ## Deploy
 
@@ -55,9 +57,10 @@ npx wrangler tail                     # live logs
 
 Worker URL: `https://play-oybc-api.oybc.workers.dev` (`GET /health`; WebSocket `wss://play-oybc-api.oybc.workers.dev/ws/<CODE>`). Rate limits: `createGame` 10/min and `/ws` upgrades 60/min per IP; per-socket 20 acts/s with burst 40. Rooms are purged 7 days after ending or after 30 days idle.
 
-Rehearsal web build on the Hosting preview channel `realtime` (expires 2026-11-10): `https://play-oybc--realtime-kd3r1anx.web.app`.
+Rehearsal web build on the Hosting preview channel `realtime` (expires 2026-11-10): `https://play-oybc--realtime-kd3r1anx.web.app`. Prerequisite: `web/.env.local` holds the real Firebase web keys.
 
 ```bash
+cp .setup-secrets/web.env.local web/.env.local   # gitignored
 VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
 npx firebase hosting:channel:deploy realtime --project play-oybc --expires 14d
 ```
@@ -87,7 +90,7 @@ Two paths stay open until the owner's go/no-go after the Friday rehearsal.
 ### Realtime (PR #8)
 
 1. Nothing to warm. Check `https://play-oybc-api.oybc.workers.dev/health`.
-2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --filter scripts forceHost <CODE>` to list the seats (seatId, name, occupied), then `pnpm --filter scripts forceHost <CODE> <seatId>` to make an occupied seat the host (needs `PLAY_ADMIN_TOKEN` or `.setup-secrets/ADMIN_TOKEN`).
+2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --filter scripts forceHost <CODE>` to list the seats (seatId, name, occupied), then `pnpm --filter scripts forceHost <CODE> <seatId>` to make an occupied seat the host (needs `PLAY_ADMIN_TOKEN` or `.setup-secrets/ADMIN_TOKEN`, and the `ADMIN_TOKEN` Worker secret must already be set; see Deploy).
 3. If a guest says they asked to get back in and the host phone shows no prompt, reload the host's game screen; the prompt list re-attaches.
 4. Rehearsal URL: `https://play-oybc--realtime-kd3r1anx.web.app`. Watch live with `cd server && npx wrangler tail`.
 

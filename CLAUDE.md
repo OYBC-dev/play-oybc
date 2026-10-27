@@ -20,7 +20,7 @@ Every write goes through the server (`GameRoom` over WebSocket; legacy: callable
 - New repo lives at `/Volumes/Stephen/play-oybc`; GitHub `2014sheas/play-oybc`. No runtime or build dependency on the oybc repo or `oybc-dev-e2668`; reused code is **copied**.
 - All Xcode builds use `-derivedDataPath /Volumes/Stephen/play-oybc-derived` (never an internal derived-data dir).
 - Board: **5×5, FREE center at index 12**, 24 tasks per board. `GRID_SIZE = 5`, `TASKS_PER_BOARD = 24`.
-- Clients never write Firestore. `firestore.rules`: every `write` is `false`.
+- Clients never write Firestore (legacy, until cutover). `firestore.rules`: every `write` is `false`.
 - A blurred pool entry carries **no task text** in any document the viewer can read.
 - Game stages: `'lobby' | 'playing' | 'ended'`.
 - Display names: trimmed, inner whitespace collapsed to one space, 1–20 chars, letters/digits/space/`'`/`’`/`-` only; uniqueness is case-insensitive.
@@ -29,7 +29,7 @@ Every write goes through the server (`GameRoom` over WebSocket; legacy: callable
 - Owner UI rule (carried from oybc): screens carry labels, values and controls — no explanatory sentences (no "Tip:", helper lines, captions). Allowed: validation errors, loading/error states, confirm-dialog bodies, one-line empty states.
 - Write "Bingo" in normal case (never "BINGO") in UI copy.
 - Web is built first for every feature; iOS (Tasks 15–17) follows. If the date gets tight, iOS slips, web does not.
-- Functions region `us-central1`; every callable gets `minInstances` from a param `MIN_INSTANCES` (default `0`, set to `1` for the party).
+- (Legacy, until cutover) Functions region `us-central1`; every callable gets `minInstances` from a param `MIN_INSTANCES` (default `0`, set to `1` for the party).
 
 ## Firestore layout (legacy, until cutover)
 
