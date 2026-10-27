@@ -21,12 +21,8 @@ jobs:
       - run: pnpm --filter web lint
       - run: pnpm --filter web test
       - run: pnpm --filter web build
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - run: npm i -g firebase-tools
-      - run: pnpm --filter functions test
+      - run: pnpm --filter server test
+      - run: pnpm --filter server typecheck
 
   e2e:
     runs-on: ubuntu-latest
