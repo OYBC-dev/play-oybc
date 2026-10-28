@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { GameClient } from '../../game/GameClient';
 import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { MAX_TASK_LENGTH } from './constants';
@@ -7,14 +6,13 @@ import { MentionAutocomplete } from './MentionAutocomplete';
 import { activeMention, mentionOptions } from './mentions';
 import styles from './AddTaskForm.module.css';
 
-/** Task entry with @mention autocomplete; sends through the client and shows server errors inline. */
+/** Task entry with @mention autocomplete; sends through `onAdd` and shows server errors inline. */
 export function AddTaskForm({
-  client,
-  gameId,
+  onAdd,
   seatNames,
 }: {
-  client: GameClient;
-  gameId: string;
+  /** Adds the trimmed text to the pool; rejects with the server error. */
+  onAdd: (text: string) => Promise<void>;
   /** Names of the other players (not you), in display order. */
   seatNames: string[];
 }) {
@@ -59,7 +57,7 @@ export function AddTaskForm({
     setBusy(true);
     setError(null);
     try {
-      await client.addTask(gameId, body);
+      await onAdd(body);
       // Keep anything typed while the call was in flight.
       if (latest.current === text) { setText(''); setCaret(0); }
     } catch (err) {

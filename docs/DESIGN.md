@@ -182,6 +182,8 @@ Squares on the pending board whose task `@Name`s the host stay blurred for the h
 
 ## 5. Architecture (decided)
 
+§5.1–5.4 are superseded by `docs/REALTIME_SERVER.md`.
+
 ### 5.1 Stack
 - **Backend:** Firebase — Anonymous Auth, Firestore, Cloud Functions (TypeScript, Node 22),
   Hosting for the web app.

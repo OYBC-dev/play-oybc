@@ -1,8 +1,8 @@
-import type { PoolViewEntry } from 'game-core';
 import { RisoCard } from '../../components/riso/RisoCard';
 import { RisoIcon } from '../../components/riso/RisoIcon';
 import { RisoMiniBoardArt } from '../../components/riso/RisoMiniBoardArt';
 import { nonsenseFor } from './nonsense';
+import type { PoolRow } from './usePoolEdits';
 import styles from './PoolList.module.css';
 
 /**
@@ -19,18 +19,18 @@ function BlurredText({ taskId }: { taskId: string }) {
   );
 }
 
-/** The shared pool in one card. Rows that mention you arrive without text and render blurred. */
+/**
+ * The shared pool in one card. Rows that mention you arrive without text and render blurred; a row the
+ * server has not confirmed yet carries `data-pending` (dimmed after 250 ms, like a board cell in flight).
+ */
 export function PoolList({
   entries,
   isHost,
   onDelete,
-  deleting,
 }: {
-  entries: PoolViewEntry[];
+  entries: PoolRow[];
   isHost: boolean;
   onDelete: (taskId: string) => void;
-  /** Task ids with a delete in flight. */
-  deleting?: ReadonlySet<string>;
 }) {
   if (entries.length === 0) {
     return (
@@ -44,7 +44,7 @@ export function PoolList({
     <RisoCard className={styles.card}>
       <ul className={styles.list} aria-label="Pool">
         {entries.map((e) => (
-          <li key={e.taskId} className={styles.entry} data-blurred={e.text === null || undefined}>
+          <li key={e.taskId} className={styles.entry} data-blurred={e.text === null || undefined} data-pending={e.pending || undefined}>
             <div className={styles.body}>
               {e.text === null ? <BlurredText taskId={e.taskId} /> : <span className={styles.text}>{e.text}</span>}
               <span className={styles.author}>{e.mine ? 'You' : e.authorName}</span>
@@ -54,7 +54,7 @@ export function PoolList({
                 type="button"
                 className={styles.delete}
                 aria-label={e.text === null ? `Delete hidden task by ${e.authorName}` : `Delete task: ${e.text}`}
-                disabled={deleting?.has(e.taskId)}
+                disabled={e.pending}
                 onClick={() => onDelete(e.taskId)}
               >
                 <RisoIcon name="trash" size={18} />

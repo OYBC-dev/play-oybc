@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "load": "node --experimental-strip-types loadTest.ts",
-    "forceHost": "node --experimental-strip-types forceHost.ts"
+    "forceHost": "node --experimental-strip-types forceHost.ts",
+    "forceHostLegacy": "node --experimental-strip-types forceHostLegacy.ts"
   },
   "dependencies": {
     "firebase": "^12.16.0",

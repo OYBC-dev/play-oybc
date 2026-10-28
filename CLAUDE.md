@@ -1,6 +1,6 @@
 # Play OYBC
 
-Play OYBC is a real-time party-bingo game: a group in one room builds a shared pool of "things that might happen tonight," each player is dealt a random 5x5 board from that pool, and people race to get bingos. Server-authoritative Firebase backend (Anonymous Auth, Firestore, Functions v2), React web client first, native SwiftUI iOS client after. Spec: `docs/DESIGN.md`; plan: `docs/PLAN_MVP.md`; product background: `docs/PLAY_OYBC.md`; setup values: `docs/SETUP.md`.
+Play OYBC is a real-time party-bingo game: a group in one room builds a shared pool of "things that might happen tonight," each player is dealt a random 5x5 board from that pool, and people race to get bingos. Server-authoritative backend: a Cloudflare Worker + Durable Object per game in `server/` (design: `docs/REALTIME_SERVER.md`), Firebase Anonymous Auth for identity (Firestore/Functions game code is legacy until cutover, then removed), React web client first, native SwiftUI iOS client after. Spec: `docs/DESIGN.md`; plan: `docs/PLAN_MVP.md`; product background: `docs/PLAY_OYBC.md`; setup values: `docs/SETUP.md`.
 
 ## Architecture invariants (inverted from the solo OYBC app)
 
@@ -13,14 +13,14 @@ Play OYBC is a real-time party-bingo game: a group in one room builds a shared p
 | Global-per-Task completion | **Per-player, per-session completion.** Nothing completes globally. |
 | Web/iOS parity rule with the solo app | Play is a separate product; never mirror a solo-app surface here. |
 
-Every write is a callable Cloud Function; never add a client write rule.
+Every write goes through the server (`GameRoom` over WebSocket; legacy: callable Cloud Functions); never add a client write rule.
 
 ## Global Constraints
 
 - New repo lives at `/Volumes/Stephen/play-oybc`; GitHub `2014sheas/play-oybc`. No runtime or build dependency on the oybc repo or `oybc-dev-e2668`; reused code is **copied**.
 - All Xcode builds use `-derivedDataPath /Volumes/Stephen/play-oybc-derived` (never an internal derived-data dir).
 - Board: **5×5, FREE center at index 12**, 24 tasks per board. `GRID_SIZE = 5`, `TASKS_PER_BOARD = 24`.
-- Clients never write Firestore. `firestore.rules`: every `write` is `false`.
+- Clients never write Firestore (legacy, until cutover). `firestore.rules`: every `write` is `false`.
 - A blurred pool entry carries **no task text** in any document the viewer can read.
 - Game stages: `'lobby' | 'playing' | 'ended'`.
 - Display names: trimmed, inner whitespace collapsed to one space, 1–20 chars, letters/digits/space/`'`/`’`/`-` only; uniqueness is case-insensitive.
@@ -29,9 +29,9 @@ Every write is a callable Cloud Function; never add a client write rule.
 - Owner UI rule (carried from oybc): screens carry labels, values and controls — no explanatory sentences (no "Tip:", helper lines, captions). Allowed: validation errors, loading/error states, confirm-dialog bodies, one-line empty states.
 - Write "Bingo" in normal case (never "BINGO") in UI copy.
 - Web is built first for every feature; iOS (Tasks 15–17) follows. If the date gets tight, iOS slips, web does not.
-- Functions region `us-central1`; every callable gets `minInstances` from a param `MIN_INSTANCES` (default `0`, set to `1` for the party).
+- (Legacy, until cutover) Functions region `us-central1`; every callable gets `minInstances` from a param `MIN_INSTANCES` (default `0`, set to `1` for the party).
 
-## Firestore layout
+## Firestore layout (legacy, until cutover)
 
 A **seat** is a player's identity inside a game, keyed by a random `seatId`. A Firebase uid maps to a seat through `members/{uid}`, so seat reclaim only rewrites that mapping.
 
@@ -55,9 +55,16 @@ Timestamps are epoch milliseconds (numbers), so web and iOS decode them identica
 pnpm install
 pnpm test                          # pnpm -r test
 pnpm --filter game-core test       # pure game logic (Jest)
-pnpm --filter functions test       # needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
+pnpm --filter server dev            # local Worker on ws://127.0.0.1:8787 (server/.dev.vars; pair with firebase emulators:start --only auth --project demo-play-oybc)
+pnpm --filter server test
+pnpm --filter server typecheck
+pnpm --filter game-core build && (cd server && npx wrangler deploy)  # deploy the Worker (bundles game-core/dist); npx wrangler tail for logs
+pnpm --filter scripts load         # 20-seat load test against the Worker
+pnpm --filter scripts forceHost <CODE> [<seatId>]   # needs PLAY_ADMIN_TOKEN or .setup-secrets/ADMIN_TOKEN
+pnpm --filter scripts forceHostLegacy <CODE> [<seatId>]   # legacy Firestore backend until cutover; needs gcloud application-default login
+pnpm --filter functions test        # legacy; needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
 pnpm --filter web dev              # web dev server
-pnpm --filter web e2e              # full-game Playwright test against the emulators (needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)
+pnpm --filter web e2e              # full-game Playwright test (Auth emulator + wrangler dev; needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)
 # iOS (from ios/, after xcodegen generate):
 xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.3.1' -derivedDataPath /Volumes/Stephen/play-oybc-derived
 # snapshot tests (PNG baselines in ios/PlayOYBCSnapshotTests/__Snapshots__; record on iPhone 17 / OS=26.3.1 only):

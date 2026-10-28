@@ -35,6 +35,7 @@ targets:
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        GameServerURL: wss://play-oybc-api.oybc.workers.dev
         UIAppFonts:
           - BricolageGrotesque-Bold.ttf
           - BricolageGrotesque-ExtraBold.ttf
@@ -51,7 +52,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 5RMV2ZMUHV
         TARGETED_DEVICE_FAMILY: "1"
-        MARKETING_VERSION: "1.0.1"
+        MARKETING_VERSION: "1.0.2"
         CURRENT_PROJECT_VERSION: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   PlayOYBCTests:

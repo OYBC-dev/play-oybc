@@ -33,4 +33,11 @@ final class AppErrorTests: XCTestCase {
         XCTAssertEqual(AppError.from(ns).code, "permission-denied")
         XCTAssertEqual(AppError.from(NSError(domain: FirestoreErrorDomain, code: FirestoreErrorCode.unavailable.rawValue)).code, "unknown")
     }
+
+    func testCloseCodesMapToAppErrors() {
+        XCTAssertEqual(AppError.fromClose(code: 4003).code, "permission-denied")
+        XCTAssertEqual(AppError.fromClose(code: 4004).code, "game-not-found")
+        XCTAssertEqual(AppError.fromClose(code: 4001).code, "unauthenticated")
+        XCTAssertEqual(AppError.fromClose(code: 1006).code, "offline")
+    }
 }

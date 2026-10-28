@@ -1,5 +1,4 @@
 import { useCallback, useId, useState } from 'react';
-import { errorMessage } from '../../game/errorMessages';
 import type { GameClient, GameSnapshot } from '../../game/GameClient';
 import { AvatarStack } from '../../components/riso/AvatarStack';
 import { HostMenu } from '../host/HostMenu';
@@ -9,6 +8,7 @@ import { MIN_POOL_SIZE } from './constants';
 import { LobbySheet } from './LobbySheet';
 import { PlayerList } from './PlayerList';
 import { PoolList } from './PoolList';
+import { usePoolEdits } from './usePoolEdits';
 import styles from './LobbyScreen.module.css';
 
 /** Scroll padding under the content when the sheet has not been measured yet. */
@@ -20,22 +20,9 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
   const isHost = game.hostSeatId === mySeatId;
   const [playersOpen, setPlayersOpen] = useState(false);
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { rows, add, remove, deleteError } = usePoolEdits(client, gameId, snapshot.view);
   const playersId = useId();
   const onSheetHeight = useCallback((px: number) => setSheetHeight(px), []);
-
-  const remove = async (id: string) => {
-    setDeleteError(null);
-    setDeleting((d) => new Set(d).add(id));
-    try {
-      await client.deleteTask(gameId, id);
-    } catch (e) {
-      setDeleteError(errorMessage(e));
-    } finally {
-      setDeleting((d) => { const n = new Set(d); n.delete(id); return n; });
-    }
-  };
 
   const seats = [...snapshot.seats].sort((a, b) => a.joinedAt - b.joinedAt);
   const others = seats.filter((s) => s.seatId !== mySeatId).map((s) => s.name);
@@ -62,9 +49,9 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
           <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
         </div>
       )}
-      <AddTaskForm client={client} gameId={gameId} seatNames={others} />
+      <AddTaskForm onAdd={add} seatNames={others} />
       {deleteError && <p className="error" role="alert">{deleteError}</p>}
-      <PoolList entries={snapshot.view} isHost={isHost} onDelete={(id) => void remove(id)} deleting={deleting} />
+      <PoolList entries={rows} isHost={isHost} onDelete={(id) => void remove(id)} />
       <LobbySheet snapshot={snapshot} isHost={isHost} onLaunch={() => client.launch(gameId)} onHeight={onSheetHeight} />
     </div>
   );

@@ -28,6 +28,7 @@
 		30473DDAF7210AE98BF3C079 /* RisoModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07AC52647DBC4E30784A803E /* RisoModifiers.swift */; };
 		30ACCA8F90C6D511E84167B9 /* GameViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CDB98AB9CDD05B5EFE3A34 /* GameViewModelTests.swift */; };
 		37A24C0FCC548530978ACC78 /* ErrorMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BEF74E6B637CB3D727FB562 /* ErrorMessages.swift */; };
+		3814DA2E468FC58B930D65B6 /* WebSocketGameService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444F8844936AF6CCA0B40C06 /* WebSocketGameService.swift */; };
 		3BF4E94A005EA832EE247937 /* AvatarFor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C324BE13E701374BB8484943 /* AvatarFor.swift */; };
 		3FDF0B18BCEAA7ED70F68EE2 /* game-lobby.json in Resources */ = {isa = PBXBuildFile; fileRef = 1148FFECDBF4199D514CCD7A /* game-lobby.json */; };
 		4199274EF0D5FA78667F1A19 /* HostMenuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67507DD26F4F3471284AF4CD /* HostMenuModel.swift */; };
@@ -45,6 +46,7 @@
 		58963CB93997300E7CDCF43D /* LobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BD038871EB4F3EE6F1EA29 /* LobbyView.swift */; };
 		59767AC24552B8CB282484BD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = F3E52CF3FDA87C0AA29FB514 /* FirebaseAuth */; };
 		5B809E0CBAA1C275D62DA002 /* EndedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 961144E44E0CC4515E3858C5 /* EndedView.swift */; };
+		5DA06D4E4AEE06DEF83AA67C /* RoomConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBB99106FDC53A0817B2761 /* RoomConnectionTests.swift */; };
 		608526C8ACE9EF41884CFEF1 /* GameLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25758DED020446574B87B582 /* GameLogicTests.swift */; };
 		6329914B739669B47CF15FB2 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55DE58F3F06E9D3127BBDFBB /* ShareView.swift */; };
 		6534438E018B8F2DBE57C220 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4DBA887A2B79ACD287DCBD56 /* Assets.xcassets */; };
@@ -53,6 +55,7 @@
 		68E5390580A7AFEFB024F75D /* EndedReclaimTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5595628CEB9737EB48ECE36D /* EndedReclaimTests.swift */; };
 		6B7755BD5D735CAF4059A5C4 /* PlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F54421D3F9BFAD95D6350D /* PlayView.swift */; };
 		6EFA74E097212D54BD27D8E6 /* Archivo-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4AE9ACA9B80A87341369B7F3 /* Archivo-OFL.txt */; };
+		715F09FD814B73A5669DD14A /* RoomConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D04AF125068301B49E20DC /* RoomConnection.swift */; };
 		7252B7C193654C381ADA958E /* JoinViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3278878B6E562B297AF5D2 /* JoinViewModel.swift */; };
 		72F3C57D01ABA383E301FBAD /* JoinViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F19E2499D620F16B1F793A /* JoinViewModelTests.swift */; };
 		768493AC496EFDE5AA72B465 /* LobbyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7758492A70A93D3449051D2 /* LobbyLogic.swift */; };
@@ -79,6 +82,7 @@
 		BFFC9A6DE48011B09053D11E /* JoinCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4E0A50C8E6EE89BE57D21B /* JoinCode.swift */; };
 		C3AFD1C4CBBF9DACF48EB1BA /* view.json in Resources */ = {isa = PBXBuildFile; fileRef = C89BAF3C470BB6D036808A52 /* view.json */; };
 		CCCA70B1BC22A187576169B0 /* RisoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9948371D873372AC2F7F6C /* RisoTheme.swift */; };
+		D1F67A3946C32ADCE63DB172 /* WireDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61252BDA4251785802B37F65 /* WireDecodingTests.swift */; };
 		DD1E913F54C56AF5541DCCC3 /* FakeGameService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3E8A384F292B213C40345C /* FakeGameService.swift */; };
 		DD995581ACCEC8B6C095480D /* RisoMiniBoardArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A80B133E2FB6E5388B9E53C /* RisoMiniBoardArt.swift */; };
 		E0AD15496CEB490A3D1C0308 /* BricolageGrotesque-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5598F2F01A3CAC19BCEA12A0 /* BricolageGrotesque-Bold.ttf */; };
@@ -95,6 +99,7 @@
 		F71A80E2C9E2D08CF0B8038E /* NonsenseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60AA54277309DC0606C52DA5 /* NonsenseTests.swift */; };
 		F82C0AA6286A207195966BF6 /* Archivo-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9DEC7DD274F7873FFC765E49 /* Archivo-Medium.ttf */; };
 		FC786055130B0A9D34C32AED /* SubscriptionHubTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DE54822EAA5DEB4FF03ECC /* SubscriptionHubTests.swift */; };
+		FC7F85036DD21A0267C46B3A /* FirebaseSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FADBFA6CCD1A682C1685A56 /* FirebaseSession.swift */; };
 		FEDD722901A6F69D272F7CD7 /* PlayOYBCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A612EA6906D2B8EDFC9210A6 /* PlayOYBCApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -137,6 +142,7 @@
 		369A5AB37ECDCFB74770E68E /* HostMenuLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostMenuLayer.swift; sourceTree = "<group>"; };
 		3FD12FFDF821D20AB03A05A9 /* seat.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = seat.json; sourceTree = "<group>"; };
 		400A68E5C6967CC53E66EF32 /* DeniedLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeniedLine.swift; sourceTree = "<group>"; };
+		444F8844936AF6CCA0B40C06 /* WebSocketGameService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketGameService.swift; sourceTree = "<group>"; };
 		47890C59A8B65A33D873BA33 /* AvatarForTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarForTests.swift; sourceTree = "<group>"; };
 		49A78B45D6F3326D834A49D3 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		4AE9ACA9B80A87341369B7F3 /* Archivo-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Archivo-OFL.txt"; sourceTree = "<group>"; };
@@ -153,11 +159,13 @@
 		57F54421D3F9BFAD95D6350D /* PlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayView.swift; sourceTree = "<group>"; };
 		5F8E7071F135757BF1C4443A /* PoolListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolListView.swift; sourceTree = "<group>"; };
 		60AA54277309DC0606C52DA5 /* NonsenseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NonsenseTests.swift; sourceTree = "<group>"; };
+		61252BDA4251785802B37F65 /* WireDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireDecodingTests.swift; sourceTree = "<group>"; };
 		61895D835CD1FA854DB384E6 /* ScreenSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshotTests.swift; sourceTree = "<group>"; };
 		6332FFF86DBDF1CDEE2761A7 /* RisoText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RisoText.swift; sourceTree = "<group>"; };
 		66BE0B0BF0952458E06F99C1 /* BingoBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BingoBannerView.swift; sourceTree = "<group>"; };
 		67507DD26F4F3471284AF4CD /* HostMenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostMenuModel.swift; sourceTree = "<group>"; };
 		6F4E0A50C8E6EE89BE57D21B /* JoinCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoinCode.swift; sourceTree = "<group>"; };
+		6FADBFA6CCD1A682C1685A56 /* FirebaseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseSession.swift; sourceTree = "<group>"; };
 		72BE720044A1CD8421603A2D /* AvatarStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStack.swift; sourceTree = "<group>"; };
 		76CB6F0A925DAEE5D81CAD5A /* GameService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameService.swift; sourceTree = "<group>"; };
 		795F4A80FA097DF38573E1BD /* Schema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Schema.swift; sourceTree = "<group>"; };
@@ -181,6 +189,7 @@
 		AA7CF90929B1C41204AFC5D9 /* SchemaDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaDecodingTests.swift; sourceTree = "<group>"; };
 		AA8D32EC34F7AD214FC65949 /* reclaim.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = reclaim.json; sourceTree = "<group>"; };
 		AC3E8A384F292B213C40345C /* FakeGameService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeGameService.swift; sourceTree = "<group>"; };
+		AEBB99106FDC53A0817B2761 /* RoomConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConnectionTests.swift; sourceTree = "<group>"; };
 		B0E3C35FF9C8C9E87DBA79E5 /* Archivo-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Archivo-Bold.ttf"; sourceTree = "<group>"; };
 		B36278CA9B8C1B2407E3086E /* PlayOYBCSnapshotTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PlayOYBCSnapshotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4F1FAA93E2D31262C38D715 /* Archivo-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Archivo-ExtraBold.ttf"; sourceTree = "<group>"; };
@@ -202,6 +211,7 @@
 		DF3298FF28A6BF75DFDD1AA2 /* Nonsense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nonsense.swift; sourceTree = "<group>"; };
 		E30FF1795B437A3D42FC34A9 /* RisoControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RisoControls.swift; sourceTree = "<group>"; };
 		E3CDB98AB9CDD05B5EFE3A34 /* GameViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameViewModelTests.swift; sourceTree = "<group>"; };
+		E3D04AF125068301B49E20DC /* RoomConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConnection.swift; sourceTree = "<group>"; };
 		E3F19E2499D620F16B1F793A /* JoinViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoinViewModelTests.swift; sourceTree = "<group>"; };
 		E807088196DDFB80A5E75384 /* BoardLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardLines.swift; sourceTree = "<group>"; };
 		EAA1ECC478F2954E2A31FA43 /* PlayOYBC.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PlayOYBC.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -298,8 +308,10 @@
 				E3CDB98AB9CDD05B5EFE3A34 /* GameViewModelTests.swift */,
 				E3F19E2499D620F16B1F793A /* JoinViewModelTests.swift */,
 				60AA54277309DC0606C52DA5 /* NonsenseTests.swift */,
+				AEBB99106FDC53A0817B2761 /* RoomConnectionTests.swift */,
 				AA7CF90929B1C41204AFC5D9 /* SchemaDecodingTests.swift */,
 				21DE54822EAA5DEB4FF03ECC /* SubscriptionHubTests.swift */,
+				61252BDA4251785802B37F65 /* WireDecodingTests.swift */,
 				639E8F2311859612B934E94E /* Fixtures */,
 			);
 			path = PlayOYBCTests;
@@ -412,7 +424,10 @@
 				D8C76B1BF8A2F0F838F20FFE /* AppError.swift */,
 				AC3E8A384F292B213C40345C /* FakeGameService.swift */,
 				259EF5DB7D8B3736D2177593 /* FirebaseGameService.swift */,
+				6FADBFA6CCD1A682C1685A56 /* FirebaseSession.swift */,
 				76CB6F0A925DAEE5D81CAD5A /* GameService.swift */,
+				E3D04AF125068301B49E20DC /* RoomConnection.swift */,
+				444F8844936AF6CCA0B40C06 /* WebSocketGameService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -592,8 +607,10 @@
 				30ACCA8F90C6D511E84167B9 /* GameViewModelTests.swift in Sources */,
 				72F3C57D01ABA383E301FBAD /* JoinViewModelTests.swift in Sources */,
 				F71A80E2C9E2D08CF0B8038E /* NonsenseTests.swift in Sources */,
+				5DA06D4E4AEE06DEF83AA67C /* RoomConnectionTests.swift in Sources */,
 				5440A8CB9E68B463CC6C7A15 /* SchemaDecodingTests.swift in Sources */,
 				FC786055130B0A9D34C32AED /* SubscriptionHubTests.swift in Sources */,
+				D1F67A3946C32ADCE63DB172 /* WireDecodingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -616,6 +633,7 @@
 				37A24C0FCC548530978ACC78 /* ErrorMessages.swift in Sources */,
 				DD1E913F54C56AF5541DCCC3 /* FakeGameService.swift in Sources */,
 				12940B6E284F0DC276E9EE9D /* FirebaseGameService.swift in Sources */,
+				FC7F85036DD21A0267C46B3A /* FirebaseSession.swift in Sources */,
 				5123805BE5580E7D2247EF34 /* FlowLayout.swift in Sources */,
 				A3A32CFB367E1F24037BD909 /* GameConstants.swift in Sources */,
 				BFEBCAE6504958FB79ADEB85 /* GameService.swift in Sources */,
@@ -648,9 +666,11 @@
 				30473DDAF7210AE98BF3C079 /* RisoModifiers.swift in Sources */,
 				F032588DC4A583C2B4390680 /* RisoText.swift in Sources */,
 				CCCA70B1BC22A187576169B0 /* RisoTheme.swift in Sources */,
+				715F09FD814B73A5669DD14A /* RoomConnection.swift in Sources */,
 				00AF84BACAAF4068CE3995CC /* Schema.swift in Sources */,
 				6329914B739669B47CF15FB2 /* ShareView.swift in Sources */,
 				2A2F9856F4344D59361520BC /* WaitingPill.swift in Sources */,
+				3814DA2E468FC58B930D65B6 /* WebSocketGameService.swift in Sources */,
 				0DB24B9042D0FAE2CF5A6FD0 /* Wordmark.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -694,7 +714,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oybc.PlayOYBC;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -886,7 +906,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oybc.PlayOYBC;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
