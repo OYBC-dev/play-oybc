@@ -198,6 +198,72 @@ describe('RoomConnection', () => {
     room.close();
   });
 
+  it('no welcome within 10 s abandons and reconnects', async () => {
+    const room = makeRoom();
+    room.onSnapshot(() => {});
+    const first = FakeSocket.last();
+    await handshake(first, WELCOME);
+    first.serverSend(FULL);
+    first.serverSend({ t: 'state', rev: 7, view: [] });
+    first.serverClose(1006);
+    await vi.advanceTimersByTimeAsync(500);
+    const second = FakeSocket.last();
+    // Opens and says hello, but the welcome never comes.
+    second.open();
+    await flush();
+    await vi.advanceTimersByTimeAsync(5_000);
+    const queued = room.act('mark', { cellIndex: 1, marked: true });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(second.closeCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(second.closeCalls).toHaveLength(1);
+    expect(room.status).toBe('connecting');
+    // The queued act survives the abandon and goes out on the next socket's welcome (second backoff step).
+    await vi.advanceTimersByTimeAsync(1_000);
+    const sockets = FakeSocket.instances.filter((s) => s.url === first.url);
+    expect(sockets).toHaveLength(3);
+    const snaps: GameSnapshot[] = [];
+    room.onSnapshot((s) => snaps.push(s));
+    await handshake(sockets[2]);
+    const sent = sockets[2].frames().find((f) => f.t === 'act') as { id: string };
+    expect(sent).toBeDefined();
+    sockets[2].serverSend({ t: 'ack', id: sent.id, ok: true, result: {} });
+    await expect(queued).resolves.toEqual({});
+    // The welcome reset the rev: a frame older than the last socket's is applied.
+    sockets[2].serverSend({ t: 'state', rev: 4, view: VIEW });
+    expect(snaps.at(-1)?.view).toEqual(VIEW);
+    room.close();
+  });
+
+  it('a wake during a stalled connect abandons it and reconnects at once', async () => {
+    const room = makeRoom();
+    room.onSnapshot(() => {});
+    const first = FakeSocket.last();
+    await handshake(first);
+    const inFlight = room.act('mark', { cellIndex: 1, marked: true });
+    first.serverClose(1006);
+    await expect(inFlight).rejects.toSatisfy((e: unknown) => appErrorCode(e) === 'offline');
+    await vi.advanceTimersByTimeAsync(500);
+    const second = FakeSocket.last();
+    second.open();
+    await flush();
+    const queued = room.act('mark', { cellIndex: 2, marked: true });
+    // A wake soon after the socket opened leaves it alone.
+    window.dispatchEvent(new Event('online'));
+    expect(second.closeCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(3_000);
+    window.dispatchEvent(new Event('online'));
+    expect(second.closeCalls).toHaveLength(1);
+    const sockets = FakeSocket.instances.filter((s) => s.url === first.url);
+    expect(sockets).toHaveLength(3);
+    await handshake(sockets[2]);
+    const sent = sockets[2].frames().find((f) => f.t === 'act') as { id: string; args: unknown };
+    expect(sent.args).toEqual({ cellIndex: 2, marked: true });
+    sockets[2].serverSend({ t: 'ack', id: sent.id, ok: true, result: {} });
+    await expect(queued).resolves.toEqual({});
+    room.close();
+  });
+
   it('a close with reason superseded parks the room until something needs it again', async () => {
     const room = makeRoom();
     room.onSnapshot(() => {});

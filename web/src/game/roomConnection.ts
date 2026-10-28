@@ -47,6 +47,10 @@ export const WAKE_PONG_WITHIN_MS = 3_000;
 const SUPERSEDED_REASON = 'superseded';
 /** How long an act (or hello) may wait for a ready socket before it fails `offline`. */
 const SEND_DEADLINE_MS = 10_000;
+/** How long a socket may take from open to `welcome` before it is abandoned and retried. */
+const CONNECT_DEADLINE_MS = 10_000;
+/** A wake abandons a socket that has been handshaking at least this long. */
+export const WAKE_STALL_MS = 3_000;
 /** How long a room with no listeners and nothing pending stays open before it closes itself. */
 export const IDLE_CLOSE_MS = 15_000;
 
@@ -99,7 +103,8 @@ export function getRoom(opts: RoomOptions): RoomConnection {
  * `welcome` (10 s from enqueue, then `offline`). A close rejects sent-but-unacked acts with `offline` and
  * reconnects with backoff (0.5 s doubling to 8 s, ±20 %), at once on `visibilitychange` → visible or `online`.
  * Closes 4001 / 4003 / 4004 are fatal: `onFatal` fires and the room stays closed. A `ping` goes out every
- * 25 s; no `pong` within 10 s drops the socket and reconnects. A wake while ready (a phone unlocking onto
+ * 25 s; no `pong` within 10 s drops the socket and reconnects. A socket with no `welcome` 10 s after it was
+ * opened is dropped and retried the same way, and a wake drops one that has been handshaking for 3 s. A wake while ready (a phone unlocking onto
  * a socket that died while it slept) probes at once with a `ping` and a 3 s deadline. A close with reason
  * `superseded` (this uid opened too many sockets) parks the room: no automatic reconnect, so tabs cannot
  * evict each other in a loop; the next act, hello, listener or wake reopens it.
@@ -116,6 +121,7 @@ export class RoomConnection {
   private readonly setT: (fn: () => void, ms: number) => unknown;
   private readonly clearT: (handle: unknown) => void;
   private readonly random: () => number;
+  private readonly now: () => number;
 
   private ws: WebSocket | null = null;
   private state: RoomStatus = 'idle';
@@ -140,6 +146,10 @@ export class RoomConnection {
   private pingTimer: unknown = null;
   private pongTimer: unknown = null;
   private idleTimer: unknown = null;
+  /** Abandons the current socket unless its `welcome` arrives first. */
+  private connectTimer: unknown = null;
+  /** When the current socket was opened (for the wake stall check). */
+  private connectStartedAt = 0;
   /** The server superseded the last socket: reconnect only on demand, never by backoff. */
   private parked = false;
   private readonly wake = () => {
@@ -147,6 +157,11 @@ export class RoomConnection {
     if (this.state === 'ready' && this.ws) {
       this.probe(this.ws);
       return;
+    }
+    if (this.ws) {
+      // A handshake that has hung for a while: drop it, then reconnect at once below.
+      if (this.now() - this.connectStartedAt < WAKE_STALL_MS) return;
+      this.abandon(this.ws);
     }
     if (this.parked) {
       if (this.busy()) this.connect();
@@ -165,6 +180,7 @@ export class RoomConnection {
     this.setT = opts.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearT = opts.clearTimeoutImpl ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
     this.random = opts.random ?? Math.random;
+    this.now = opts.now ?? Date.now;
     if (typeof window !== 'undefined') window.addEventListener('online', this.wake);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.wake);
   }
@@ -279,6 +295,12 @@ export class RoomConnection {
     const ws = new this.WS(`${this.opts.url.replace(/\/+$/, '')}/ws/${this.code}`);
     this.ws = ws;
     this.state = 'connecting';
+    this.connectStartedAt = this.now();
+    this.clearConnectDeadline();
+    this.connectTimer = this.setT(() => {
+      this.connectTimer = null;
+      if (this.ws === ws && this.state !== 'ready') this.abandon(ws);
+    }, CONNECT_DEADLINE_MS);
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.state = 'authenticating';
@@ -320,6 +342,7 @@ export class RoomConnection {
     this.ws = null;
     if (ws) detach(ws);
     this.stopPing();
+    this.clearConnectDeadline();
     for (const entry of this.inFlight.values()) entry.reject(appError('offline'));
     this.inFlight.clear();
     const fatal = FATAL_CLOSE[code];
@@ -406,6 +429,7 @@ export class RoomConnection {
     this.lastRev = -1;
     this.attempt = 0;
     this.state = 'ready';
+    this.clearConnectDeadline();
     const welcome: Welcome = { uid: w.uid, gameId: w.gameId, seatId: w.seatId, stage: w.stage, rev: w.rev };
     const waiters = this.helloWaiters;
     this.helloWaiters = [];
@@ -512,6 +536,11 @@ export class RoomConnection {
     this.dropped(1006);
   }
 
+  private clearConnectDeadline(): void {
+    if (this.connectTimer !== null) this.clearT(this.connectTimer);
+    this.connectTimer = null;
+  }
+
   private stopPing(): void {
     if (this.pingTimer !== null) this.clearT(this.pingTimer);
     if (this.pongTimer !== null) this.clearT(this.pongTimer);
@@ -545,6 +574,7 @@ export class RoomConnection {
     this.state = 'closed';
     if (rooms.get(this.code) === this) rooms.delete(this.code);
     this.stopPing();
+    this.clearConnectDeadline();
     this.cancelIdle();
     if (this.reconnectTimer !== null) this.clearT(this.reconnectTimer);
     this.reconnectTimer = null;
