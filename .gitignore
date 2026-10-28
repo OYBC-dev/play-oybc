@@ -22,3 +22,9 @@ coverage/
 # Design handoffs (reference only, never committed)
 design_handoff_*/
 *.zip
+
+# The Xcode project is GENERATED, not tracked (2026-10-28, oybc#688):
+# `cd ios && xcodegen generate` after checkout / pull / adding a .swift file.
+# CI (.github/workflows/ci.yml) and Xcode Cloud (ios/ci_scripts/ci_post_clone.sh)
+# generate it the same way. Schemes and Package.resolved stay tracked.
+ios/PlayOYBC.xcodeproj/project.pbxproj
