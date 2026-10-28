@@ -177,7 +177,8 @@ final class URLSessionTransport: Transport, @unchecked Sendable {
 /// on `wake()` (network back) or `resume()` (foreground). Closes 4001 / 4003 / 4004 are fatal: `fatal()`
 /// streams yield the error and the room stays closed. A close with reason `superseded` parks the room until
 /// something needs it again. A `ping` goes out every 25 s; no `pong` within 10 s
-/// drops the socket and reconnects. `suspend()` (background) drops the socket and every timer.
+/// drops the socket and reconnects. A socket with no `welcome` 10 s after it opened is dropped and retried the
+/// same way, and a `wake()` drops one that has been handshaking for 3 s. `suspend()` (background) drops the socket and every timer.
 ///
 /// Lifetime: the socket opens on first use. With no snapshot or reclaim stream attached and nothing
 /// pending, the room closes itself after 15 s.
@@ -191,6 +192,10 @@ actor RoomConnection {
     static let pongWithin = 10.0
     /// How long an act (or hello) may wait for a ready socket before it fails `offline`.
     static let sendDeadline = 10.0
+    /// How long a socket (token fetch included) may take to reach `welcome` before it is abandoned and retried.
+    static let connectDeadline = 10.0
+    /// A `wake()` abandons a socket that has been handshaking at least this long.
+    static let wakeStall = 3.0
     /// How long a room nothing needs stays open before it closes itself.
     static let idleClose = 15.0
     /// Close codes that end the room for good (see `AppError.fromClose`).
@@ -228,6 +233,8 @@ actor RoomConnection {
     private let makeTransport: (URL) -> Transport
     private let sleeper: Sleeper
     private let random: () -> Double
+    private let now: () -> Double
+    private let connectDeadline: Double
     /// Readable without hopping onto the actor, so a registry can tell a dead room from a live one.
     nonisolated let closedFlag = ClosedFlag()
 
@@ -253,6 +260,10 @@ actor RoomConnection {
     private var pingTask: _Concurrency.Task<Void, Never>?
     private var pongTask: _Concurrency.Task<Void, Never>?
     private var idleTask: _Concurrency.Task<Void, Never>?
+    /// Abandons the current socket unless its `welcome` arrives first.
+    private var connectTask: _Concurrency.Task<Void, Never>?
+    /// When the current socket was opened, on the `now` clock (for the wake stall check).
+    private var connectStartedAt = 0.0
 
     private var nextKey = 0
     private var helloWaiters: [Int: Waiter] = [:]
@@ -274,11 +285,14 @@ actor RoomConnection {
                   startSuspended: startSuspended)
     }
 
-    /// Test seam: injects the transport, the timer sleep and the backoff jitter source (in [0, 1)).
+    /// Test seam: injects the transport, the timer sleep, the backoff jitter source (in [0, 1)), the clock
+    /// (seconds) and the handshake deadline.
     init(url: URL, code: String, tokenProvider: @escaping () async throws -> String,
          makeTransport: @escaping (URL) -> Transport,
          sleeper: @escaping Sleeper = { try await _Concurrency.Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) },
          random: @escaping () -> Double = { Double.random(in: 0..<1) },
+         now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime },
+         connectDeadline: Double = RoomConnection.connectDeadline,
          startSuspended: Bool = false) {
         self.code = code
         self.suspended = startSuspended
@@ -287,6 +301,8 @@ actor RoomConnection {
         self.makeTransport = makeTransport
         self.sleeper = sleeper
         self.random = random
+        self.now = now
+        self.connectDeadline = connectDeadline
     }
 
     /// Whether the room has ended (it never reopens; ask for a new one).
@@ -395,9 +411,11 @@ actor RoomConnection {
         wake()
     }
 
-    /// The network came back: skips a pending backoff wait and restarts the backoff from its shortest delay.
+    /// The network came back: drops a handshake stalled for `wakeStall`, skips a pending backoff wait and
+    /// restarts the backoff from its shortest delay.
     func wake() {
         guard status != .closed, !suspended else { return }
+        if transport != nil, status != .ready, now() - connectStartedAt >= Self.wakeStall { abandon() }
         attempt = 0
         if reconnectTask != nil {
             cancel(&reconnectTask)
@@ -425,6 +443,11 @@ actor RoomConnection {
         let t = makeTransport(socketURL)
         transport = t
         status = .connecting
+        connectStartedAt = now()
+        connectTask = after(connectDeadline) { room in
+            room.connectTask = nil
+            if gen == room.generation, room.transport != nil, room.status != .ready { room.abandon() }
+        }
         let (frames, out) = AsyncStream<String>.makeStream()
         outbox = out
         // One writer per socket keeps frames in the order they were queued.
@@ -533,6 +556,7 @@ actor RoomConnection {
         outbox = nil
         writeTask = nil
         readTask = nil
+        cancel(&connectTask)
         stopPing()
     }
 
@@ -586,6 +610,7 @@ actor RoomConnection {
         lastRev = -1
         attempt = 0
         status = .ready
+        cancel(&connectTask)
         let waiters = helloWaiters.values
         helloWaiters = [:]
         for h in waiters {

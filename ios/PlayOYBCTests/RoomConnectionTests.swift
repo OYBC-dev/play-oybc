@@ -85,6 +85,17 @@ final class Dialer: @unchecked Sendable {
     }
 }
 
+/// A clock the test moves by hand, and a counter of token fetches.
+final class ManualClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var t = 0.0
+    private var fetches = 0
+    var now: Double { lock.withLock { t } }
+    func advance(_ s: Double) { lock.withLock { t += s } }
+    /// Counts one token fetch and returns how many came before it.
+    func nextFetch() -> Int { lock.withLock { defer { fetches += 1 }; return fetches } }
+}
+
 final class RoomConnectionTests: XCTestCase {
     private let game = #"{"code":"ABCDE","stage":"playing","hostSeatId":"s1","createdAt":1,"bingoCount":0,"shortfalls":{},"reviewGate":false}"#
 
@@ -314,6 +325,83 @@ final class RoomConnectionTests: XCTestCase {
         t2.push(#"{"t":"ack","id":"\#(sent["id"] as? String ?? "")","ok":true,"result":{"marks":[],"completedLines":[],"newBingoSeqs":[]}}"#)
         _ = try await act.value
         withExtendedLifetime(snaps) {}
+    }
+
+    func testNoWelcomeBeforeTheConnectDeadlineAbandonsAndReconnects() async throws {
+        let dialer = Dialer()
+        let room = RoomConnection(url: URL(string: "ws://test.local")!, code: "ABCDE", tokenProvider: { "tok" },
+                                  makeTransport: { dialer.make($0) }, random: { 0.5 }, connectDeadline: 0.3)
+        let snaps = collect(await room.snapshots())
+        let t1 = try await dialer.made.take()
+        _ = try await t1.nextSent() // hello, never answered
+        let act = _Concurrency.Task { () async throws -> ToggleMarkRes in try await room.act("mark", ["cellIndex": 4, "marked": true]) }
+        let t2 = try await dialer.made.take()
+        XCTAssertTrue(t1.cancelled)
+        let hello = try await t2.nextSent()
+        XCTAssertEqual(hello["t"] as? String, "hello")
+        t2.push(welcome(seat: "s1"))
+        // The act queued during the stalled handshake goes out on the new socket.
+        let sent = try await t2.nextSent()
+        XCTAssertEqual(sent["op"] as? String, "mark")
+        t2.push(#"{"t":"ack","id":"\#(sent["id"] as? String ?? "")","ok":true,"result":{"marks":[],"completedLines":[],"newBingoSeqs":[]}}"#)
+        _ = try await act.value
+        t2.push(fullState(rev: 1))
+        let snap = try await snaps.take()
+        XCTAssertEqual(snap.mySeatId, "s1")
+        // A welcomed socket outlives the deadline.
+        do {
+            _ = try await dialer.made.take(timeout: 1)
+            XCTFail("a welcomed socket must not be abandoned")
+        } catch is AsyncQueue<FakeTransport>.Timeout {}
+        XCTAssertFalse(t2.cancelled)
+    }
+
+    func testAHangingTokenFetchHitsTheConnectDeadline() async throws {
+        let dialer = Dialer()
+        let clock = ManualClock()
+        let room = RoomConnection(url: URL(string: "ws://test.local")!, code: "ABCDE",
+                                  tokenProvider: {
+                                      if clock.nextFetch() == 0 { try? await _Concurrency.Task.sleep(nanoseconds: 3_600_000_000_000) }
+                                      return "tok"
+                                  },
+                                  makeTransport: { dialer.make($0) }, random: { 0.5 }, connectDeadline: 0.3)
+        let hello = _Concurrency.Task { try await room.hello(gameId: "g1") }
+        let t1 = try await dialer.made.take()
+        let t2 = try await dialer.made.take()
+        XCTAssertTrue(t1.cancelled)
+        let frame = try await t2.nextSent()
+        XCTAssertEqual(frame["gameId"] as? String, "g1")
+        t2.push(welcome(seat: "s1"))
+        let w = try await hello.value
+        XCTAssertEqual(w.seatId, "s1")
+    }
+
+    func testWakeDuringAStalledConnectAbandonsIt() async throws {
+        let dialer = Dialer()
+        let clock = ManualClock()
+        let room = RoomConnection(url: URL(string: "ws://test.local")!, code: "ABCDE", tokenProvider: { "tok" },
+                                  makeTransport: { dialer.make($0) }, random: { 0.5 }, now: { clock.now })
+        let snaps = collect(await room.snapshots())
+        let t1 = try await dialer.made.take()
+        _ = try await t1.nextSent()
+        // A wake right after the socket opened leaves the handshake alone.
+        clock.advance(1)
+        await room.wake()
+        XCTAssertFalse(t1.cancelled)
+        clock.advance(2)
+        await room.wake()
+        XCTAssertTrue(t1.cancelled)
+        // ...and reconnects at once, without the backoff wait.
+        let t2 = try await dialer.made.take(timeout: 0.2)
+        _ = try await t2.nextSent()
+        t2.push(welcome(seat: "s1"))
+        t2.push(fullState(rev: 1))
+        let snap = try await snaps.take()
+        XCTAssertEqual(snap.mySeatId, "s1")
+        // A ready socket is never dropped by the stall check.
+        clock.advance(10)
+        await room.wake()
+        XCTAssertFalse(t2.cancelled)
     }
 
     func testTryAgainThenClose1013ReconnectsAndTheWaitingHelloResolves() async throws {
