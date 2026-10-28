@@ -65,7 +65,10 @@ pnpm --filter scripts forceHostLegacy <CODE> [<seatId>]   # legacy Firestore bac
 pnpm --filter functions test        # legacy; needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
 pnpm --filter web dev              # web dev server
 pnpm --filter web e2e              # full-game Playwright test (Auth emulator + wrangler dev; needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)
-# iOS (from ios/, after xcodegen generate):
+# iOS (from ios/, after `xcodegen generate` — ALWAYS first: PlayOYBC.xcodeproj/project.pbxproj is NOT
+# tracked since 2026-10-28 (oybc#688); it is generated locally, in CI and in Xcode Cloud's ci_post_clone.sh.
+# Seed GoogleService-Info.plist before generating. The PlayOYBCCI scheme runs both test targets in one build —
+# that is what CI runs; locally the two schemes below stay the fast loop):
 xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.3.1' -derivedDataPath /Volumes/Stephen/play-oybc-derived
 # snapshot tests (PNG baselines in ios/PlayOYBCSnapshotTests/__Snapshots__; record on iPhone 17 / OS=26.3.1 only):
 xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBCSnapshotTests -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.3.1' -derivedDataPath /Volumes/Stephen/play-oybc-derived

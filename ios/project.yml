@@ -99,3 +99,19 @@ schemes:
     test:
       targets:
         - PlayOYBCSnapshotTests
+  # CI scheme (2026-10-28, oybc#688): ONE build, BOTH test targets — the Xcode
+  # Cloud "PR Tests" workflow's Test action and the GitHub `ios-hosted` job run
+  # this, where two `xcodebuild test` calls used to compile the app twice.
+  # Local ⌘U keeps using PlayOYBC / PlayOYBCSnapshotTests.
+  PlayOYBCCI:
+    build:
+      targets:
+        PlayOYBC: all
+        PlayOYBCTests: [test]
+        PlayOYBCSnapshotTests: [test]
+    test:
+      targets:
+        - PlayOYBCTests
+        - PlayOYBCSnapshotTests
+      environmentVariables:
+        SNAPSHOT_TESTING_RECORD: never

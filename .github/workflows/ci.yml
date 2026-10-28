@@ -1,13 +1,26 @@
 name: CI
 
-# The org's Actions pool is shared with oybc and metered (macOS minutes count
-# ×10), so the macOS `ios` job is path-gated (2026-10-27, oybc#688): it runs
-# only when `ios/**` or this workflow changed. There is deliberately NO
-# trigger-level `paths:` filter — `ts`, `e2e` and `ios` are the REQUIRED
-# checks on `dev`, and a required check whose workflow never triggers blocks
-# the PR forever. The `changes` job decides instead; a job skipped by its
-# `if:` reports success. If `changes` itself fails, `ios` still runs and
-# fails on its first step, so a broken gate can never pass silently.
+# `ts`, `e2e` and `ios` are the REQUIRED checks on `dev`. There is deliberately
+# NO trigger-level `paths:` filter — a required check whose workflow never
+# triggers blocks the PR forever. The `changes` job decides instead; a job
+# skipped by its `if:` reports success, and the `ios` aggregator below fails
+# unless the gate ran AND the selected backend actually ran when the gate said
+# iOS changed.
+#
+# The iOS tests run on one of two BACKENDS, selected by the repo variable
+# IOS_CI_BACKEND (oybc#688, 2026-10-28 — same shape as oybc's ios.yml):
+#
+#   github       (default when unset) — the `ios-hosted` macOS job below, on
+#                GitHub's metered macOS runners (×10 against the org pool).
+#   xcode-cloud  — the "PR Tests" Xcode Cloud workflow (App Store Connect; start
+#                condition: pull request → dev, Files and Folders: ios/) runs the
+#                PlayOYBCCI scheme on Apple's compute. The `xcode-cloud` job here
+#                only WAITS for that workflow's check runs on the PR head commit
+#                and relays the verdict. Push events have no Xcode Cloud PR run
+#                (the Default workflow archives every dev commit anyway), so on
+#                this backend a push skips iOS tests.
+#
+#   Flip:  gh variable set IOS_CI_BACKEND -R OYBC-dev/play-oybc --body xcode-cloud
 
 on:
   pull_request:
@@ -23,7 +36,8 @@ env:
   # Pinned XcodeGen release, checksum-verified (xcodegen is not on the
   # macos-15 image; `brew install` cost 1–3 macOS minutes per run). To bump:
   # pick a tag from https://github.com/yonaskolb/XcodeGen/releases, download
-  # its `xcodegen.zip`, `shasum -a 256` it, and update both vars.
+  # its `xcodegen.zip`, `shasum -a 256` it, and update both vars — AND the
+  # same pair in ios/ci_scripts/ci_post_clone.sh.
   XCODEGEN_VERSION: "2.45.4"
   XCODEGEN_ZIP_SHA256: "090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef"
 
@@ -35,16 +49,23 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      # Anything the hosted macOS job must re-run for (sources + this CI).
       ios: ${{ steps.filter.outputs.ios }}
+      # Exactly what the Xcode Cloud "PR Tests" workflow's Files and Folders
+      # condition watches; keep the two in lockstep.
+      ios_src: ${{ steps.filter.outputs.ios_src }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
+            ios_src:
+              - 'ios/**'
             ios:
               - 'ios/**'
               - '.github/workflows/ci.yml'
+              - 'scripts/ci/wait-for-xcode-cloud.mjs'
 
   ts:
     runs-on: ubuntu-latest
@@ -90,22 +111,19 @@ jobs:
             web/test-results
           retention-days: 7
 
-  ios:
+  ios-hosted:
+    # The github backend. ONE build: the PlayOYBCCI scheme carries both test
+    # targets (logic + snapshots), where two `xcodebuild test` calls used to
+    # compile the app twice (5.2 + 5.8 min per run).
     needs: changes
-    # Runs when iOS inputs changed — or when the gate itself did not succeed,
-    # in which case the first step fails the job loudly instead of letting a
-    # skipped required check count as a pass.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ios == 'true')
+    if: >-
+      needs.changes.outputs.ios == 'true'
+      && (vars.IOS_CI_BACKEND == '' || vars.IOS_CI_BACKEND == 'github')
     runs-on: macos-15
     timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
-      - name: Fail if the path gate did not run
-        if: needs.changes.result != 'success'
-        run: |
-          echo "::error::changes job: ${{ needs.changes.result }} — the path gate did not run, so nothing was decided"
-          exit 1
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
         with:
@@ -125,14 +143,10 @@ jobs:
           echo "$RUNNER_TEMP/xcodegen-install/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Dummy GoogleService-Info.plist
         run: cp ios/PlayOYBC/GoogleService-Info.template.plist ios/PlayOYBC/GoogleService-Info.plist
+      # The project is NOT tracked (2026-10-28): generated here, in Xcode
+      # Cloud's ci_post_clone.sh, and locally.
       - run: cd ios && xcodegen generate
-      - name: Test
-        run: |
-          cd ios
-          xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBC \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
-            -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"
-      - name: Snapshot tests
+      - name: Logic + snapshot tests (one build)
         env:
           # Informational: the test file's per-call `record: .missing` takes precedence over this
           # env var. A missing baseline still fails the run, because `.missing` records the PNG
@@ -140,6 +154,86 @@ jobs:
           SNAPSHOT_TESTING_RECORD: never
         run: |
           cd ios
-          xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBCSnapshotTests \
+          xcodebuild test -project PlayOYBC.xcodeproj -scheme PlayOYBCCI \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -clonedSourcePackagesDirPath "$GITHUB_WORKSPACE/.spm"
+
+  xcode-cloud:
+    # The xcode-cloud backend: Linux only. Waits for the Xcode Cloud "PR Tests"
+    # workflow's check runs on the PR HEAD commit (the commit Xcode Cloud builds
+    # and reports on) and fails if any action failed or none appeared within
+    # the grace period. PR events only — a push has no Xcode Cloud PR run.
+    needs: changes
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.changes.outputs.ios_src == 'true'
+      && vars.IOS_CI_BACKEND == 'xcode-cloud'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+      - name: Wait for Xcode Cloud
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The Xcode Cloud workflow's name in App Store Connect; its check
+          # runs are named "<Product> | <Workflow> | <Action> - iOS".
+          XCODE_CLOUD_WORKFLOW: ${{ vars.XCODE_CLOUD_PR_WORKFLOW || 'PR Tests' }}
+        run: |
+          node scripts/ci/wait-for-xcode-cloud.mjs \
+            --sha "$HEAD_SHA" \
+            --workflow "$XCODE_CLOUD_WORKFLOW" \
+            --appear-minutes 10 \
+            --timeout-minutes 55 \
+            --poll-seconds 60
+
+  ios:
+    # THE required iOS check. Always runs; fails unless `changes` succeeded,
+    # unless every gated job passed or was skipped, and unless the SELECTED
+    # backend actually ran when the path gate asked for it — so neither a
+    # broken gate nor a mistyped IOS_CI_BACKEND can pass vacuously.
+    needs: [changes, ios-hosted, xcode-cloud]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        env:
+          BACKEND: ${{ vars.IOS_CI_BACKEND }}
+          EVENT: ${{ github.event_name }}
+          CHANGES: ${{ needs.changes.result }}
+          IOS: ${{ needs.changes.outputs.ios }}
+          IOS_SRC: ${{ needs.changes.outputs.ios_src }}
+          HOSTED: ${{ needs.ios-hosted.result }}
+          XCODE_CLOUD: ${{ needs.xcode-cloud.result }}
+        run: |
+          set -u
+          backend=${BACKEND:-github}
+          echo "backend: $backend  event: $EVENT"
+          case "$backend" in
+            github|xcode-cloud) ;;
+            *) echo "::error::IOS_CI_BACKEND='$BACKEND' is not 'github' or 'xcode-cloud'"; exit 1 ;;
+          esac
+          if [ "$CHANGES" != success ]; then
+            echo "::error::changes job: $CHANGES — the path gate did not run, so nothing was decided"
+            exit 1
+          fi
+          fail=0
+          for pair in ios-hosted=$HOSTED xcode-cloud=$XCODE_CLOUD; do
+            job=${pair%%=*}; result=${pair#*=}
+            echo "$job: $result"
+            case "$result" in success|skipped) ;; *) echo "::error::$job: $result"; fail=1 ;; esac
+          done
+          # The selected backend must have RUN, not merely not failed.
+          if [ "$backend" = github ] && [ "$IOS" = true ]; then
+            [ "$HOSTED" = success ] || { echo "::error::ios-hosted did not run on the github backend"; fail=1; }
+          fi
+          if [ "$backend" = xcode-cloud ] && [ "$IOS_SRC" = true ] && [ "$EVENT" = pull_request ]; then
+            [ "$XCODE_CLOUD" = success ] || { echo "::error::xcode-cloud wait did not succeed"; fail=1; }
+          fi
+          exit $fail
