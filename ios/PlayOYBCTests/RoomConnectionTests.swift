@@ -419,3 +419,15 @@ final class RoomConnectionTests: XCTestCase {
         XCTAssertEqual(w.seatId, "s1")
     }
 }
+
+final class PendingTaskIdsTests: XCTestCase {
+    func testARetryOfTheSameTextReusesItsIdUntilAcked() {
+        var ids = PendingTaskIds()
+        let first = ids.id(gameId: "g1", text: "Sing")
+        XCTAssertEqual(ids.id(gameId: "g1", text: " Sing\n"), first)
+        XCTAssertNotEqual(ids.id(gameId: "g1", text: "Dance"), first)
+        XCTAssertNotEqual(ids.id(gameId: "g2", text: "Sing"), first)
+        ids.confirm(gameId: "g1", text: "Sing")
+        XCTAssertNotEqual(ids.id(gameId: "g1", text: "Sing"), first)
+    }
+}

@@ -16,6 +16,7 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
     private let lock = NSLock()
     private var rooms: [String: RoomConnection] = [:]
     private var codes: [String: String] = [:]
+    private var pendingTaskIds = PendingTaskIds()
     private var active = true
     private var pathSatisfied: Bool?
     private let monitor = NWPathMonitor()
@@ -183,7 +184,9 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
     }
 
     func addTask(gameId: String, text: String) async throws {
-        try await actVoid(gameId, "addTask", ["taskId": UUID().uuidString.lowercased(), "text": text])
+        let taskId = lock.withLock { pendingTaskIds.id(gameId: gameId, text: text) }
+        try await actVoid(gameId, "addTask", ["taskId": taskId, "text": text])
+        lock.withLock { pendingTaskIds.confirm(gameId: gameId, text: text) }
     }
 
     func deleteTask(gameId: String, taskId: String) async throws { try await actVoid(gameId, "deleteTask", ["taskId": taskId]) }
@@ -238,5 +241,27 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
             await group.next()
             group.cancelAll()
         }
+    }
+}
+
+/// The taskId an unconfirmed `addTask` text was sent with, so a retry of the same (trimmed) text reuses it and
+/// an add that landed before its ack was lost is not added twice.
+struct PendingTaskIds {
+    private var ids: [String: String] = [:]
+
+    /// The id to send `text` with: the unconfirmed one for the same text, else a new one.
+    mutating func id(gameId: String, text: String) -> String {
+        let key = Self.key(gameId, text)
+        if let id = ids[key] { return id }
+        let id = UUID().uuidString.lowercased()
+        ids[key] = id
+        return id
+    }
+
+    /// The add of `text` was acked: a later add of the same text is a new task.
+    mutating func confirm(gameId: String, text: String) { ids[Self.key(gameId, text)] = nil }
+
+    private static func key(_ gameId: String, _ text: String) -> String {
+        "\(gameId)\u{0}\(text.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
 }
