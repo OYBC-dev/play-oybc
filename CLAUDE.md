@@ -58,7 +58,7 @@ pnpm --filter game-core test       # pure game logic (Jest)
 pnpm --filter server dev            # local Worker on ws://127.0.0.1:8787 (server/.dev.vars; pair with firebase emulators:start --only auth --project demo-play-oybc)
 pnpm --filter server test
 pnpm --filter server typecheck
-(cd server && npx wrangler deploy)  # deploy the Worker; npx wrangler tail for logs
+pnpm --filter game-core build && (cd server && npx wrangler deploy)  # deploy the Worker (bundles game-core/dist); npx wrangler tail for logs
 pnpm --filter scripts load         # 20-seat load test against the Worker
 pnpm --filter scripts forceHost <CODE> [<seatId>]   # needs PLAY_ADMIN_TOKEN or .setup-secrets/ADMIN_TOKEN
 pnpm --filter scripts forceHostLegacy <CODE> [<seatId>]   # legacy Firestore backend until cutover; needs gcloud application-default login

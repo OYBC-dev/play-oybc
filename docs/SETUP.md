@@ -55,6 +55,7 @@ Local auth: the local server accepts only unsigned emulator tokens whose audienc
 Server (Worker):
 
 ```bash
+pnpm --filter game-core build         # the Worker bundles packages/game-core/dist
 cd server && npx wrangler deploy
 npx wrangler secret put ADMIN_TOKEN   # once; guards the admin routes
 npx wrangler tail                     # live logs
@@ -66,6 +67,7 @@ Rehearsal web build on the Hosting preview channel `realtime` (expires 2026-11-1
 
 ```bash
 cp .setup-secrets/web.env.local web/.env.local   # gitignored
+pnpm --filter game-core build
 VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
 npx firebase hosting:channel:deploy realtime --project play-oybc --expires 14d
 ```
@@ -79,6 +81,7 @@ Only after the owner's go. Prerequisite: `cp .setup-secrets/web.env.local web/.e
 ```bash
 cp .setup-secrets/web.env.local web/.env.local   # gitignored
 npx firebase hosting:clone play-oybc:live play-oybc:legacy --project play-oybc   # snapshot the current live release first
+pnpm --filter game-core build
 VITE_GAME_SERVER_URL=wss://play-oybc-api.oybc.workers.dev VITE_USE_EMULATORS=false pnpm --filter web build
 npx firebase deploy --only hosting --project play-oybc
 ```
@@ -115,6 +118,7 @@ Two paths stay open until the owner's go/no-go after the Friday rehearsal.
 2. Host recovery: create the party game on the host phone and keep the host seat there. If that phone is lost, run `pnpm --filter scripts forceHost <CODE>` to list the seats (seatId, name, occupied), then `pnpm --filter scripts forceHost <CODE> <seatId>` to make an occupied seat the host (needs `PLAY_ADMIN_TOKEN` or `.setup-secrets/ADMIN_TOKEN`, and the `ADMIN_TOKEN` Worker secret must already be set; see Deploy).
 3. If a guest says they asked to get back in and the host phone shows no prompt, reload the host's game screen; the prompt list re-attaches.
 4. Rehearsal URL: `https://play-oybc--realtime-kd3r1anx.web.app`. Watch live with `cd server && npx wrangler tail`.
+5. Before Go, iOS host: the share link and QR open the live site (`https://play-oybc.web.app`, Firebase backend). Rehearsal guests open `https://play-oybc--realtime-kd3r1anx.web.app` and type the code.
 
 ### Fallback (current app on play-oybc.web.app)
 
@@ -153,7 +157,7 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | --- | --- | --- |
 | 1 | iOS: launch, enter a name, tap Host a game | Lobby: code, QR, `https://play-oybc.web.app/g/<CODE>`, Copy link; you are listed with Host and You badges |
 | 2 | iOS: tap Copy link, paste into Notes | The link above |
-| 3 | Phone A scans the QR, joins as "Cody"; phone B types the code on the web home page, joins as "Pat" | Both appear in the iOS player list live; the iOS host sees "Cody needs 24 more tasks" / "Pat needs 24 more tasks" lines and the pool counter |
+| 3 | Phone A scans the QR (before Go: opens `https://play-oybc--realtime-kd3r1anx.web.app` and types the code), joins as "Cody"; phone B types the code on the web home page, joins as "Pat" | Both appear in the iOS player list live; the iOS host sees "Cody needs 24 more tasks" / "Pat needs 24 more tasks" lines and the pool counter |
 | 4 | iOS: type `@co`, tap Cody in the suggestions, finish "@Cody does the Monster Mash", tap Add | Pool updates on all three; on phone A the entry is a redacted bar with no text; iOS and B see the text |
 | 5 | iOS: add tasks with `@someone` and `@anyone`; type a 121-character task | Blurring matches the web rules on each phone; the field stops at 120 characters |
 | 6 | iOS: delete one of your tasks with ×, and (host) delete one of Pat's | Both disappear everywhere |
@@ -172,7 +176,7 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | 19 | Phone B (new host): Host menu, make the iOS player host again | iOS gets End game and the Host menu back |
 | 20 | iOS: tap End game, then End game in the confirm sheet | All three show the leaderboard and their final board; nothing is tappable |
 | 21 | iOS: tap Home, relaunch the app | The home screen shows (the ended game is forgotten) |
-| 22 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
+| 22 | iOS: on Home, paste `https://play-oybc.web.app/g/<a live code>` (before Go: `https://play-oybc--realtime-kd3r1anx.web.app/g/<a live code>`) into Game code and tap Join | The join screen for that code; joining seats you in the lobby |
 
 ## Known deploy issue (legacy Firebase backend): callables return 403
 
