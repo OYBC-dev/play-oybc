@@ -66,7 +66,11 @@ export class GameRoom implements DurableObject {
         return json(adminSeats(this.state));
       }
       if (req.method === 'POST' && pathname === '/internal/admin/transferHost') {
-        const { seatId } = (await req.json()) as { seatId: string };
+        const body: unknown = await req.json();
+        const seatId = (body as { seatId?: unknown } | null)?.seatId;
+        if (typeof body !== 'object' || body === null || typeof seatId !== 'string') {
+          return json({ code: 'invalid-argument' }, 400);
+        }
         const out = adminTransferHost(this.state, { now: Date.now() }, { seatId });
         await this.afterMutation(out.push, 'adminTransferHost');
         return json(out.result);
@@ -162,6 +166,15 @@ export class GameRoom implements DurableObject {
       if (!attachmentOf(ws)) ws.close(CLOSE.BAD_TOKEN, 'hello-required');
       return;
     }
+    // `hello` spends a token too: each one costs a signature check and a full-state send.
+    if (msg.t === 'hello' || msg.t === 'act') {
+      let bucket = this.buckets.get(ws);
+      if (!bucket) this.buckets.set(ws, (bucket = new TokenBucket()));
+      if (!bucket.take()) {
+        ws.close(CLOSE.RATE_LIMITED, 'rate-limited');
+        return;
+      }
+    }
     if (msg.t === 'hello') return this.hello(ws, msg);
     const who = attachmentOf(ws);
     if (!who) {
@@ -170,12 +183,6 @@ export class GameRoom implements DurableObject {
     }
     if (msg.t !== 'act') {
       send(ws, { t: 'error', code: 'invalid-argument' });
-      return;
-    }
-    let bucket = this.buckets.get(ws);
-    if (!bucket) this.buckets.set(ws, (bucket = new TokenBucket()));
-    if (!bucket.take()) {
-      ws.close(CLOSE.RATE_LIMITED, 'rate-limited');
       return;
     }
     await this.act(ws, who.uid, msg);

@@ -1,6 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StateMsg } from '../src/protocol';
+import worker from '../src/index';
 import { connect, createGame, isState, randomIp, tokenFor, wsClient } from './helpers';
 
 beforeEach(() => { vi.spyOn(console, 'log').mockImplementation(() => {}); });
@@ -67,6 +68,42 @@ describe('Worker routes', () => {
     const unknown = await post(`/admin/${g.code}/transferHost`, { seatId: 'nobody' }, admin);
     expect(unknown.status).toBe(400);
     expect(await unknown.json()).toEqual({ code: 'unknown-seat' });
+  });
+
+  it('admin transferHost with a body that is not {seatId: string} is 400', async () => {
+    const g = await createGame('ua', 'Ann');
+    for (const body of [null, 'x', 7, [], { seatId: 3 }]) {
+      const res = await post(`/admin/${g.code}/transferHost`, body, admin);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(await res.json()).toEqual({ code: 'invalid-argument' });
+    }
+  });
+
+  /** Calls the Worker with a room namespace whose `fetch` is `roomFetch`. */
+  const createWithRoom = (roomFetch: () => Promise<Response>) => {
+    const rooms = { idFromName: (n: string) => n, get: () => ({ fetch: roomFetch }) };
+    const req = new Request('https://api.test/api/createGame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': randomIp(), Authorization: `Bearer ${tokenFor('ua')}` },
+      body: JSON.stringify({ name: 'Ann' }),
+    });
+    return worker.fetch(req, { ...env, GAME_ROOM: rooms } as unknown as typeof env);
+  };
+
+  it('createGame passes a non-JSON room failure on as JSON with CORS', async () => {
+    const res = await createWithRoom(async () => new Response('boom', { status: 500 }));
+    expect(res.status).toBe(500);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(await res.json()).toEqual({ code: 'unknown' });
+  });
+
+  it('createGame answers a thrown failure with a JSON 500 with CORS', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await createWithRoom(async () => { throw new Error('room unreachable'); });
+    expect(res.status).toBe(500);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(await res.json()).toEqual({ code: 'unknown' });
+    expect(errSpy).toHaveBeenCalledTimes(1);
   });
 
   it('malformed codes are 404', async () => {

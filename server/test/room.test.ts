@@ -284,14 +284,24 @@ describe('GameRoom', () => {
     expect(a.since(fa2).filter((f) => isState(f) && f.reclaims !== undefined)).toEqual([]);
   });
 
-  it('41 acts in one burst (20/s, burst 40) closes 4008', async () => {
+  it('hello + 40 acts in one burst (20/s, burst 40) closes 4008', async () => {
     const g = await createGame('ua', 'Ann');
     const a = await wsClient(g.code, 'ua');
     for (let i = 0; i < 60; i++) a.send({ t: 'act', id: `r${i}`, op: 'deleteTask', args: { taskId: 'none' } });
     expect(await a.closed).toBe(CLOSE.RATE_LIMITED);
     const acks = a.frames.filter((f) => f.t === 'ack').length;
-    expect(acks).toBeGreaterThanOrEqual(40);
+    expect(acks).toBeGreaterThanOrEqual(39); // the hello spent one of the 40
     expect(acks).toBeLessThan(60);
+  });
+
+  it('hello frames spend rate-limit tokens: looping hello past the burst closes 4008', async () => {
+    const g = await createGame('ua', 'Ann');
+    const a = await connect(g.code);
+    for (let i = 0; i < 60; i++) a.send({ t: 'hello', token: tokenFor('ua'), gameId: g.gameId });
+    expect(await a.closed).toBe(CLOSE.RATE_LIMITED);
+    const welcomes = a.frames.filter((f) => f.t === 'welcome').length;
+    expect(welcomes).toBeGreaterThanOrEqual(40);
+    expect(welcomes).toBeLessThan(60);
   });
 
   it('a 70 KB frame closes 4013', async () => {
@@ -307,6 +317,8 @@ describe('GameRoom', () => {
     const a = await wsClient(g.code, 'ua');
     await launch(a);
     expect(await a.act('end')).toMatchObject({ ok: true });
+    await a.sync();
+    const endRev = lastState(a)!.rev;
     const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(g.code));
     const endedAt = await runInDurableObject(stub, async (_room: GameRoom, state) => {
       expect(await state.storage.getAlarm()).not.toBeNull();
@@ -328,9 +340,24 @@ describe('GameRoom', () => {
     expect(await a.closed).toBe(CLOSE.NOT_FOUND);
     expect(await runInDurableObject(stub, (_r: GameRoom, state) => state.storage.sql.exec('SELECT * FROM game').toArray())).toEqual([]);
 
-    const later = await connect(g.code);
-    expect(await later.hello(tokenFor('ua'), g.gameId)).toEqual({ t: 'error', code: 'game-not-found' });
-    expect(await later.closed).toBe(CLOSE.NOT_FOUND);
+
+    // The purged code can be claimed again: a new game with its own epoch and a fresh rev.
+    const reclaimed = await stub.fetch('https://room/internal/claim', {
+      method: 'POST', body: JSON.stringify({ gameId: 'g-reused', code: g.code, uid: 'uz', name: 'Zed' }),
+    });
+    expect(reclaimed.status).toBe(200);
+    const zed = await connect(g.code);
+    const zw = await zed.hello(tokenFor('uz'), 'g-reused');
+    expect(zw).toMatchObject({ t: 'welcome', gameId: 'g-reused', stage: 'lobby' });
+    expect((zw as { rev: number }).rev).toBeLessThan(endRev);
+    // The old phone's epoch is gone (4004); a bare hello finds the new game, unseated.
+    const oldPhone = await connect(g.code);
+    expect(await oldPhone.hello(tokenFor('ua'), g.gameId)).toEqual({ t: 'error', code: 'game-not-found' });
+    expect(await oldPhone.closed).toBe(CLOSE.NOT_FOUND);
+    const bare = await connect(g.code);
+    expect(await bare.hello(tokenFor('ua'))).toMatchObject({ t: 'welcome', gameId: 'g-reused', seatId: null, stage: 'lobby' });
+    zed.close();
+    bare.close();
   });
 
   it('a failure after the ack never sends a second ack and other sockets still get their push', async () => {

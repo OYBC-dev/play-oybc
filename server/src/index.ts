@@ -87,7 +87,7 @@ async function createGame(req: Request, env: Env): Promise<Response> {
       method: 'POST', body: JSON.stringify({ gameId, code, uid, name }),
     });
     if (res.status === 409) continue;
-    if (res.status !== 200) return json(await res.json(), res.status, true);
+    if (res.status !== 200) return json(await res.json().catch(() => ({ code: 'unknown' })), res.status, true);
     const { seatId } = (await res.json()) as { seatId: string };
     return json({ gameId, code, seatId }, 200, true);
   }
@@ -114,7 +114,15 @@ export default {
 
     if (pathname === '/api/createGame') {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-      if (req.method === 'POST') return createGame(req, env);
+      if (req.method === 'POST') {
+        try {
+          return await createGame(req, env);
+        } catch (e) {
+          const stack = e instanceof Error ? e.stack ?? e.message : String(e);
+          console.error(JSON.stringify({ error: 'create-failed', op: 'createGame', stack }));
+          return json({ code: 'unknown' }, 500, true);
+        }
+      }
     }
 
     const ws = /^\/ws\/([^/]+)$/.exec(pathname);
