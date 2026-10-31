@@ -21,7 +21,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
     /// The `marked` value sent with each toggle, parallel to `toggledCells`.
     private(set) var toggledValues: [Bool] = []
     private(set) var whoAmICodes: [String] = []
-    private(set) var joins: [(code: String, name: String)] = []
+    private(set) var joins: [(code: String, name: String, reclaim: Bool)] = []
     private(set) var calls: [String] = []
     /// How many times `subscribe` was called, and how many of those streams are still open.
     private(set) var subscribeCount = 0
@@ -102,7 +102,9 @@ final class FakeGameService: GameService, @unchecked Sendable {
         }
         return try createResult.get()
     }
-    func joinGame(code: String, name: String) async throws -> JoinGameRes { joins.append((code, name)); return try joinResult.get() }
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        joins.append((code, name, reclaim)); return try joinResult.get()
+    }
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         whoAmICodes.append(code)
         if let whoAmIError { throw whoAmIError }

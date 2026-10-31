@@ -70,7 +70,9 @@ final class FirebaseGameService: GameService {
     func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
         try await call("createGame", CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace), as: CreateGameRes.self)
     }
-    func joinGame(code: String, name: String) async throws -> JoinGameRes { try await call("joinGame", JoinGameReq(code: code, name: name), as: JoinGameRes.self) }
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        try await call("joinGame", JoinGameReq(code: code, name: name, reclaim: reclaim ? true : nil), as: JoinGameRes.self)
+    }
 
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         let data = try await invoke("whoAmI", try FirebaseCoding.encode(WhoAmIReq(code: code)))

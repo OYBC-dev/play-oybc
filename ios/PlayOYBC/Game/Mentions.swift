@@ -68,8 +68,16 @@ enum Mentions {
     /// - Returns: the rows, in display order.
     static func options(partial: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil,
                         selfSeatId: String? = nil) -> [Option] {
-        let p = key(partial)
-        let matches: (String) -> Bool = { key($0).hasPrefix(p) }
+        // A finished mention ("@Cody " just picked) offers nothing, so Return submits the task and never
+        // turns it into "@Cody B ".
+        if partial.last?.isWhitespace == true {
+            let done = key(partial)
+            let names = seatNames + [selfName].compactMap { $0 } + roster.map(\.display) + keywords
+            if names.contains(where: { key($0) == done }) { return [] }
+        }
+        // Prefix-match without the trim: a trailing space still separates "Cody " from "Cody".
+        let p = prefixKey(partial)
+        let matches: (String) -> Bool = { prefixKey($0).hasPrefix(p) }
         var rows = seatNames.filter(matches).map { Option(name: $0, kind: .player) }
         rows += roster.filter { $0.seatId != nil && $0.seatId != selfSeatId && matches($0.display) }
             .map { Option(name: $0.display, kind: .bound) }
@@ -128,6 +136,13 @@ enum Mentions {
     /// Case-, whitespace- and apostrophe-insensitive key (game-core `nameKey`).
     static func key(_ name: String) -> String {
         name.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            .replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'").lowercased()
+    }
+
+    /// Prefix-compare form of a name (web `prefixKey`): `key` without the trim, so whitespace runs
+    /// collapse, curly apostrophes and case fold, but a trailing space is kept.
+    static func prefixKey(_ name: String) -> String {
+        name.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'").lowercased()
     }
 

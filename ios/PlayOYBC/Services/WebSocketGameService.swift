@@ -143,8 +143,10 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
         return out
     }
 
-    func joinGame(code: String, name: String) async throws -> JoinGameRes {
-        let res: JoinGameRes = try await room(code).act("join", ["name": name])
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        var args: [String: Any] = ["name": name]
+        if reclaim { args["reclaim"] = true }
+        let res: JoinGameRes = try await room(code).act("join", args)
         switch res {
         case let .joined(g, _), let .resumed(g, _), let .reclaimPending(g, _): remember(gameId: g, code: code)
         }

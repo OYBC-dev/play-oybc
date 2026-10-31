@@ -237,7 +237,8 @@ struct CreateGameReq: Codable, Equatable {
     var freeSpace: Bool = false
 }
 struct CreateGameRes: Codable, Equatable { var gameId: String; var code: String; var seatId: String }
-struct JoinGameReq: Codable, Equatable { var code: String; var name: String }
+/// `reclaim: true` is the explicit "That's me" reclaim; nil is omitted from the wire.
+struct JoinGameReq: Codable, Equatable { var code: String; var name: String; var reclaim: Bool? = nil }
 
 enum JoinGameRes: Codable, Equatable {
     case joined(gameId: String, seatId: String)

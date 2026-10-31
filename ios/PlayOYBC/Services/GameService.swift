@@ -21,7 +21,9 @@ protocol GameService {
     /// Creates a game with the host seated as `name`. `gameName` (trimmed, ≤ 40, nil = none) and
     /// `freeSpace` are fixed at create; the server answers `invalid-argument` on a long name.
     func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes
-    func joinGame(code: String, name: String) async throws -> JoinGameRes
+    /// Joins as `name`. A name held by someone here (or bound by the host to someone) fails `name-taken`
+    /// unless `reclaim` is true, which asks the host for that seat (the lost-phone case → `reclaimPending`).
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes
     func whoAmI(code: String) async throws -> WhoAmIRes?
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error>
     func addTask(gameId: String, text: String) async throws
@@ -48,5 +50,12 @@ extension GameService {
     /// A game with no name and no free space.
     func createGame(name: String) async throws -> CreateGameRes {
         try await createGame(name: name, gameName: nil, freeSpace: false)
+    }
+}
+
+extension GameService {
+    /// A plain join (no reclaim).
+    func joinGame(code: String, name: String) async throws -> JoinGameRes {
+        try await joinGame(code: code, name: name, reclaim: false)
     }
 }

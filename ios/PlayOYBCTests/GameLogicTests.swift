@@ -29,6 +29,23 @@ final class MentionsTests: XCTestCase {
         XCTAssertEqual(Mentions.options(partial: "any", seatNames: ["Someone Else"]).map(\.name), ["anyone"])
     }
 
+    func testFinishedMentionOffersNoRowsSoReturnSubmits() {
+        let roster = [RosterName(key: "jo", display: "Jo", seatId: nil)]
+        XCTAssertEqual(Mentions.options(partial: "Cody ", seatNames: ["Cody", "Cody B"]), [])
+        XCTAssertEqual(Mentions.options(partial: "Jo ", seatNames: ["Jo Ann"], roster: roster), [])
+        XCTAssertEqual(Mentions.options(partial: "Co", seatNames: ["Cody", "Pat"]).map(\.name), ["Cody"])
+        XCTAssertEqual(Mentions.options(partial: "Cody B", seatNames: ["Cody", "Cody B"]).map(\.name), ["Cody B"])
+        XCTAssertEqual(Mentions.options(partial: "Mary ", seatNames: ["Mary Jane"]).map(\.name), ["Mary Jane"])
+        // Curly apostrophes fold in the prefix compare.
+        XCTAssertEqual(Mentions.options(partial: "O’", seatNames: ["O'Neil"]).map(\.name), ["O'Neil"])
+        // Pick "Cody", then Return: no rows are offered, so Return submits instead of re-picking.
+        let m = Mentions.active(in: "hi @Co", caret: 6)!
+        let picked = Mentions.pick("Cody", mention: m, in: "hi @Co", caret: 6)
+        XCTAssertEqual(picked.text, "hi @Cody ")
+        let after = Mentions.active(in: picked.text, caret: picked.caret)!
+        XCTAssertNil(Mentions.returnPick(Mentions.options(partial: after.partial, seatNames: ["Cody", "Pat"])))
+    }
+
     func testPickReplacesMentionAndCapsLength() {
         let m = Mentions.active(in: "hi @co", caret: 6)!
         let r = Mentions.pick("Cody", mention: m, in: "hi @co", caret: 6)

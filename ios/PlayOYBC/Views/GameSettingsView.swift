@@ -17,7 +17,7 @@ struct GameSettingsView: View {
                 SectionLabel("Game name").accessibilityHidden(true)
                 RisoInputField(placeholder: "", text: $model.gameName, maxLength: GameSettingsModel.maxGameName,
                                capitalization: .sentences, accessibilityName: "Game name") { create() }
-                helper("Shown in the lobby and on the join page. Optional.")
+                helper("Shown in the lobby. Optional.")
             }
             RisoCardBox {
                 SectionLabel("Board")

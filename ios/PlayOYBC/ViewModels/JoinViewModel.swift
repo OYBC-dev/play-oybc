@@ -17,16 +17,20 @@ final class JoinViewModel: ObservableObject {
     @Published private(set) var busy = false
     /// The host turned down the last reclaim request ("The host said no").
     @Published private(set) var denied = false
+    /// The last join failed `name-taken`: offer "That's me" (a reclaim) beside picking another name.
+    @Published private(set) var taken = false
     let code: String
     private let service: GameService
     private var watchTask: _Concurrency.Task<Void, Never>?
 
-    init(service: GameService, code: String, phase: Phase = .checking, error: String? = nil, denied: Bool = false) {
+    init(service: GameService, code: String, phase: Phase = .checking, error: String? = nil, denied: Bool = false,
+         taken: Bool = false) {
         self.service = service
         self.code = code
         self.phase = phase
         self.error = error
         self.denied = denied
+        self.taken = taken
     }
 
     deinit { watchTask?.cancel() }
@@ -45,14 +49,16 @@ final class JoinViewModel: ObservableObject {
         }
     }
 
-    /// Joins with `name`; a taken name held by another device waits for the host.
-    func submit(name: String) async {
+    /// Joins with `name`. A taken name fails `name-taken` (sets `taken`); `reclaim: true` ("That's me")
+    /// asks the host for that seat and waits.
+    func submit(name: String, reclaim: Bool = false) async {
         busy = true
         error = nil
         denied = false
+        taken = false
         defer { busy = false }
         do {
-            switch try await service.joinGame(code: code, name: name) {
+            switch try await service.joinGame(code: code, name: name, reclaim: reclaim) {
             case let .joined(g, s), let .resumed(g, s):
                 phase = .seated(gameId: g, seatId: s)
             case let .reclaimPending(g, r):
@@ -61,6 +67,7 @@ final class JoinViewModel: ObservableObject {
             }
         } catch {
             self.error = ErrorMessages.message(for: error)
+            taken = AppError.from(error).code == "name-taken"
         }
     }
 
