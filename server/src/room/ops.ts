@@ -137,8 +137,10 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
 
 /**
  * Adds a pool task in the lobby; idempotent on a repeated `taskId` by the same author.
+ * A `@Name` nobody here has yet is accepted as an unbound name (kept from whoever might be that person
+ * until they join; see game-core `visibility.ts`).
  * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `invalid-text`,
- *   `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
+ *   `self-mention`, `resource-exhausted`.
  */
 export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; text: string }): OpOut<AddTaskRes> {
   const game = requireGame(state);
@@ -153,10 +155,9 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   const text = typeof args.text === 'string' ? args.text.trim() : '';
   if (!text || text.length > MAX_TASK_LENGTH) throw new AppError('invalid-text');
   if (state.tasks.size >= MAX_TASKS) throw new AppError('resource-exhausted');
-  const parsed = parseMentions(text, state.seatList());
-  if (!parsed.ok) throw new AppError('unknown-mention', { token: parsed.token });
-  if (parsed.mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
-  state.putTask({ taskId, text, authorSeatId: seatId, mentions: parsed.mentions, createdAt: ctx.now });
+  const mentions = parseMentions(text, state.seatList());
+  if (mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
+  state.putTask({ taskId, text, authorSeatId: seatId, mentions, createdAt: ctx.now });
   return { result: { taskId }, push: { all: ['game', 'view'] } };
 }
 

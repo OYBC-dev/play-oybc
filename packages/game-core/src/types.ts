@@ -1,7 +1,12 @@
 /** A player's seat in a session. */
 export interface Seat { seatId: string; name: string; joinedAt: number }
-/** Who a task text @-mentions. */
-export interface TaskMentions { seatIds: string[]; someone: boolean; anyone: boolean }
+/**
+ * Who a task text @-mentions. `seatIds` are the seats matched when the task was
+ * written; `names` are the `nameKey`s of `@Name` tokens that matched nobody then
+ * (absent = none). Both are authoring-time records: visibility and dealing
+ * re-scan the text against the current seats (see `visibility.ts`).
+ */
+export interface TaskMentions { seatIds: string[]; someone: boolean; anyone: boolean; names?: string[] }
 /** A task in the shared pool. */
 export interface PoolTask { id: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number }
 /**

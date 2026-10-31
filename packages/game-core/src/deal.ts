@@ -3,7 +3,7 @@ import { resolveMentionRefs } from './mentions';
 import { fillableCellCount, placeBoard } from './placement';
 import { fisherYatesShuffle } from './shuffle';
 import { PoolTask, Seat } from './types';
-import { canBeDealt } from './visibility';
+import { MentionContext, canBeDealt, mentionContext } from './visibility';
 
 /**
  * One square of a dealt board. A task cell's `refs` are the `[start, end)`
@@ -37,8 +37,8 @@ export function tasksPerBoard(freeSpace: boolean): number {
 }
 
 /** Whether `task` may go on `seatId`'s board under `opts`. */
-function isEligible(task: PoolTask, seatId: string, opts: DealOptions): boolean {
-  if (!canBeDealt(task, seatId)) return false;
+function isEligible(task: PoolTask, seatId: string, opts: DealOptions, ctx: MentionContext): boolean {
+  if (!canBeDealt(task, seatId, ctx)) return false;
   if (opts.excludeTaskIds?.has(task.id)) return false;
   const assigned = task.mentions.anyone ? opts.anyoneAssignment?.[task.id] : undefined;
   return assigned === undefined || assigned === seatId;
@@ -67,8 +67,9 @@ function assignedFirst(
  * Deals a 5x5 board for one seat: shuffles the eligible tasks, centers FREE
  * when `opts.freeSpace`, and resolves mentions for display (see
  * {@link resolveMentionRefs}): each `@someone` becomes one other seat
- * (consistent within a task), `@Name` the seat's name, `@anyone` "Anyone".
- * Task cells carry `refs` when the text has a resolved mention.
+ * (consistent within a task), `@Name` the seat's name (or the typed name when
+ * nobody here has it yet), `@anyone` "Anyone". Task cells carry `refs` when
+ * the text has a resolved mention.
  *
  * With `opts.anyoneAssignment`, the `@anyone` tasks assigned to this seat are
  * dealt first (up to the board's task count) and the rest of the board is
@@ -86,7 +87,8 @@ export function dealBoard(
   rng: () => number = Math.random,
   opts: DealOptions = LEGACY_DEAL,
 ): BoardCell[] {
-  const eligible = tasks.filter((t) => isEligible(t, seatId, opts));
+  const ctx = mentionContext(tasks, seats);
+  const eligible = tasks.filter((t) => isEligible(t, seatId, opts, ctx));
   const needed = tasksPerBoard(opts.freeSpace);
   if (eligible.length < needed) throw new Error('insufficient-pool');
   const others = seats.filter((s) => s.seatId !== seatId);
@@ -120,6 +122,7 @@ export function assignAnyone(
   rng: () => number,
 ): Record<string, string> {
   const out: Record<string, string> = {};
+  const ctx = mentionContext(tasks, seats);
   const anyone = fisherYatesShuffle(tasks.filter((t) => t.mentions.anyone), rng);
   const order = fisherYatesShuffle(seats, rng);
   if (!order.length) return out;
@@ -127,7 +130,7 @@ export function assignAnyone(
   for (const task of anyone) {
     let pick = -1;
     order.forEach((seat, i) => {
-      if (canBeDealt(task, seat.seatId) && (pick < 0 || counts[i] < counts[pick])) pick = i;
+      if (canBeDealt(task, seat.seatId, ctx) && (pick < 0 || counts[i] < counts[pick])) pick = i;
     });
     if (pick < 0) continue;
     out[task.id] = order[pick].seatId;

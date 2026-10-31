@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canSeeText, resolveMentionRefs, type PoolTask } from 'game-core';
+import { canSeeText, mentionContext, resolveMentionRefs, type PoolTask } from 'game-core';
 import { AppError } from '../src/errors';
 import { MemoryPersistence } from '../src/room/persistence';
 import { addTask, claimGame, deleteTask, join, setOptions, type OpCtx } from '../src/room/ops';
@@ -14,10 +14,6 @@ const fresh = () => new GameState(new MemoryPersistence(), { now: () => clock })
 const codeOf = (fn: () => unknown): string | undefined => {
   try { fn(); } catch (e) { if (e instanceof AppError) return e.code; throw e; }
   return undefined;
-};
-const errOf = (fn: () => unknown): AppError => {
-  try { fn(); } catch (e) { return e as AppError; }
-  throw new Error('did not throw');
 };
 
 /** Stephen (host, u1) + Cody (u2) + Seth (u3). */
@@ -188,16 +184,45 @@ describe('addTask', () => {
     expect(view(state, s2)[0].text).toBeNull();
     expect(view(state, s3)[0]).toMatchObject({ text: 'Someone takes a shot', refs: [[0, 7]] });
   });
-  it('carries the unresolved token on unknown-mention', () => {
-    const { state } = setup();
-    const err = errOf(() => add(state, 'u2', '@Bob sings'));
-    expect(err.code).toBe('unknown-mention');
-    expect(err.details?.token).toBe('@Bob');
+  describe('a name nobody here has yet', () => {
+    const game = (state: GameState, seat: string) => buildSections(state, seat, ['game']).game!;
+    it('is accepted and stored as an unbound name', () => {
+      const { state } = setup();
+      const id = add(state, 'u2', '@Bob sings');
+      expect(state.tasks.get(id)!.mentions).toEqual({ seatIds: [], someone: false, anyone: false, names: ['bob'] });
+    });
+    it('is read by the author and by identified seats only, shown without its @', () => {
+      const { state, s1, s2, s3 } = setup();
+      add(state, 'u2', '@Bob sings');
+      expect(view(state, s2)[0]).toMatchObject({ text: 'Bob sings', refs: [[0, 3]], mine: true });
+      expect(view(state, s1)[0].text).toBeNull();
+      expect(view(state, s3)[0].text).toBeNull();
+      add(state, 'u1', '@Seth naps');
+      expect(view(state, s3)[0].text).toBe('Bob sings');
+      expect(view(state, s1)[0].text).toBeNull();
+    });
+    it('binds itself when that person joins: hidden from them, open to the others, counts moved', () => {
+      const { state, s1, s2, s3 } = setup();
+      add(state, 'u2', '@Bob sings');
+      // Nobody is identified yet, the author included: the task is dealt to no one.
+      expect(game(state, s1).dealable).toEqual({ [s1]: 0, [s2]: 0, [s3]: 0 });
+      const out = join(state, ctxFor('u4'), { name: 'bob' });
+      const s4 = (out.result as { seatId: string }).seatId;
+      expect(out.push.all).toEqual(expect.arrayContaining(['game', 'seats', 'view']));
+      expect(view(state, s4)[0].text).toBeNull();
+      expect(view(state, s1)[0]).toMatchObject({ text: 'bob sings', refs: [[0, 3]] });
+      expect(view(state, s3)[0].text).toBe('bob sings');
+      expect(game(state, s1).dealable).toEqual({ [s1]: 1, [s2]: 1, [s3]: 1, [s4]: 0 });
+    });
+    it('a task row stored without names still loads', () => {
+      const { state, s1, s3 } = setup();
+      state.putTask({ taskId: 'old', text: 'plain', authorSeatId: s1, mentions: { seatIds: [], someone: false, anyone: false }, createdAt: 1 });
+      expect(view(state, s3)[0].text).toBe('plain');
+    });
   });
-  it('rejects self-mention, unknown mention and bad text', () => {
+  it('rejects self-mention and bad text', () => {
     const { state } = setup();
     expect(codeOf(() => add(state, 'u2', '@Cody dances'))).toBe('self-mention');
-    expect(codeOf(() => add(state, 'u2', '@Bob sings'))).toBe('unknown-mention');
     expect(codeOf(() => add(state, 'u2', ''))).toBe('invalid-text');
     expect(codeOf(() => add(state, 'u2', '   '))).toBe('invalid-text');
     expect(codeOf(() => add(state, 'u2', 'x'.repeat(121)))).toBe('invalid-text');
@@ -334,13 +359,14 @@ describe('leak check', () => {
     add(state, 'u1', '@Cody and @Seth hug');
     add(state, 'u2', 'plain');
     const tasks = new Map<string, PoolTask>(state.poolTasks().map((t) => [t.id, t]));
+    const ctx = mentionContext(state.poolTasks(), state.seatList());
     expect(tasks.size).toBe(5);
     for (const seat of [s1, s2, s3]) {
       const entries = view(state, seat);
       expect(entries).toHaveLength(5);
       for (const e of entries) {
         const t = tasks.get(e.taskId)!;
-        expect(e.text === null).toBe(!canSeeText(t, seat));
+        expect(e.text === null).toBe(!canSeeText(t, seat, ctx));
         if (e.text !== null) expect(e.text).toBe(resolveMentionRefs(t.text, state.seatList(), 'Someone').text);
       }
     }

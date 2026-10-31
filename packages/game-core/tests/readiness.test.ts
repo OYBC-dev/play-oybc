@@ -69,6 +69,14 @@ describe('readiness guarantees launch (property)', () => {
       for (let i = 0; i < mixedCount; i++) {
         tasks.push({ ...mk('x' + i), mentions: { seatIds: [party[int(0, n - 1)].seatId], someone: false, anyone: true } });
       }
+      const ghostCount = int(0, 5);
+      for (let i = 0; i < ghostCount; i++) {
+        tasks.push({ ...mk('u' + i), text: `@Ghost${i} sings`, mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost' + i] } });
+      }
+      const ghostAnyCount = int(0, 3);
+      for (let i = 0; i < ghostAnyCount; i++) {
+        tasks.push({ ...mk('ua' + i), text: `@anyone hugs @Ghost${i}`, mentions: { seatIds: [], someone: false, anyone: true, names: ['ghost' + i] } });
+      }
       const freeSpace = rng() < 0.5;
       if (Object.keys(shortfalls(tasks, party, { freeSpace })).length > 0) continue;
       readyRuns++;
@@ -100,5 +108,22 @@ describe('assignAnyone', () => {
   it('is empty without @anyone tasks or seats', () => {
     expect(assignAnyone([mk('p')], seats, makeSeededRng(1))).toEqual({});
     expect(assignAnyone([{ ...mk('a'), mentions: { seatIds: [], someone: false, anyone: true } }], [], makeSeededRng(1))).toEqual({});
+  });
+});
+
+describe('dealableCounts with names nobody here has yet', () => {
+  const ghost = (id: string): PoolTask => ({ ...mk(id), text: `@Ghost ${id}`, mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost'] } });
+  it('counts for identified seats only, and for everyone else once that person joins', () => {
+    // s2 is named by a task, so identified; s1 and s3 are not.
+    const tasks = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), mk('m', ['s2']), ...['g1', 'g2', 'g3'].map(ghost)];
+    expect(dealableCounts(tasks, seats, { freeSpace: true })).toEqual({ s1: 11, s2: 13, s3: 11 });
+    const joined: Seat[] = [...seats, { seatId: 's4', name: 'Ghost', joinedAt: 9 }];
+    expect(dealableCounts(tasks, joined, { freeSpace: true })).toEqual({ s1: 14, s2: 13, s3: 14, s4: 11 });
+  });
+  it('a mixed @anyone + unbound name adds nothing to the share', () => {
+    const pure = (id: string): PoolTask => ({ ...mk(id), mentions: { seatIds: [], someone: false, anyone: true } });
+    const mixed: PoolTask = { ...ghost('x'), mentions: { seatIds: [], someone: false, anyone: true, names: ['ghost'] }, text: '@anyone hugs @Ghost' };
+    const base = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), pure('a1'), pure('a2'), pure('a3')];
+    expect(dealableCounts([...base, mixed], seats, { freeSpace: true })).toEqual(dealableCounts(base, seats, { freeSpace: true }));
   });
 });
