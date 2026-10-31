@@ -437,7 +437,10 @@ export class RoomConnection {
     this.attempt = 0;
     this.state = 'ready';
     this.clearConnectDeadline();
-    const welcome: Welcome = { uid: w.uid, gameId: w.gameId, seatId: w.seatId, stage: w.stage, rev: w.rev };
+    const welcome: Welcome = {
+      uid: w.uid, gameId: w.gameId, seatId: w.seatId, stage: w.stage, rev: w.rev,
+      ...(w.gameName && { gameName: w.gameName }), ...(w.hostName && { hostName: w.hostName }),
+    };
     const waiters = this.helloWaiters;
     this.helloWaiters = [];
     for (const h of waiters) {
