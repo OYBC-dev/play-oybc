@@ -144,7 +144,7 @@ Three forms, typed inline in task text:
   `@Name` them) has ≥ the board's task count (25, or 24 with free space on). Until then the lobby shows who is short and by how
   many ("Cody needs 3 more tasks"). *(Owner decision.)* Late joiners can't be `@Name`d
   (they weren't present when tasks were written), so their eligible pool is the whole
-  locked pool minus nothing — always ≥ 24.
+  pool minus the `@anyone` tasks already on a board (since 2026-10-30; `docs/PARTY_FEATURES.md` §3) — normally ≥ the board's task count.
 - Dealing is a per-player random draw from that player's eligible pool, with
   `@someone` resolved per board. Dealt boards are stored and never re-dealt.
 - Marks: tap toggles. Unmarking a square that was part of an already-announced bingo
