@@ -1,0 +1,18 @@
+/* Game settings (/host): page chrome mirrors Join (36/16/32, stack gap 20). */
+:global(.page).settings { padding: 36px 16px 32px; gap: 20px; }
+.head { display: flex; align-items: center; gap: 14px; }
+.titles { flex: 1; min-width: 0; }
+.titles p { margin: 0; }
+.title { margin: 4px 0 0; font-family: var(--riso-font-head); font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.form { display: flex; flex-direction: column; gap: 20px; }
+.card { display: flex; flex-direction: column; gap: 12px; }
+.card > p { margin: 0; }
+.help { margin: 0; font-family: var(--riso-font-body); font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--riso-muted); text-wrap: pretty; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+label.row { cursor: pointer; }
+.labelBlock { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.label { font-family: var(--riso-font-head); font-size: 15px; font-weight: 800; }
+.value { font-family: var(--riso-font-head); font-size: 16px; font-weight: 800; color: var(--riso-muted); }
+.divider { height: 1px; background: var(--riso-hair); }
+.footer { display: flex; flex-direction: column; gap: 10px; }
+.hosting { margin: 0; text-align: center; font-family: var(--riso-font-body); font-size: 12.5px; font-weight: 600; color: var(--riso-muted); }

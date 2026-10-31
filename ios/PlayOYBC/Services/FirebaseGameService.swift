@@ -67,8 +67,12 @@ final class FirebaseGameService: GameService {
         _ = try await invoke(name, try FirebaseCoding.encode(req))
     }
 
-    func createGame(name: String) async throws -> CreateGameRes { try await call("createGame", CreateGameReq(name: name), as: CreateGameRes.self) }
-    func joinGame(code: String, name: String) async throws -> JoinGameRes { try await call("joinGame", JoinGameReq(code: code, name: name), as: JoinGameRes.self) }
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
+        try await call("createGame", CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace), as: CreateGameRes.self)
+    }
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        try await call("joinGame", JoinGameReq(code: code, name: name, reclaim: reclaim ? true : nil), as: JoinGameRes.self)
+    }
 
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         let data = try await invoke("whoAmI", try FirebaseCoding.encode(WhoAmIReq(code: code)))
@@ -88,6 +92,14 @@ final class FirebaseGameService: GameService {
     }
     /// The Firebase backend has no options callable.
     func setOptions(gameId: String, freeSpace: Bool) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
+    /// The Firebase backend has no roster.
+    func bindName(gameId: String, key: String, seatId: String?) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
+    /// The Firebase backend has no roster.
+    func retireName(gameId: String, key: String) async throws {
         throw AppError(code: "unimplemented", token: nil, underlying: nil)
     }
     func transferHost(gameId: String, toSeatId: String) async throws {

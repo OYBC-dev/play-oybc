@@ -46,6 +46,21 @@ final class EndedReclaimTests: XCTestCase {
         XCTAssertNotNil(m.error)
         XCTAssertNil(m.busy)
     }
+
+    func testReclaimHeadlineNamesTheSeat() {
+        let seats = [Seat(seatId: "s2", doc: SeatDoc(name: "C-Dog", nameKey: "c-dog", joinedAt: 2)),
+                     Seat(seatId: "s3", doc: SeatDoc(name: "Cody", nameKey: "cody", joinedAt: 3))]
+        func doc(_ name: String, _ seatId: String) -> ReclaimDoc {
+            ReclaimDoc(requesterUid: "u9", name: name, seatId: seatId, status: .pending, createdAt: 1, resolvedAt: nil)
+        }
+        XCTAssertEqual(ReclaimPromptView.headline(for: doc("Cody", "s2"), seats: seats),
+                       "Someone as Cody wants to take C-Dog's seat")
+        XCTAssertEqual(ReclaimPromptView.headline(for: doc("cody", "s3"), seats: seats),
+                       "Someone wants to take Cody's seat")
+        // The seat is gone: fall back to the typed name.
+        XCTAssertEqual(ReclaimPromptView.headline(for: doc("Cody", "s7"), seats: seats),
+                       "Someone wants to take Cody's seat")
+    }
 }
 
 private enum SnapshotLikeFixture {

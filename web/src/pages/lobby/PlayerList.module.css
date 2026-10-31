@@ -2,7 +2,34 @@
 .list { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; list-style: none; margin: 0; padding: 0; }
 .player {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%; box-sizing: border-box; height: 38px; padding: 0 12px;
-  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700;
+  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700; color: var(--riso-ink);
   background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: 999px;
 }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot { display: flex; max-width: 100%; }
+/* A roster name bound to this player: a small solid-keyline pill inside the player's pill. */
+.tag {
+  position: relative; flex: none; display: inline-flex; align-items: center; max-width: 120px; box-sizing: border-box;
+  height: 22px; padding: 0 8px; margin: 0;
+  font-family: var(--riso-font-head); font-size: 12px; font-weight: 700; color: var(--riso-ink);
+  background: var(--riso-paper); border: 1.5px solid var(--riso-ink); border-radius: 999px;
+}
+.tagText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Guests: muted keyline + text (not a button). */
+.tagStatic { color: var(--riso-muted); border-color: var(--riso-muted); }
+.tagButton, .chipButton { appearance: none; cursor: pointer; position: relative; }
+/* Beat the page-wide `.page button { min-height: 44px }`: the hit areas come from ::before, not the box. */
+.tagButton.tagButton, .chipButton.chipButton { min-height: 0; }
+/* 22px tag → 44px hit area. */
+.tagButton::before { content: ''; position: absolute; inset: -11px; }
+/* 38px chip → 44px hit area. */
+.chipButton::before { content: ''; position: absolute; inset: -3px 0; }
+.tagButton:focus-visible, .chipButton:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+/* A retired name's chip: width and opacity to 0 over 180ms, then it unmounts. */
+.leaving { overflow: hidden; pointer-events: none; animation: chipOut 180ms ease forwards; }
+@keyframes chipOut {
+  from { max-width: var(--chip-w); opacity: 1; }
+  to { max-width: 0; opacity: 0; margin-right: -8px; }
+}
+.leaving > * { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .leaving { animation: none; display: none; } }

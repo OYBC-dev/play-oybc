@@ -33,6 +33,10 @@
 .item:disabled { opacity: 0.45; cursor: not-allowed; }
 /* --riso-red-text lifts the harvest-dark rust (~2.9:1 on the dark card) to 5.26:1. */
 .danger { color: var(--riso-red-text); }
+.count {
+  margin-left: auto; display: inline-grid; place-items: center; box-sizing: border-box; min-width: 22px; height: 22px; padding: 0 6px;
+  border: 2px dashed var(--riso-ink); border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--riso-muted);
+}
 .hairline { height: 1px; background: var(--riso-hair); margin: 4px 10px; }
 @keyframes menuFade { from { opacity: 0; } to { opacity: 1; } }
 

@@ -77,4 +77,34 @@ final class JoinViewModelTests: XCTestCase {
         XCTAssertEqual(vm.phase, .name)
         XCTAssertEqual(vm.error, "That request is gone")
     }
+
+    func testNameTakenOffersThatsMeWhichReclaimsAndWaits() async {
+        let fake = FakeGameService()
+        let vm = JoinViewModel(service: fake, code: "ABCDE", phase: .name)
+        fake.joinResult = .failure(AppError(code: "name-taken", token: nil, underlying: nil))
+        await vm.submit(name: "Cody")
+        XCTAssertEqual(vm.error, "That name is taken")
+        XCTAssertTrue(vm.taken)
+        XCTAssertEqual(vm.phase, .name)
+        XCTAssertEqual(fake.joins.last?.reclaim, false)
+        // "That's me": an explicit reclaim, then the existing waiting state.
+        fake.joinResult = .success(.reclaimPending(gameId: "g1", reclaimId: "r1"))
+        await vm.submit(name: "Cody", reclaim: true)
+        XCTAssertEqual(fake.joins.last?.name, "Cody")
+        XCTAssertEqual(fake.joins.last?.reclaim, true)
+        XCTAssertFalse(vm.taken)
+        XCTAssertNil(vm.error)
+        XCTAssertEqual(vm.phase, .waiting(gameId: "g1", reclaimId: "r1"))
+    }
+
+    func testTakenClearsOnAnyOtherOutcome() async {
+        let fake = FakeGameService()
+        let vm = JoinViewModel(service: fake, code: "ABCDE", phase: .name)
+        fake.joinResult = .failure(AppError(code: "name-taken", token: nil, underlying: nil))
+        await vm.submit(name: "Cody")
+        XCTAssertTrue(vm.taken)
+        fake.joinResult = .failure(AppError(code: "invalid-name", token: nil, underlying: nil))
+        await vm.submit(name: "!!")
+        XCTAssertFalse(vm.taken)
+    }
 }

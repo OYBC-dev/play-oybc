@@ -5,7 +5,7 @@ import { RisoButton } from '../components/riso/RisoButton';
 import { RisoCard } from '../components/riso/RisoCard';
 import { RisoSectionLabel } from '../components/riso/RisoSectionLabel';
 import { useClient } from '../game/ClientContext';
-import { errorMessage } from '../game/errorMessages';
+import { appErrorCode, errorMessage } from '../game/errorMessages';
 import { GamePage } from './GamePage';
 import styles from './Landing.module.css';
 
@@ -24,6 +24,8 @@ export function JoinPage() {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
+  /** The name is held by someone here: offer "That's me" (a reclaim) beside picking another. */
+  const [taken, setTaken] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -63,21 +65,27 @@ export function JoinPage() {
     return () => { live = false; stop(); };
   }, [client, code, waitingFor?.gameId, waitingFor?.reclaimId]);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function join(reclaim: boolean) {
     if (phase.kind === 'waiting') return;
     setBusy(true);
     setError(null);
     setDenied(false);
+    setTaken(false);
     try {
-      const res = await client.joinGame(code, name);
+      const res = await client.joinGame(code, name, reclaim ? { reclaim: true } : undefined);
       if (res.status === 'reclaim-pending') setPhase({ kind: 'waiting', gameId: res.gameId, reclaimId: res.reclaimId });
       else setPhase({ kind: 'seated', gameId: res.gameId, seatId: res.seatId });
     } catch (err) {
       setError(errorMessage(err));
+      setTaken(appErrorCode(err) === 'name-taken');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    await join(false);
   }
 
   const nameForm = (waiting: boolean) => (
@@ -100,7 +108,12 @@ export function JoinPage() {
           <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
         </div>
       ) : (
-        <RisoButton type="submit" kind="blue" size="large" fullWidth disabled={busy}>Join</RisoButton>
+        <>
+          <RisoButton type="submit" kind="blue" size="large" fullWidth disabled={busy}>Join</RisoButton>
+          {taken && (
+            <RisoButton type="button" kind="ghost" fullWidth disabled={busy} onClick={() => void join(true)}>That's me</RisoButton>
+          )}
+        </>
       )}
     </form>
   );

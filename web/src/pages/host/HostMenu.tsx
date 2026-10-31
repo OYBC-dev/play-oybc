@@ -14,17 +14,24 @@ export interface HostMenuProps {
   canEnd: boolean;
   /** "Leave game": lets go of the game on this device and goes Home (the seat stays; rejoin by code). */
   onLeave: () => void;
+  /**
+   * Lobby only: the host's "Roster" item, which expands the player chip list (where the dashed chips and
+   * tags open the bind sheet). Omitted = no Roster item (in play the roster is read-only).
+   */
+  onOpenRoster?: () => void;
 }
 
 /**
  * The game menu, for every seat: a dots button + popover. The host gets
- * "Make host" (opens the radio dialog; disabled with no other players) and,
- * when `canEnd`, a red "End game" (opens the confirm dialog); everyone gets
+ * "Make host" (opens the radio dialog; disabled with no other players), in the
+ * lobby "Roster" (expands the chip list; a dashed bubble counts the unbound
+ * names, hidden at 0) and, when `canEnd`, a red "End game" (opens the confirm
+ * dialog); everyone gets
  * "Leave game" (calls `onLeave`, no confirm). The popover closes on an
  * outside tap or Escape; focus goes to the first item on open and back to the
  * button on close.
  */
-export function HostMenu({ client, gameId, snapshot, canEnd, onLeave }: HostMenuProps) {
+export function HostMenu({ client, gameId, snapshot, canEnd, onLeave, onOpenRoster }: HostMenuProps) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<'make' | 'end' | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -48,6 +55,9 @@ export function HostMenu({ client, gameId, snapshot, canEnd, onLeave }: HostMenu
     .filter((s) => s.seatId !== snapshot.mySeatId)
     .sort((a, b) => a.joinedAt - b.joinedAt)
     .map((s) => ({ seatId: s.seatId, name: s.name }));
+  const seatIds = new Set(snapshot.seats.map((s) => s.seatId));
+  const unbound = (snapshot.roster ?? []).filter((r) => r.seatId === null || !seatIds.has(r.seatId)).length;
+  const showRoster = onOpenRoster !== undefined && snapshot.game.stage === 'lobby';
   const closeMenu = () => { setOpen(false); button.current?.focus(); };
   const choose = (d: 'make' | 'end') => { setOpen(false); setDialog(d); };
 
@@ -91,6 +101,12 @@ export function HostMenu({ client, gameId, snapshot, canEnd, onLeave }: HostMenu
                 <button type="button" role="menuitem" className={styles.item} disabled={others.length === 0} onClick={() => choose('make')}>
                   <RisoIcon name="you" size={18} />Make host
                 </button>
+                {showRoster && (
+                  <button type="button" role="menuitem" className={styles.item} onClick={() => { setOpen(false); onOpenRoster(); }}>
+                    <RisoIcon name="list" size={18} />Roster
+                    {unbound > 0 && <span className={styles.count} data-testid="roster-unbound-count">{unbound}</span>}
+                  </button>
+                )}
                 {canEnd && (
                   <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={() => choose('end')}>
                     <RisoIcon name="logout" size={18} />End game

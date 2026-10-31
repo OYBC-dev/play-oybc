@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Landing screen (web `HomePage`): host a new game or join one by code or pasted link.
+/// Landing screen (web `HomePage`): host a new game or join one by code or pasted link. "Host a game"
+/// validates the name, then opens Game settings in place; its Back returns here with the name kept.
 struct HomeView: View {
     let service: GameService
-    /// Called after `createGame` succeeds; the host is seated immediately.
+    /// Called after Game settings' `createGame` succeeds; the host is seated immediately.
     let onHosted: (_ code: String, _ gameId: String, _ seatId: String) -> Void
     /// Called with a parsed game code.
     let onJoin: (_ code: String) -> Void
@@ -15,9 +16,24 @@ struct HomeView: View {
     @State var name = ""
     @State var code = ""
     @State var error: String?
-    @State var busy = false
+    /// Game settings, kept across Back so Host again reopens them as they were.
+    @State var settings: GameSettingsModel?
+    @State var settingsShown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ZStack {
+            if settingsShown, let settings {
+                GameSettingsView(model: settings, onBack: { show(false) },
+                                 onCreated: { onHosted($0.code, $0.gameId, $0.seatId) })
+                    .transition(.move(edge: .trailing))
+            } else {
+                home.transition(.move(edge: .leading))
+            }
+        }
+    }
+
+    private var home: some View {
         RisoPage(gutter: Riso.gutter, top: 40, bottom: 32, spacing: 26) {
             hero
             if let resume {
@@ -33,7 +49,6 @@ struct HomeView: View {
                 RisoInputField(placeholder: "Your name", text: $name, maxLength: 20, contentType: .nickname) { host() }
                 if let error { ErrorText(error) }
                 RisoButton(title: "Host a game", kind: .primary, fullWidth: true, large: true) { host() }
-                    .risoDisabled(busy)
             }
             RisoCardBox {
                 SectionLabel("Join")
@@ -59,18 +74,18 @@ struct HomeView: View {
     }
 
     private func host() {
-        guard !busy else { return }
-        busy = true
-        error = nil
-        _Concurrency.Task {
-            do {
-                let res = try await service.createGame(name: name)
-                onHosted(res.code, res.gameId, res.seatId)
-            } catch {
-                self.error = ErrorMessages.message(for: error)
-                busy = false
-            }
+        switch GameSettingsModel.open(rawName: name, reusing: settings, service: service) {
+        case let .success(model):
+            error = nil
+            settings = model
+            show(true)
+        case let .failure(e):
+            error = e.message
         }
+    }
+
+    private func show(_ shown: Bool) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { settingsShown = shown }
     }
 
     private func join() {

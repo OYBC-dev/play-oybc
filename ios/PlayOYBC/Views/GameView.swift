@@ -30,7 +30,7 @@ struct GameView: View {
 
     @ViewBuilder private var reclaimToast: some View {
         if let snap = vm.snapshot, snap.game.hostSeatId == snap.mySeatId {
-            ReclaimPromptView(service: service, gameId: vm.gameId, reclaims: snap.reclaims)
+            ReclaimPromptView(service: service, gameId: vm.gameId, reclaims: snap.reclaims, seats: snap.seats)
         }
     }
 

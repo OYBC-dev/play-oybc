@@ -32,11 +32,118 @@ enum Mentions {
         return ActiveMention(start: start, partial: partial)
     }
 
-    /// Names offered for a partial: other players by case-insensitive prefix, then someone / anyone.
-    static func options(partial: String, seatNames: [String]) -> [String] {
-        let p = partial.lowercased()
-        let names = seatNames.filter { $0.lowercased().hasPrefix(p) }
-        return names + ["someone", "anyone"].filter { $0.hasPrefix(p) }
+    /// What an autocomplete row stands for.
+    enum Kind: Equatable {
+        /// A joined player.
+        case player
+        /// A roster name the host bound to a player.
+        case bound
+        /// A roster name nobody here carries yet.
+        case unbound
+        /// `someone` / `anyone`.
+        case keyword
+        /// The typed partial as a new name.
+        case add
+    }
+
+    /// One autocomplete row: `name` is what `pick` inserts after the `@`.
+    struct Option: Equatable, Hashable {
+        var name: String
+        var kind: Kind
+    }
+
+    /// Rows offered for a partial, in order (web `mentionOptions`; keep both identical): other
+    /// players by case-insensitive prefix, roster names bound to a player (not to you: that would
+    /// be a self-mention), unbound roster names, someone / anyone, then one `.add` row for the typed
+    /// partial. The add row needs a single word (no whitespace: past a space the person is typing
+    /// the task) of at least `minAddLength` characters that is a valid name, matches no row or
+    /// roster name exactly, is not the start of a present name or a keyword (that is them being
+    /// typed), and is not a near-miss of a present name (the server refuses those).
+    /// - Parameters:
+    ///   - partial: the text after the `@`.
+    ///   - seatNames: the other players' names (not you), in display order.
+    ///   - roster: the game's roster (names the pool mentions that no seat owns).
+    ///   - selfName: this seat's own name; never offered, and gates the add row like any present name.
+    ///   - selfSeatId: this seat's id; a roster name bound to it is not offered.
+    /// - Returns: the rows, in display order.
+    static func options(partial: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil,
+                        selfSeatId: String? = nil) -> [Option] {
+        // A finished mention ("@Cody " just picked) offers nothing, so Return submits the task and never
+        // turns it into "@Cody B ".
+        if partial.last?.isWhitespace == true {
+            let done = key(partial)
+            let names = seatNames + [selfName].compactMap { $0 } + roster.map(\.display) + keywords
+            if names.contains(where: { key($0) == done }) { return [] }
+        }
+        // Prefix-match without the trim: a trailing space still separates "Cody " from "Cody".
+        let p = prefixKey(partial)
+        let matches: (String) -> Bool = { prefixKey($0).hasPrefix(p) }
+        var rows = seatNames.filter(matches).map { Option(name: $0, kind: .player) }
+        rows += roster.filter { $0.seatId != nil && $0.seatId != selfSeatId && matches($0.display) }
+            .map { Option(name: $0.display, kind: .bound) }
+        rows += roster.filter { $0.seatId == nil && matches($0.display) }.map { Option(name: $0.display, kind: .unbound) }
+        rows += keywords.filter(matches).map { Option(name: $0, kind: .keyword) }
+        if let add = addRow(partial: partial, rows: rows, roster: roster, present: seatNames + [selfName].compactMap { $0 }) {
+            rows.append(add)
+        }
+        return rows
+    }
+
+    /// Fewest characters the add row offers (one stray character never creates a name).
+    static let minAddLength = 2
+
+    private static let keywords = ["someone", "anyone"]
+
+    /// The `.add` row for `partial`, or nil (see `options`).
+    private static func addRow(partial: String, rows: [Option], roster: [RosterName], present: [String]) -> Option? {
+        guard !partial.contains(where: \.isWhitespace), let name = normalizeName(partial), name.count >= minAddLength
+        else { return nil }
+        let k = key(name)
+        let taken = (rows.map(\.name) + roster.map(\.display) + present + keywords).contains { key($0) == k }
+        let near = (present + keywords).contains { key($0).hasPrefix(k) }
+            || present.contains { isNearName(k, seatKey: key($0)) }
+        return taken || near ? nil : Option(name: name, kind: .add)
+    }
+
+    /// The row Return picks: the first row, unless it is the add row (Return then submits the task
+    /// as typed; the add row is picked by tap only).
+    /// - Parameter options: the rows on show.
+    /// - Returns: the row to pick, or nil to submit.
+    static func returnPick(_ options: [Option]) -> Option? {
+        guard let first = options.first, first.kind != .add else { return nil }
+        return first
+    }
+
+    /// A display name as the server normalizes it (game-core `normalizeName`): trimmed, whitespace
+    /// collapsed, 1–20 letters / digits / spaces / apostrophes / hyphens, not `someone` / `anyone`.
+    /// - Returns: the normalized name, or nil when invalid.
+    static func normalizeName(_ raw: String) -> String? {
+        let name = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard (1...20).contains(name.count), name.allSatisfy(isNameChar) else { return nil }
+        guard !["someone", "anyone"].contains(name.lowercased()) else { return nil }
+        return name
+    }
+
+    /// Whether name key `key` plausibly names the seat with `seatKey` (game-core `isNearName`): the
+    /// same key, its first word, that word plus "s", or a 3+ char prefix of that word.
+    static func isNearName(_ key: String, seatKey: String) -> Bool {
+        if key == seatKey { return true }
+        let first = seatKey.split(separator: " ").first.map(String.init) ?? seatKey
+        if key == first || key == first + "s" { return true }
+        return key.count >= 3 && first.hasPrefix(key)
+    }
+
+    /// Case-, whitespace- and apostrophe-insensitive key (game-core `nameKey`).
+    static func key(_ name: String) -> String {
+        name.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            .replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'").lowercased()
+    }
+
+    /// Prefix-compare form of a name (web `prefixKey`): `key` without the trim, so whitespace runs
+    /// collapse, curly apostrophes and case fold, but a trailing space is kept.
+    static func prefixKey(_ name: String) -> String {
+        name.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'").lowercased()
     }
 
     /// Replaces the mention with `@name ` and caps the text at the task length.

@@ -17,6 +17,8 @@ export interface GameDoc {
   bingoCount: number;
   shortfalls: Record<string, number>;
   reviewGate: boolean;
+  /** The host's optional title for the game (≤ 40 chars, trimmed; absent when not set). */
+  gameName?: string;
 }
 /** games/{g}/members/{uid} */
 export interface MemberDoc { seatId: string }
@@ -54,11 +56,15 @@ export interface ReclaimDoc {
   resolvedAt?: number;
 }
 
-export interface CreateGameReq { name: string }
+/** `name` is the host's display name; `gameName` (≤ 40 chars, optional) and `freeSpace` (default false) are the game's settings, locked at creation. */
+export interface CreateGameReq { name: string; gameName?: string; freeSpace?: boolean }
+/** Longest game name accepted by `createGame`. */
+export const MAX_GAME_NAME_LENGTH = 40;
 export interface CreateGameRes { gameId: string; code: string; seatId: string }
 /** A requester whose reclaim of a seat was denied must wait this long before asking for it again. */
 export const RECLAIM_RETRY_COOLDOWN_MS = 60_000;
-export interface JoinGameReq { code: string; name: string }
+/** `reclaim` asks for the seat already held under `name` (the lost-phone case); without it a taken name is `name-taken`. */
+export interface JoinGameReq { code: string; name: string; reclaim?: boolean }
 export type JoinGameRes =
   | { status: 'joined' | 'resumed'; gameId: string; seatId: string }
   | { status: 'reclaim-pending'; gameId: string; reclaimId: string };

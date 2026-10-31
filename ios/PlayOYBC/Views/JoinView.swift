@@ -67,13 +67,17 @@ struct JoinView: View {
                 } else {
                     RisoButton(title: "Join", kind: .blue, fullWidth: true, large: true) { submit() }
                         .risoDisabled(model.busy)
+                    if model.taken {
+                        RisoButton(title: "That's me", kind: .ghost, fullWidth: true, minHeight: 44) { submit(reclaim: true) }
+                            .risoDisabled(model.busy)
+                    }
                 }
             }
         }
     }
 
-    private func submit() {
+    private func submit(reclaim: Bool = false) {
         guard !model.busy, case .name = model.phase else { return }
-        _Concurrency.Task { await model.submit(name: name) }
+        _Concurrency.Task { await model.submit(name: name, reclaim: reclaim) }
     }
 }

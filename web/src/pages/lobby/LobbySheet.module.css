@@ -1,19 +1,51 @@
-/* Fixed bottom sheet above the browser bar / home indicator. */
+/* Fixed bottom sheet above the browser bar / home indicator. The --sheet-* tokens swap on the ready sheet. */
 .sheet {
+  --sheet-bg: var(--riso-paper-2);
+  --sheet-muted: var(--riso-muted);
+  --sheet-hair: var(--riso-hair);
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
   box-sizing: border-box; max-width: 480px; max-height: 70vh; max-height: min(70dvh, 620px); margin: 0 auto;
   display: flex; flex-direction: column; gap: 10px;
-  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
-  background-color: var(--riso-paper-2); color: var(--riso-ink);
+  padding: 2px 16px calc(16px + env(safe-area-inset-bottom));
+  background-color: var(--sheet-bg); color: var(--riso-ink);
   border-top: 2px solid var(--riso-ink); border-radius: 22px 22px 0 0;
   transition: background-color 250ms ease, color 250ms ease;
 }
 @media (min-width: 481px) {
   .sheet { border-left: 2px solid var(--riso-ink); border-right: 2px solid var(--riso-ink); }
 }
-.ready { background-color: var(--riso-blue); color: var(--riso-on-color); }
-.ready .info p { color: var(--riso-on-color); }
-.handle { flex: none; width: 40px; height: 5px; border-radius: 99px; background: currentColor; opacity: 0.35; margin: 0 auto; }
+/* Ready: blue sheet, everything on it on-color (dark contract); hairlines are on-color at 25%. */
+.ready {
+  --sheet-bg: var(--riso-blue);
+  --sheet-muted: var(--riso-on-color);
+  --sheet-hair: color-mix(in srgb, var(--riso-on-color) 25%, transparent);
+  color: var(--riso-on-color);
+}
+/* Expanded: taller, with the spring the modal sheets use. */
+.expanded { max-height: 66vh; max-height: min(66dvh, 620px); animation: sheetUp 340ms cubic-bezier(0.34, 1.3, 0.64, 1) both; }
+@keyframes sheetUp { from { transform: translateY(40%); } to { transform: none; } }
+.scrim { position: fixed; inset: 0; z-index: 3; background: var(--riso-scrim); animation: scrimFade 0.18s ease both; }
+@keyframes scrimFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Grab row: the handle is a button (tap or drag); its hit area reaches 44px tall. */
+.grab { flex: none; position: relative; display: flex; justify-content: center; align-items: center; min-height: 24px; }
+.sheet .handleButton {
+  position: relative; display: grid; place-items: center; width: 120px; height: 24px; min-height: 0; padding: 0; margin: 0;
+  background: none; border: 0; color: inherit; cursor: grab; touch-action: none;
+}
+.handleButton::before { content: ''; position: absolute; inset: -6px 0 -14px; }
+.handleButton:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 0; border-radius: 6px; }
+.ready .handleButton:focus-visible { outline-color: var(--riso-on-color); }
+.handle { display: block; width: 40px; height: 5px; border-radius: 99px; background: currentColor; opacity: 0.35; }
+.expanded { padding-top: 8px; }
+.expandedBody .grab { min-height: 38px; }
+.done { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+.ready .done button { color: var(--riso-on-color); border-color: var(--riso-on-color); }
+.ready .done button:hover:not(:disabled) { background: transparent; }
+
+.label { font-family: var(--riso-font-head); font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sheet-muted); }
+
+/* Collapsed row. */
 .row { flex: 0 1 auto; min-height: 0; display: flex; align-items: center; gap: 14px; }
 .row > :not(.info) { flex: none; }
 .info { flex: 1; min-width: 0; min-height: 0; max-height: 100%; display: flex; flex-direction: column; gap: 4px; }
@@ -22,47 +54,92 @@
 .shorts { min-height: 0; max-height: calc(3 * 1.35em); overflow-y: auto; overscroll-behavior: contain; font-size: 12.5px; line-height: 1.35; }
 .code { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
 .short { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-red-text); overflow-wrap: anywhere; }
-.count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-muted); }
-.ready .count { color: var(--riso-on-color); }
+.count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--sheet-muted); }
 .error { flex: none; font-size: 13px; }
-/* Free space: a native checkbox drawn as a Riso switch (2px ink border, paper-2 track, blue when on; ink-static on the ready sheet). */
-.option { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
-.optionLabel { font-family: var(--riso-font-head); font-size: 15px; font-weight: 800; }
-.switch {
-  appearance: none; -webkit-appearance: none; flex: none; position: relative; box-sizing: border-box;
-  width: 52px; height: 30px; margin: 0; cursor: pointer;
-  background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: var(--riso-r-pill);
-  box-shadow: 2px 2px 0 var(--riso-shadow-ink); transition: background-color 150ms ease;
-}
-.switch::before {
-  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; box-sizing: border-box;
-  background: var(--riso-paper); border: 2px solid var(--riso-ink); border-radius: 50%;
-  transition: transform 150ms ease;
-}
-.switch:checked { background: var(--riso-blue); }
-.switch:checked::before { transform: translateX(22px); }
-.switch:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
-/* On the blue ready sheet a blue "on" track would vanish: ink-static instead (iOS mirrors this). */
-.ready .switch:checked { background: var(--riso-ink-static); }
-.ready .switch:focus-visible { outline-color: var(--riso-on-color); }
-.switch:disabled { opacity: 0.55; cursor: default; }
 .ready .error { color: var(--riso-on-color); }
+.playerActions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 /* QR tiles: static cream + ink so they scan in both themes. */
 .tile {
   flex: none; box-sizing: border-box; width: 64px; height: 64px; padding: 1px; cursor: pointer;
-  background: #fbf6ea; border: 2px solid #18120b; border-radius: 6px;
+  background: var(--riso-on-color); border: 2px solid var(--riso-ink-static); border-radius: 6px;
   box-shadow: 2px 2px 0 var(--riso-shadow-ink); line-height: 0;
 }
 .tile:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
 .ready .tile:focus-visible { outline-color: var(--riso-on-color); }
 .qrSvg { display: block; width: 100%; height: 100%; }
-.expanded { flex: none; display: flex; align-items: center; gap: 16px; padding-top: 6px; border-top: 1px solid var(--riso-hair); }
-.bigQr {
-  flex: none; box-sizing: border-box; width: 160px; height: 160px; padding: 2px; line-height: 0;
-  background: #fbf6ea; border: 2px solid #18120b; border-radius: 8px; box-shadow: 3px 3px 0 var(--riso-shadow-ink);
+
+/* Waiting pills: dashed ink keyline, muted label; the bouncing dots only once the pool is ready. */
+.miniPill {
+  box-sizing: border-box; height: 34px; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 2px dashed var(--riso-ink); border-radius: var(--riso-r-card);
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 11.5px; color: var(--sheet-muted); white-space: nowrap;
 }
-.actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.ready .miniPill, .ready .pill { border-color: var(--riso-on-color); }
+.pill {
+  box-sizing: border-box; height: 52px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 2px dashed var(--riso-ink); border-radius: var(--riso-r-card);
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 15px; color: var(--sheet-muted);
+}
+.pillText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pillShort { color: var(--riso-red-text); }
+.dots { flex: none; display: inline-flex; gap: 3px; }
+.dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: pbDots 1.2s infinite; }
+.pill .dots i { width: 5px; height: 5px; }
+.dots i:nth-child(2) { animation-delay: 0.2s; }
+.dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pbDots { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* Expanded body: a scroll region (with a bottom fade when it overflows) over the pinned footer. */
+.expandedBody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; outline: none; }
+.scrollWrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; margin: 0 -4px; padding: 0 4px 4px; }
+.fade { flex: none; height: 28px; margin-top: -28px; position: relative; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--sheet-bg)); }
+.footer { flex: none; }
+.launch > button { height: 52px; padding-block: 0; }
+
+/* a. Big QR + share. */
+.share { display: flex; align-items: center; gap: 16px; }
+.bigQr {
+  flex: none; box-sizing: border-box; width: 128px; height: 128px; padding: 3px; line-height: 0;
+  background: var(--riso-on-color); border: 2px solid var(--riso-ink-static); border-radius: var(--riso-r-card);
+  box-shadow: 3px 3px 0 var(--riso-shadow-ink);
+}
+.shareInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.bigCode { font-family: var(--riso-font-head); font-size: 38px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
+.link { font-size: 12.5px; color: var(--sheet-muted); word-break: break-all; }
+.shareButtons { display: flex; gap: 8px; }
+.shareButtons > button { flex: 1 1 0; min-width: 0; height: 40px; min-height: 40px; padding: 0 8px; font-size: 13px; gap: 6px; box-shadow: 2px 2px 0 var(--riso-shadow-ink); }
+.shareButtons > button svg { width: 14px; height: 14px; }
+
+/* b. Readiness summary. */
+.readiness { display: flex; flex-direction: column; gap: 8px; }
+.readinessRow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.readinessLabel { font-family: var(--riso-font-head); font-size: 15px; font-weight: 800; }
+.readinessSub { font-size: 12.5px; font-weight: 700; color: var(--sheet-muted); text-align: right; }
+.bar { box-sizing: border-box; height: 12px; border: 2px solid var(--riso-ink); border-radius: var(--riso-r-pill); background: var(--riso-paper-2); overflow: hidden; }
+.fill { height: 100%; background: var(--riso-blue); }
+.ready .fill { background: var(--riso-on-color); }
+.line { font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+.lineShort { color: var(--riso-red-text); }
+
+/* c. Players. */
+.players { display: flex; flex-direction: column; }
+.playersLabel { padding-bottom: 4px; }
+.playerList { list-style: none; margin: 0; padding: 0; }
+.playerRow { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.playerList .playerRow + .playerRow { border-top: 1px solid var(--sheet-hair); }
+.playerName { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-family: var(--riso-font-body); font-weight: 600; font-size: 15px; }
+.playerNameText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playerCount { font-family: var(--riso-font-head); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.stack { display: inline-flex; align-items: center; }
+.overlap { margin-left: -8px; }
+
 @media (prefers-reduced-motion: reduce) {
   .sheet { transition: none; }
-  .switch, .switch::before { transition: none; }
+  .expanded, .scrim { animation: none; }
+  .dots i { animation: none; opacity: 0.6; }
 }
+/* Launch? confirm: the unbound names as dashed chips, then Cancel / Launch. */
+.unbound { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.confirmActions { display: flex; gap: 8px; margin-top: 4px; }
+.confirmActions > * { flex: 1 1 0; min-width: 0; }

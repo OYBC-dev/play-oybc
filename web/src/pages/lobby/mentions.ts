@@ -1,3 +1,33 @@
+import type { RosterName } from 'game-core';
+
+/*
+ * Name rules restated from game-core `names.ts` (the web bundle imports game-core for types only).
+ * Keep these three in step with it.
+ */
+const NAME_RE = /^[\p{L}\p{N} '’-]+$/u;
+const KEYWORDS = ['someone', 'anyone'];
+const squash = (raw: string): string => raw.trim().replace(/\s+/g, ' ');
+
+/** game-core `normalizeName`: the trimmed, collapsed name, or null when invalid or a keyword. */
+export function normalizeName(raw: string): string | null {
+  const name = squash(raw);
+  if (name.length < 1 || name.length > 20 || !NAME_RE.test(name)) return null;
+  return KEYWORDS.includes(name.toLowerCase()) ? null : name;
+}
+
+/** game-core `nameKey`: case-, whitespace- and apostrophe-insensitive. */
+export function nameKey(name: string): string {
+  return squash(name).replace(/[’‘]/g, "'").toLowerCase();
+}
+
+/** game-core `isNearName`: `key` is the seat's key, its first name (or + "s"), or a 3+ char prefix of the first name. */
+export function isNearName(key: string, seatKey: string): boolean {
+  if (key === seatKey) return true;
+  const first = seatKey.split(' ')[0];
+  if (key === first || key === first + 's') return true;
+  return key.length >= 3 && first.startsWith(key);
+}
+
 const WORD = /[\p{L}\p{N}]/u;
 const isWord = (ch: string | undefined): boolean => ch !== undefined && WORD.test(ch);
 
@@ -13,11 +43,73 @@ export function activeMention(text: string, caret: number): { start: number; par
   return { start, partial };
 }
 
-/** Names offered for a partial mention: other players (prefix, case-insensitive), then someone / anyone. */
-export function mentionOptions(partial: string, seatNames: readonly string[]): string[] {
-  const p = partial.toLowerCase();
-  const names = seatNames.filter((n) => n.toLowerCase().startsWith(p));
-  const specials = ['someone', 'anyone'].filter((n) => n.startsWith(p));
-  return [...names, ...specials];
+/**
+ * What a suggestion row is: a joined player, a roster name bound to a player, a roster name nobody has
+ * yet, a keyword (`someone` / `anyone`), or a new name to add.
+ */
+export type MentionKind = 'player' | 'bound' | 'unbound' | 'keyword' | 'add';
+/**
+ * One suggestion row; picking it inserts `@<name> `. `seatId` is the player a `bound` row is bound to
+ * (its avatar is that player's).
+ */
+export interface MentionOption { name: string; kind: MentionKind; seatId?: string }
+
+/** Shortest typed name the add row offers (one stray character never makes a name). */
+export const ADD_ROW_MIN = 2;
+
+/**
+ * Prefix-compare form of a name: `nameKey` without the trim, so curly apostrophes and case fold but a
+ * trailing space still separates "@Cody " (a finished mention) from "Cody B".
+ */
+const prefixKey = (s: string): string => s.replace(/\s+/g, ' ').replace(/[’‘]/g, "'").toLowerCase();
+
+/** Who is asking and who is seated, for the self and stale-binding checks. */
+export interface MentionContext {
+  /** Your seat: a roster name bound to you is a self-mention, so it is not offered. */
+  selfSeatId?: string | null;
+  /** Seats present now; a name bound to a seat not here counts as unbound (as the chip list shows it). */
+  seatIds?: ReadonlySet<string>;
 }
 
+/**
+ * Suggestions for a partial mention, in order: other players (prefix, case- and apostrophe-insensitive),
+ * roster names bound to another player, unbound roster names, `someone` / `anyone`, then one `add` row
+ * for the typed name when it is at least ADD_ROW_MIN characters, one word, a valid name, matches no row
+ * above exactly, is not the start of anyone's name here (or of a keyword), and does not nearly name
+ * anyone here (the server refuses that as `unknown-mention`).
+ *
+ * @param seats names of the other players (not you), in join order
+ * @param roster the snapshot's roster
+ * @param present every seated name, you included (for the add row's exact / near checks); defaults to `seats`
+ * @param context your seat (drops a name bound to you) and the seats present
+ */
+export function mentionOptions(
+  partial: string,
+  seats: readonly string[],
+  roster: readonly RosterName[] = [],
+  present: readonly string[] = seats,
+  context: MentionContext = {},
+): MentionOption[] {
+  const p = prefixKey(partial);
+  const starts = (n: string) => prefixKey(n).startsWith(p);
+  const { selfSeatId = null, seatIds } = context;
+  const isBound = (r: RosterName) => r.seatId !== null && (seatIds === undefined || seatIds.has(r.seatId));
+  const rows: MentionOption[] = [
+    ...seats.filter(starts).map((name) => ({ name, kind: 'player' as const })),
+    ...roster.filter((r) => isBound(r) && r.seatId !== selfSeatId && starts(r.display))
+      .map((r) => ({ name: r.display, kind: 'bound' as const, seatId: r.seatId! })),
+    ...roster.filter((r) => !isBound(r) && starts(r.display)).map((r) => ({ name: r.display, kind: 'unbound' as const })),
+    ...KEYWORDS.filter(starts).map((name) => ({ name, kind: 'keyword' as const })),
+  ];
+  // One word only: past a space the person is typing the task, and a name just picked ends in one.
+  const typed = /\s/.test(partial) ? null : normalizeName(partial);
+  if (typed !== null && Array.from(typed).length >= ADD_ROW_MIN) {
+    const key = nameKey(typed);
+    const taken = [...present, ...roster.map((r) => r.display), ...KEYWORDS].some((n) => nameKey(n) === key);
+    // A prefix of someone here (or of a keyword) is them being typed; a near name is refused by the server.
+    const near = [...present, ...KEYWORDS].some((n) => nameKey(n).startsWith(key))
+      || present.some((n) => isNearName(key, nameKey(n)));
+    if (!taken && !near) rows.push({ name: typed, kind: 'add' });
+  }
+  return rows;
+}

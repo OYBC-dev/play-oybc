@@ -15,6 +15,7 @@ const snapshot: GameSnapshot = {
   bingos: [],
   standings: [],
   reclaims: [],
+  roster: [],
 };
 
 function setup(client: FakeGameClient) {
@@ -88,6 +89,22 @@ describe('JoinPage', () => {
     client.whoAmIResult = { gameId: 'g1', seatId: 's2' };
     await act(async () => client.emitReclaim('approved'));
     expect(await screen.findByTestId('stage-lobby')).toBeInTheDocument();
+  });
+
+  it('a taken name says so and offers That\'s me, which asks for the seat (a reclaim)', async () => {
+    const client = new FakeGameClient();
+    client.joinResult = appError('name-taken');
+    setup(client);
+    await userEvent.type(await nameField(), 'Josh');
+    await submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent('That name is taken');
+    expect(screen.getByLabelText('Your name')).not.toHaveAttribute('readonly');
+    expect(client.calls).toContainEqual(['joinGame', 'ABCDE', 'Josh']);
+    client.joinResult = { status: 'reclaim-pending', gameId: 'g1', reclaimId: 'r1' };
+    await userEvent.click(screen.getByRole('button', { name: "That's me" }));
+    await screen.findByText('Waiting for the host');
+    expect(client.calls).toContainEqual(['joinGame', 'ABCDE', 'Josh', 'reclaim']);
+    expect(screen.queryByRole('button', { name: "That's me" })).not.toBeInTheDocument();
   });
 
   it('returns to the name field with an error when the host says no', async () => {

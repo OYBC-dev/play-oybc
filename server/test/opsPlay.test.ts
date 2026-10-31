@@ -46,7 +46,7 @@ const markedCount = (state: GameState, seat: string) => state.boards.get(seat)!.
 /** Host u1, u2 (Cody), 30 tasks (launched unless told otherwise); u9 asks to reclaim Cody's seat by typing "cody". */
 function withReclaim(launched = true) {
   const l = launched ? playing() : lobby();
-  const j = join(l.state, ctxFor('u9'), { name: 'cody' }).result as { status: string; reclaimId: string };
+  const j = join(l.state, ctxFor('u9'), { name: 'cody', reclaim: true }).result as { status: string; reclaimId: string };
   expect(j.status).toBe('reclaim-pending');
   return { ...l, hostSeat: l.ids.u1, codySeat: l.ids.u2, reclaimId: j.reclaimId };
 }
@@ -80,7 +80,7 @@ describe('launch', () => {
       expect(b.completedLines).toEqual([]);
       expect(b.announcedLines).toEqual([]);
     }
-    expect(out.push.all).toEqual(['game', 'standings']);
+    expect(out.push.all).toEqual(['game', 'standings', 'roster', 'view']);
     expect(out.push.perSeat).toEqual({ [ids.u1]: ['board'], [ids.u2]: ['board'], [ids.u3]: ['board'] });
   });
   it('rejects a second launch and addTask after launch', () => {
@@ -292,15 +292,16 @@ describe('join while playing', () => {
     plain(state, 'extra');
     for (let seed = 1; seed <= 20; seed++) expect(joinWith(state, seeded(seed))).not.toContain('any1');
   });
-  it('a task naming someone not here yet never reaches them, nor an unidentified late joiner', () => {
+  it('launch releases a name nobody joined under: dealt like a plain task, except to the person if they join later', () => {
     const ghost = (s: GameState) =>
       s.putTask({ taskId: 'gh', text: '@Ghost trips', authorSeatId: 'x', mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost'] }, createdAt: 99 });
-    const { state, host } = soloLaunched(25, ghost);
-    expect(taskIdsOf(state.boards.get(host)!)).not.toContain('gh');
+    // 24 plain + the Ghost task: the host's 25-cell board must hold it.
+    const { state, host } = soloLaunched(24, ghost);
+    expect(taskIdsOf(state.boards.get(host)!)).toContain('gh');
+    expect(state.names.get('ghost')).toEqual({ seatId: null, retired: true });
     const other = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
-    expect(taskIdsOf(state.boards.get(other.seatId)!)).not.toContain('gh');
-    const them = join(state, ctxFor('u3'), { name: 'Ghost' }).result as { seatId: string };
-    expect(taskIdsOf(state.boards.get(them.seatId)!)).not.toContain('gh');
+    expect(taskIdsOf(state.boards.get(other.seatId)!)).toContain('gh');
+    expect(codeOf(() => join(state, ctxFor('u3'), { name: 'Ghost' }))).toBe('not-ready');
   });
   it('an @anyone task on no board may reach a late joiner', () => {
     const { state } = soloLaunched(25);
@@ -384,11 +385,11 @@ describe('resolveReclaim', () => {
     const { state, reclaimId } = withReclaim();
     resolveReclaim(state, ctxFor('u1'), { reclaimId, approve: false });
     expect(state.reclaims.get(reclaimId)!.resolvedAt).toBe(NOW);
-    expect(codeOf(() => join(state, ctxFor('u9'), { name: 'Cody' }))).toBe('reclaim-cooldown');
+    expect(codeOf(() => join(state, ctxFor('u9'), { name: 'Cody', reclaim: true }))).toBe('reclaim-cooldown');
     // Someone else may still ask.
-    expect((join(state, ctxFor('u10'), { name: 'Cody' }).result as { status: string }).status).toBe('reclaim-pending');
+    expect((join(state, ctxFor('u10'), { name: 'Cody', reclaim: true }).result as { status: string }).status).toBe('reclaim-pending');
     // After the minute, u9 may ask again.
-    const again = join(state, ctxFor('u9', NOW + 61_000), { name: 'Cody' }).result as { status: string; reclaimId: string };
+    const again = join(state, ctxFor('u9', NOW + 61_000), { name: 'Cody', reclaim: true }).result as { status: string; reclaimId: string };
     expect(again.status).toBe('reclaim-pending');
     expect(again.reclaimId).not.toBe(reclaimId);
   });
@@ -419,7 +420,7 @@ describe('resolveReclaim', () => {
   it('reclaiming the host seat after transfer keeps hostSeatId', () => {
     const { state, ids } = lobby();
     transferHost(state, ctxFor('u1'), { toSeatId: ids.u2 });
-    const j = join(state, ctxFor('u9'), { name: 'stephen' }).result as { reclaimId: string };
+    const j = join(state, ctxFor('u9'), { name: 'stephen', reclaim: true }).result as { reclaimId: string };
     resolveReclaim(state, ctxFor('u2'), { reclaimId: j.reclaimId, approve: true });
     expect(state.seatOf('u9')).toBe(ids.u1);
     expect(state.game!.hostSeatId).toBe(ids.u2);
@@ -427,7 +428,7 @@ describe('resolveReclaim', () => {
   });
   it('approving one of two competing reclaims denies the other', () => {
     const { state, codySeat, reclaimId } = withReclaim();
-    const j10 = join(state, ctxFor('u10'), { name: 'cody' }).result as { reclaimId: string };
+    const j10 = join(state, ctxFor('u10'), { name: 'cody', reclaim: true }).result as { reclaimId: string };
     const out = resolveReclaim(state, ctxFor('u1'), { reclaimId, approve: true });
     expect(state.reclaims.get(j10.reclaimId)!.status).toBe('denied');
     expect(out.push.reclaimNotify).toEqual(expect.arrayContaining([
@@ -440,11 +441,11 @@ describe('resolveReclaim', () => {
   it('approving a claim on the caller\'s own seat is refused and denied; deny still works', () => {
     const state = fresh();
     const g = claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' }).result;
-    const j = join(state, ctxFor('u9'), { name: 'stephen' }).result as { reclaimId: string };
+    const j = join(state, ctxFor('u9'), { name: 'stephen', reclaim: true }).result as { reclaimId: string };
     expect(codeOf(() => resolveReclaim(state, ctxFor('u1'), { reclaimId: j.reclaimId, approve: true }))).toBe('wrong-stage');
     expect(state.reclaims.get(j.reclaimId)!.status).toBe('denied');
     expect(state.seatOf('u1')).toBe(g.seatId);
-    const j2 = join(state, ctxFor('u10'), { name: 'stephen' }).result as { reclaimId: string };
+    const j2 = join(state, ctxFor('u10'), { name: 'stephen', reclaim: true }).result as { reclaimId: string };
     resolveReclaim(state, ctxFor('u1'), { reclaimId: j2.reclaimId, approve: false });
     expect(state.reclaims.get(j2.reclaimId)!.status).toBe('denied');
   });
@@ -520,6 +521,6 @@ describe('admin', () => {
 
 describe('OPS', () => {
   it('maps every protocol op to its handler', () => {
-    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'deleteTask', 'end', 'join', 'launch', 'mark', 'resolveReclaim', 'setOptions', 'transferHost']);
+    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'bindName', 'deleteTask', 'end', 'join', 'launch', 'mark', 'resolveReclaim', 'retireName', 'setOptions', 'transferHost']);
   });
 });

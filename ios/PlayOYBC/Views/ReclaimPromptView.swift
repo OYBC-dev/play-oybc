@@ -28,10 +28,13 @@ final class ReclaimPromptModel: ObservableObject {
 /// are pending; outside its own frame touches reach the screen beneath.
 struct ReclaimPromptView: View {
     let reclaims: [Reclaim]
+    /// The game's seats, so a card names the seat asked for (a bound name can differ from the typed one).
+    let seats: [Seat]
     @StateObject private var model: ReclaimPromptModel
 
-    init(service: GameService, gameId: String, reclaims: [Reclaim]) {
+    init(service: GameService, gameId: String, reclaims: [Reclaim], seats: [Seat] = []) {
         self.reclaims = reclaims
+        self.seats = seats
         _model = StateObject(wrappedValue: ReclaimPromptModel(service: service, gameId: gameId))
     }
 
@@ -68,7 +71,7 @@ struct ReclaimPromptView: View {
 
     private func card(_ r: Reclaim) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Someone wants to take \(r.doc.name)'s seat")
+            Text(Self.headline(for: r.doc, seats: seats))
                 .font(.risoHead(19, .extraBold)).tracking(-0.19)
                 .foregroundStyle(Color.risoInk)
                 .fixedSize(horizontal: false, vertical: true)
@@ -83,6 +86,16 @@ struct ReclaimPromptView: View {
         .risoCard()
         .risoHardShadow(Riso.Shadow.large)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The card's line (web `ReclaimPrompt`): names the seat asked for, falling back to the typed name when
+    /// the seat is gone; adds the typed name ("Someone as Cody wants to take C-Dog's seat") only when the
+    /// two differ (case-insensitively).
+    static func headline(for doc: ReclaimDoc, seats: [Seat]) -> String {
+        let seatName = seats.first { $0.seatId == doc.seatId }?.name ?? doc.name
+        return seatName.lowercased() == doc.name.lowercased()
+            ? "Someone wants to take \(seatName)'s seat"
+            : "Someone as \(doc.name) wants to take \(seatName)'s seat"
     }
 
     private func resolve(_ id: String, _ approve: Bool) {

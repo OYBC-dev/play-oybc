@@ -12,6 +12,14 @@ final class GameViewHostingTests: XCTestCase {
         }
     }
 
+    /// Spins until `condition` holds or `timeout` passes (CI runners render the first frame slowly).
+    private func waitUntil(_ timeout: Double = 5, _ condition: () -> Bool) async {
+        let end = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < end {
+            try? await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     private func snapshot(_ stage: Stage) -> GameSnapshot {
         var cells: [BoardCell] = (0..<25).map { .task(taskId: "t\($0)", text: "T\($0)") }
         cells[12] = .free
@@ -30,11 +38,12 @@ final class GameViewHostingTests: XCTestCase {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
         window.rootViewController = UIHostingController(rootView: GameView(vm: vm, service: fake, onHome: {}))
         window.makeKeyAndVisible()
-        await spin()
+        await waitUntil { fake.subscribeCount == 1 }
         XCTAssertEqual(fake.subscribeCount, 1)
 
         for stage in [Stage.lobby, .playing, .ended] {
             fake.emit(snapshot(stage))
+            await waitUntil { vm.snapshot?.game.stage == stage }
             await spin()
             XCTAssertEqual(vm.snapshot?.game.stage, stage, "snapshot for \(stage) delivered")
             XCTAssertEqual(fake.subscribeCount, 1, "subscribed once (\(stage))")
@@ -44,7 +53,7 @@ final class GameViewHostingTests: XCTestCase {
         // Tearing the screen down cancels the subscription.
         window.rootViewController = nil
         window.isHidden = true
-        await spin()
+        await waitUntil { fake.activeSubscriptions == 0 }
         XCTAssertEqual(fake.activeSubscriptions, 0)
     }
 }

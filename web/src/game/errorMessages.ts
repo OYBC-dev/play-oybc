@@ -1,5 +1,6 @@
 const MESSAGES: Record<string, string> = {
   'invalid-name': 'Use 1–20 letters, numbers or spaces',
+  'name-taken': 'That name is taken',
   'game-not-found': 'No game with that code',
   'game-ended': 'That game has ended',
   'reclaim-not-found': 'That request is gone',
@@ -12,6 +13,8 @@ const MESSAGES: Record<string, string> = {
   'unknown-seat': 'That player is not in this game',
   'invalid-text': 'Task text is empty or too long',
   'reclaim-cooldown': 'Wait a minute before asking again',
+  'name-not-found': 'That name is gone',
+  'seat-not-found': 'That player left',
 };
 
 const FALLBACK = 'Something went wrong';

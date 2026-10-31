@@ -1,9 +1,12 @@
+import type { NameState } from 'game-core';
 import type { BingoRow, BoardRow, GameRow, ReclaimRow, SeatRow, TaskRow } from './state';
 
 /** Everything a persistence layer hands back on load. */
 export interface Loaded {
   game: GameRow | null; seats: SeatRow[]; members: Array<[string, string]>; tasks: TaskRow[];
   boards: BoardRow[]; bingos: BingoRow[]; reclaims: ReclaimRow[];
+  /** Name states as `[key, state]` pairs (absent from stores written before the roster). */
+  names?: Array<[string, NameState]>;
 }
 
 /** Synchronous write-through store behind `GameState`. */
@@ -18,6 +21,7 @@ export interface Persistence {
   putBoard(b: BoardRow): void;
   appendBingo(b: BingoRow): void;
   putReclaim(r: ReclaimRow): void;
+  putNameState(key: string, st: NameState): void;
   purge(): void;
 }
 
@@ -30,6 +34,7 @@ export class MemoryPersistence implements Persistence {
   private boards = new Map<string, BoardRow>();
   private bingos: BingoRow[] = [];
   private reclaims = new Map<string, ReclaimRow>();
+  private names = new Map<string, NameState>();
 
   load(): Loaded {
     const c = <T>(v: T): T => structuredClone(v);
@@ -37,6 +42,7 @@ export class MemoryPersistence implements Persistence {
       // A row written before `freeSpace` existed migrates as `SqlPersistence` does: off in the lobby, on once dealt.
       game: this.game && { ...c(this.game), freeSpace: this.game.freeSpace ?? this.game.stage !== 'lobby' }, seats: c([...this.seats.values()]), members: [...this.members], tasks: c([...this.tasks.values()]),
       boards: c([...this.boards.values()]), bingos: c(this.bingos), reclaims: c([...this.reclaims.values()]),
+      names: c([...this.names]),
     };
   }
   putGame(g: GameRow): void { this.game = structuredClone(g); }
@@ -51,9 +57,10 @@ export class MemoryPersistence implements Persistence {
     if (i >= 0) this.bingos[i] = structuredClone(b); else this.bingos.push(structuredClone(b));
   }
   putReclaim(r: ReclaimRow): void { this.reclaims.set(r.id, structuredClone(r)); }
+  putNameState(key: string, st: NameState): void { this.names.set(key, structuredClone(st)); }
   purge(): void {
     this.game = null;
-    this.seats.clear(); this.members.clear(); this.tasks.clear(); this.boards.clear(); this.reclaims.clear();
+    this.seats.clear(); this.members.clear(); this.tasks.clear(); this.boards.clear(); this.reclaims.clear(); this.names.clear();
     this.bingos = [];
   }
 }
@@ -66,7 +73,8 @@ export class SqlPersistence implements Persistence {
     const ddl = [
       `CREATE TABLE IF NOT EXISTS game (id INTEGER PRIMARY KEY CHECK (id = 1), gameId TEXT NOT NULL, code TEXT NOT NULL, stage TEXT NOT NULL,
         hostSeatId TEXT NOT NULL, createdAt INTEGER NOT NULL, launchedAt INTEGER, endedAt INTEGER, bingoCount INTEGER NOT NULL,
-        reviewGate INTEGER NOT NULL, freeSpace INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`,
+        reviewGate INTEGER NOT NULL, freeSpace INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL,
+        gameName TEXT)`,
       `CREATE TABLE IF NOT EXISTS seats (seatId TEXT PRIMARY KEY, name TEXT NOT NULL, nameKey TEXT NOT NULL, joinedAt INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS members (uid TEXT PRIMARY KEY, seatId TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS tasks (taskId TEXT PRIMARY KEY, text TEXT NOT NULL, authorSeatId TEXT NOT NULL, mentions TEXT NOT NULL, createdAt INTEGER NOT NULL)`,
@@ -75,6 +83,7 @@ export class SqlPersistence implements Persistence {
         playerBingoNumber INTEGER NOT NULL, at INTEGER NOT NULL, status TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS reclaims (id TEXT PRIMARY KEY, requesterUid TEXT NOT NULL, name TEXT NOT NULL, seatId TEXT NOT NULL,
         status TEXT NOT NULL, createdAt INTEGER NOT NULL, resolvedAt INTEGER)`,
+      `CREATE TABLE IF NOT EXISTS names (key TEXT PRIMARY KEY, seatId TEXT, retired INTEGER NOT NULL DEFAULT 0)`,
     ];
     for (const q of ddl) sql.exec(q);
     // Rooms created before the free-space option have a `game` table without the column; add it. A lobby room
@@ -84,6 +93,7 @@ export class SqlPersistence implements Persistence {
       sql.exec('ALTER TABLE game ADD COLUMN freeSpace INTEGER NOT NULL DEFAULT 0');
       sql.exec("UPDATE game SET freeSpace = 1 WHERE stage != 'lobby'");
     }
+    if (!cols.includes('gameName')) sql.exec('ALTER TABLE game ADD COLUMN gameName TEXT');
   }
 
   load(): Loaded {
@@ -96,6 +106,7 @@ export class SqlPersistence implements Persistence {
             createdAt: g.createdAt as number, ...(g.launchedAt !== null && { launchedAt: g.launchedAt as number }),
             ...(g.endedAt !== null && { endedAt: g.endedAt as number }), bingoCount: g.bingoCount as number,
             reviewGate: g.reviewGate === 1, freeSpace: g.freeSpace === 1, rev: g.rev as number, lastMutationAt: g.lastMutationAt as number,
+            ...(typeof g.gameName === 'string' && g.gameName !== '' && { gameName: g.gameName }),
           }
         : null,
       seats: all('SELECT * FROM seats') as unknown as SeatRow[],
@@ -110,15 +121,16 @@ export class SqlPersistence implements Persistence {
         const { resolvedAt, ...rest } = r;
         return (resolvedAt === null ? rest : { ...rest, resolvedAt }) as unknown as ReclaimRow;
       }),
+      names: all('SELECT * FROM names').map((n): [string, NameState] => [n.key as string, { seatId: (n.seatId as string | null) ?? null, retired: n.retired === 1 }]),
     };
   }
 
   putGame(g: GameRow): void {
     this.sql.exec(
-      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, freeSpace, rev, lastMutationAt)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, freeSpace, rev, lastMutationAt, gameName)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       g.gameId, g.code, g.stage, g.hostSeatId, g.createdAt, g.launchedAt ?? null, g.endedAt ?? null, g.bingoCount,
-      g.reviewGate ? 1 : 0, g.freeSpace ? 1 : 0, g.rev, g.lastMutationAt,
+      g.reviewGate ? 1 : 0, g.freeSpace ? 1 : 0, g.rev, g.lastMutationAt, g.gameName ?? null,
     );
   }
   putSeat(s: SeatRow): void {
@@ -153,7 +165,10 @@ export class SqlPersistence implements Persistence {
       r.id, r.requesterUid, r.name, r.seatId, r.status, r.createdAt, r.resolvedAt ?? null,
     );
   }
+  putNameState(key: string, st: NameState): void {
+    this.sql.exec('INSERT OR REPLACE INTO names (key, seatId, retired) VALUES (?, ?, ?)', key, st.seatId, st.retired ? 1 : 0);
+  }
   purge(): void {
-    for (const t of ['game', 'seats', 'members', 'tasks', 'boards', 'bingos', 'reclaims']) this.sql.exec(`DELETE FROM ${t}`);
+    for (const t of ['game', 'seats', 'members', 'tasks', 'boards', 'bingos', 'reclaims', 'names']) this.sql.exec(`DELETE FROM ${t}`);
   }
 }

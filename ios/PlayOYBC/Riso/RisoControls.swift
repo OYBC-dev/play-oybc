@@ -61,27 +61,52 @@ struct RisoButton: View {
     /// Centre a label that wraps (a long name in "Make {Name} host"). Off by default: the
     /// alignment shifts single-line glyphs by a subpixel, which would move every baseline.
     var centersWrappedLabel: Bool = false
+    /// A fixed minimum outer height (the lobby sheet's 40pt share row); nil = padding decides.
+    var minHeight: CGFloat? = nil
+    /// Overrides the size's horizontal padding (two 40pt buttons sharing a narrow column).
+    var horizontalPadding: CGFloat? = nil
     let action: () -> Void
-
-    private var fontSize: CGFloat { large ? 17 : (small ? 13 : 15) }
-    private var vPad: CGFloat { large ? 16 : (small ? 8 : 13) }
-    private var hPad: CGFloat { large ? 20 : (small ? 12 : 18) }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title)
-            }
-            .font(.risoHead(fontSize, .bold))
-            .multilineTextAlignment(centersWrappedLabel ? .center : .leading)
-            .foregroundStyle(kind.foreground)
-            .frame(maxWidth: fullWidth ? .infinity : nil)
-            .padding(.vertical, vPad)
-            .padding(.horizontal, hPad)
-            .risoCard(fill: kind.fill)
+            RisoButtonLabel(title: title, kind: kind, systemImage: systemImage, fullWidth: fullWidth, large: large,
+                            small: small, centersWrappedLabel: centersWrappedLabel, minHeight: minHeight,
+                            horizontalPadding: horizontalPadding)
         }
         .buttonStyle(RisoButtonStyle(showsShadow: kind.hasShadow))
+    }
+}
+
+/// `RisoButton`'s face on its own, for controls that bring their own button (a `ShareLink`):
+/// pair it with `.buttonStyle(RisoButtonStyle(showsShadow: kind.hasShadow))`.
+struct RisoButtonLabel: View {
+    let title: String
+    var kind: RisoButtonKind = .neutral
+    var systemImage: String? = nil
+    var fullWidth: Bool = false
+    var large: Bool = false
+    var small: Bool = false
+    var centersWrappedLabel: Bool = false
+    var minHeight: CGFloat? = nil
+    var horizontalPadding: CGFloat? = nil
+
+    private var fontSize: CGFloat { large ? 17 : (small ? 13 : 15) }
+    private var vPad: CGFloat { large ? 16 : (small ? 8 : 13) }
+    private var hPad: CGFloat { horizontalPadding ?? (large ? 20 : (small ? 12 : 18)) }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(title)
+        }
+        .font(.risoHead(fontSize, .bold))
+        .multilineTextAlignment(centersWrappedLabel ? .center : .leading)
+        .foregroundStyle(kind.foreground)
+        .frame(maxWidth: fullWidth ? .infinity : nil)
+        .frame(minHeight: minHeight.map { max(0, $0 - 2 * vPad) })
+        .padding(.vertical, vPad)
+        .padding(.horizontal, hPad)
+        .risoCard(fill: kind.fill)
     }
 }
 
@@ -353,11 +378,12 @@ struct RisoProgressBar: View {
     var value: Double
     var color: Color = .risoRed
     var height: CGFloat = 12
+    var track: Color = .risoPaper
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.risoPaper)
+                Capsule().fill(track)
                 Rectangle()
                     .fill(color)
                     .frame(width: max(0, min(1, value)) * geo.size.width)

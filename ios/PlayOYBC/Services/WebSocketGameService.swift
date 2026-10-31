@@ -122,14 +122,14 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
 
     // MARK: GameService
 
-    func createGame(name: String) async throws -> CreateGameRes {
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
         let token: String
         do { token = try await session.idToken() } catch { throw AppError.from(error) }
         var req = URLRequest(url: Self.httpURL(baseURL).appendingPathComponent("api/createGame"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONEncoder().encode(CreateGameReq(name: name))
+        req.httpBody = try JSONEncoder().encode(CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace))
         let data: Data, response: URLResponse
         do { (data, response) = try await http.data(for: req) } catch { throw AppError(code: "offline", token: nil, underlying: error) }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -143,8 +143,10 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
         return out
     }
 
-    func joinGame(code: String, name: String) async throws -> JoinGameRes {
-        let res: JoinGameRes = try await room(code).act("join", ["name": name])
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        var args: [String: Any] = ["name": name]
+        if reclaim { args["reclaim"] = true }
+        let res: JoinGameRes = try await room(code).act("join", args)
         switch res {
         case let .joined(g, _), let .resumed(g, _), let .reclaimPending(g, _): remember(gameId: g, code: code)
         }
@@ -193,6 +195,19 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
     func launch(gameId: String) async throws { try await actVoid(gameId, "launch", [:]) }
     func setOptions(gameId: String, freeSpace: Bool) async throws {
         try await actVoid(gameId, "setOptions", ["freeSpace": freeSpace])
+    }
+
+    func bindName(gameId: String, key: String, seatId: String?) async throws {
+        try await actVoid(gameId, "bindName", Self.bindNameArgs(key: key, seatId: seatId))
+    }
+
+    func retireName(gameId: String, key: String) async throws {
+        try await actVoid(gameId, "retireName", ["key": key])
+    }
+
+    /// `bindName` args: `seatId` goes out as an explicit JSON `null` for "nobody yet".
+    static func bindNameArgs(key: String, seatId: String?) -> [String: Any] {
+        ["key": key, "seatId": seatId.map { $0 as Any } ?? NSNull()]
     }
 
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {

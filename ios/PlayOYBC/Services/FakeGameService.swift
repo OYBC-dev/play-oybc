@@ -12,13 +12,16 @@ final class FakeGameService: GameService, @unchecked Sendable {
     var whoAmIError: Error?
     var createResult: Result<CreateGameRes, Error> = .success(CreateGameRes(gameId: "g1", code: "ABCDE", seatId: "s1"))
     var joinResult: Result<JoinGameRes, Error> = .success(.joined(gameId: "g1", seatId: "s2"))
-    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, end, resolveReclaim, transferHost).
+    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, bindName, retireName, end, resolveReclaim, transferHost).
     var callError: Error?
+    /// When set, bindName / retireName suspend until `releaseRoster()`.
+    var gateRoster = false
+    private var rosterGates: [CheckedContinuation<Void, Never>] = []
     private(set) var toggledCells: [Int] = []
     /// The `marked` value sent with each toggle, parallel to `toggledCells`.
     private(set) var toggledValues: [Bool] = []
     private(set) var whoAmICodes: [String] = []
-    private(set) var joins: [(code: String, name: String)] = []
+    private(set) var joins: [(code: String, name: String, reclaim: Bool)] = []
     private(set) var calls: [String] = []
     /// How many times `subscribe` was called, and how many of those streams are still open.
     private(set) var subscribeCount = 0
@@ -47,13 +50,61 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func emitReclaim(_ s: ReclaimStatus) { reclaimContinuation?.yield(s) }
     func failReclaim(_ e: Error) { reclaimContinuation?.finish(throwing: e) }
 
+    /// Records the call, then (with `gateRoster`) suspends until `releaseRoster()`, then throws `callError` if set.
+    private func gatedVoid(_ name: String) async throws {
+        let gated = lock.withLock { calls.append(name); return gateRoster }
+        if gated { await withCheckedContinuation { c in lock.withLock { rosterGates.append(c) } } }
+        if let callError { throw callError }
+    }
+    /// Resumes every bindName / retireName parked by `gateRoster`.
+    /// How many roster calls are parked at the gate.
+    var parkedRosterCalls: Int { lock.withLock { rosterGates.count } }
+    func releaseRoster() {
+        let waiting: [CheckedContinuation<Void, Never>] = lock.withLock { defer { rosterGates = [] }; return rosterGates }
+        waiting.forEach { $0.resume() }
+    }
+
     private func void(_ name: String) throws {
         calls.append(name)
         if let callError { throw callError }
     }
 
-    func createGame(name: String) async throws -> CreateGameRes { calls.append("createGame:\(name)"); return try createResult.get() }
-    func joinGame(code: String, name: String) async throws -> JoinGameRes { joins.append((code, name)); return try joinResult.get() }
+    /// The options of every `createGame` call, in order.
+    private(set) var creates: [CreateGameReq] = []
+    /// When set, createGame suspends until `releaseCreate()`.
+    var gateCreate = false
+    private var createGate: CheckedContinuation<Void, Never>?
+    /// `releaseCreate()` ran before the create reached its gate.
+    private var createReleased = false
+    func releaseCreate() {
+        let c: CheckedContinuation<Void, Never>? = lock.withLock {
+            if let c = createGate { createGate = nil; return c }
+            createReleased = true
+            return nil
+        }
+        c?.resume()
+    }
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
+        let gated = lock.withLock {
+            calls.append("createGame:\(name)")
+            creates.append(CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace))
+            return gateCreate
+        }
+        if gated {
+            await withCheckedContinuation { c in
+                let pass: Bool = lock.withLock {
+                    if createReleased { createReleased = false; return true }
+                    createGate = c
+                    return false
+                }
+                if pass { c.resume() }
+            }
+        }
+        return try createResult.get()
+    }
+    func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes {
+        joins.append((code, name, reclaim)); return try joinResult.get()
+    }
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         whoAmICodes.append(code)
         if let whoAmIError { throw whoAmIError }
@@ -71,6 +122,10 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
     func launch(gameId: String) async throws { try void("launch") }
     func setOptions(gameId: String, freeSpace: Bool) async throws { try void("setOptions:\(freeSpace)") }
+    func bindName(gameId: String, key: String, seatId: String?) async throws {
+        try await gatedVoid("bindName:\(key):\(seatId ?? "nil")")
+    }
+    func retireName(gameId: String, key: String) async throws { try await gatedVoid("retireName:\(key)") }
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         let gated = lock.withLock { toggledCells.append(cellIndex); toggledValues.append(marked); return gateToggle }
         if gated {

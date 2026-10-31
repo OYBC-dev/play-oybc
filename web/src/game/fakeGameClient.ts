@@ -1,5 +1,5 @@
 import type { CreateGameRes, JoinGameRes, ReclaimDoc, ToggleMarkRes, WhoAmIRes } from 'game-core';
-import type { GameClient, GameSnapshot } from './GameClient';
+import type { CreateGameOptions, GameClient, GameSnapshot } from './GameClient';
 
 /** Error shaped like a callable failure, for tests. */
 export function appError(code: string): Error & { details: { code: string } } {
@@ -13,6 +13,8 @@ export class FakeGameClient implements GameClient {
   joinResult: JoinGameRes | Error = { status: 'joined', gameId: 'g1', seatId: 's2' };
   whoAmIResult: WhoAmIRes | Error = null;
   snapshot: GameSnapshot | null = null;
+  bindResult: void | Error = undefined;
+  retireResult: void | Error = undefined;
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
   private snapshotErrorListeners = new Set<(e: Error) => void>();
   private reclaimListeners = new Set<(s: ReclaimDoc['status']) => void>();
@@ -24,8 +26,10 @@ export class FakeGameClient implements GameClient {
     return value;
   }
 
-  createGame(name: string) { return this.result('createGame', [name], this.createResult); }
-  joinGame(code: string, name: string) { return this.result('joinGame', [code, name], this.joinResult); }
+  createGame(name: string, options?: CreateGameOptions) {
+    return this.result('createGame', options === undefined ? [name] : [name, options], this.createResult);
+  }
+  joinGame(code: string, name: string, options?: { reclaim?: boolean }) { return this.result('joinGame', options?.reclaim ? [code, name, 'reclaim'] : [code, name], this.joinResult); }
   whoAmI(code: string) { return this.result('whoAmI', [code], this.whoAmIResult); }
 
   subscribe(gameId: string, seatId: string, onChange: (s: GameSnapshot) => void, onError?: (e: Error) => void): () => void {
@@ -59,6 +63,8 @@ export class FakeGameClient implements GameClient {
   deleteTask(gameId: string, taskId: string) { return this.result('deleteTask', [gameId, taskId], undefined); }
   launch(gameId: string) { return this.result('launch', [gameId], undefined); }
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void> { return this.result('setOptions', [gameId, options], undefined); }
+  bindName(gameId: string, key: string, seatId: string | null): Promise<void> { return this.result('bindName', [gameId, key, seatId], this.bindResult); }
+  retireName(gameId: string, key: string): Promise<void> { return this.result('retireName', [gameId, key], this.retireResult); }
   end(gameId: string) { return this.result('end', [gameId], undefined); }
   toggleMark(gameId: string, cellIndex: number, marked: boolean) {
     return this.result<ToggleMarkRes>('toggleMark', [gameId, cellIndex, marked], { marks: [], completedLines: [], newBingoSeqs: [] });

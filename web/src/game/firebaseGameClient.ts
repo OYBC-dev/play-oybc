@@ -7,14 +7,21 @@ import type { GameClient, GameSnapshot } from './GameClient';
 
 /** Real GameClient: callables for writes, Firestore listeners for reads. */
 export const firebaseGameClient: GameClient = {
-  createGame: (name) => api.createGame({ name }),
-  joinGame: (code, name) => api.joinGame({ code, name }),
+  createGame: (name, options = {}) => api.createGame({ name, ...options }),
+  joinGame: (code, name, options) => api.joinGame(options?.reclaim ? { code, name, reclaim: true } : { code, name }),
   whoAmI: (code) => api.whoAmI({ code }),
   addTask: async (gameId, text) => { await api.addTask({ gameId, text }); },
   deleteTask: async (gameId, taskId) => { await api.deleteTask({ gameId, taskId }); },
   launch: async (gameId) => { await api.launchGame({ gameId }); },
   // The legacy backend has no game options (free space is always on).
   setOptions: async () => {
+    throw Object.assign(new Error('unimplemented'), { details: { code: 'unimplemented' } });
+  },
+  // Nor a roster.
+  bindName: async () => {
+    throw Object.assign(new Error('unimplemented'), { details: { code: 'unimplemented' } });
+  },
+  retireName: async () => {
     throw Object.assign(new Error('unimplemented'), { details: { code: 'unimplemented' } });
   },
   toggleMark: (gameId, cellIndex, marked) => api.toggleMark({ gameId, cellIndex, marked }),
@@ -37,7 +44,7 @@ export const firebaseGameClient: GameClient = {
     const emit = () => {
       const { game, seats, view, board, bingos } = state;
       if (closed || !game || !seats || !view || board === undefined || !bingos) return;
-      onChange({ game, mySeatId: seatId, seats, view, board, bingos, standings: [], reclaims: state.reclaims });
+      onChange({ game, mySeatId: seatId, seats, view, board, bingos, standings: [], reclaims: state.reclaims, roster: [] });
     };
 
     const setReclaimListener = (isHost: boolean, db: ReturnType<typeof firebase>['db']) => {

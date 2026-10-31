@@ -1,6 +1,8 @@
 import { assignAnyone, dealBoard } from '../src/deal';
 import { dealableCounts, shortfalls } from '../src/readiness';
 import { canBeDealt, mentionContext } from '../src/visibility';
+import { unboundKeys } from '../src/roster';
+import { NameState } from '../src/types';
 import { makeSeededRng } from './seededRng';
 import { PoolTask, Seat } from '../src/types';
 
@@ -81,9 +83,11 @@ describe('readiness guarantees launch (property)', () => {
       const freeSpace = rng() < 0.5;
       if (Object.keys(shortfalls(tasks, party, { freeSpace })).length > 0) continue;
       readyRuns++;
-      const assignment = assignAnyone(tasks, party, rng);
-      const boards = party.map((s) => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment }));
-      const ctx = mentionContext(tasks, party);
+      // Launch releases every unbound name before dealing.
+      const names = new Map<string, NameState>(unboundKeys(tasks, party, new Map()).map((k) => [k, { seatId: null, retired: true }]));
+      const assignment = assignAnyone(tasks, party, rng, names);
+      const boards = party.map((s) => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment, names }));
+      const ctx = mentionContext(tasks, party, names);
       const byId = new Map(tasks.map((t) => [t.id, t]));
       const onBoards = (id: string) =>
         boards.filter((b) => b.some((c) => c.kind === 'task' && c.taskId === id)).length;
@@ -120,17 +124,20 @@ describe('assignAnyone', () => {
 
 describe('dealableCounts with names nobody here has yet', () => {
   const ghost = (id: string): PoolTask => ({ ...mk(id), text: `@Ghost ${id}`, mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost'] } });
-  it('counts for identified seats only, and for everyone else once that person joins', () => {
-    // s2 is named by a task, so identified; s1 and s3 are not.
+  it('counts for every seat the task does not refer to (launch releases the hold), never for the person once they join', () => {
     const tasks = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), mk('m', ['s2']), ...['g1', 'g2', 'g3'].map(ghost)];
-    expect(dealableCounts(tasks, seats, { freeSpace: true })).toEqual({ s1: 11, s2: 13, s3: 11 });
+    expect(dealableCounts(tasks, seats, { freeSpace: true })).toEqual({ s1: 14, s2: 13, s3: 14 });
     const joined: Seat[] = [...seats, { seatId: 's4', name: 'Ghost', joinedAt: 9 }];
     expect(dealableCounts(tasks, joined, { freeSpace: true })).toEqual({ s1: 14, s2: 13, s3: 14, s4: 11 });
+    const bound = new Map([['ghost', { seatId: 's3', retired: false }]]);
+    expect(dealableCounts(tasks, seats, { freeSpace: true, names: bound })).toEqual({ s1: 14, s2: 13, s3: 11 });
   });
-  it('a mixed @anyone + unbound name adds nothing to the share', () => {
+  it('a mixed @anyone + unbound name counts as a pure @anyone task (launch releases the name)', () => {
     const pure = (id: string): PoolTask => ({ ...mk(id), mentions: { seatIds: [], someone: false, anyone: true } });
     const mixed: PoolTask = { ...ghost('x'), mentions: { seatIds: [], someone: false, anyone: true, names: ['ghost'] }, text: '@anyone hugs @Ghost' };
-    const base = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), pure('a1'), pure('a2'), pure('a3')];
-    expect(dealableCounts([...base, mixed], seats, { freeSpace: true })).toEqual(dealableCounts(base, seats, { freeSpace: true }));
+    const base = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), pure('a1'), pure('a2')];
+    expect(dealableCounts([...base, mixed], seats, { freeSpace: true })).toEqual({ s1: 11, s2: 11, s3: 11 });
+    const bound = new Map([['ghost', { seatId: 's2', retired: false }]]);
+    expect(dealableCounts([...base, mixed], seats, { freeSpace: true, names: bound })).toEqual({ s1: 10, s2: 10, s3: 10 });
   });
 });

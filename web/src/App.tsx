@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { ClientProvider } from './game/ClientContext';
 import type { GameClient } from './game/GameClient';
 import { createWsGameClient } from './game/wsGameClient';
+import { GameSettingsPage } from './pages/GameSettingsPage';
 import { HomePage } from './pages/HomePage';
 import { JoinPage } from './pages/JoinPage';
 
@@ -24,6 +25,7 @@ export function App() {
     <ClientProvider value={client}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/host" element={<GameSettingsPage />} />
         <Route path="/g/:code" element={<JoinPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>

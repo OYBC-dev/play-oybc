@@ -6,11 +6,18 @@ import type {
   JoinGameRes,
   PoolViewEntry,
   ReclaimDoc,
+  RosterName,
   SeatDoc,
   Standing,
   ToggleMarkRes,
   WhoAmIRes,
 } from 'game-core';
+
+/** Settings chosen on Game settings, sent with `createGame`. */
+export interface CreateGameOptions {
+  gameName?: string;
+  freeSpace?: boolean;
+}
 
 /** Tasks per board when a frame does not say (free space off). */
 export const DEFAULT_TASKS_PER_BOARD = 25;
@@ -47,12 +54,19 @@ export interface GameSnapshot {
   standings: Standing[];
   /** Pending reclaims; only populated while this seat is the host. */
   reclaims: Array<ReclaimDoc & { id: string }>;
+  /** Names tasks refer to that no seat owns, in order of first mention, with the host's binding; `[]` when the frame does not carry it. */
+  roster: RosterName[];
 }
 
 /** The only door between UI and backend: callables for writes, listeners for reads. */
 export interface GameClient {
-  createGame(name: string): Promise<CreateGameRes>;
-  joinGame(code: string, name: string): Promise<JoinGameRes>;
+  /**
+   * Creates a game with the caller (`name`) as host. `options` are the game's settings, locked at creation:
+   * `gameName` (optional, ≤ 40 chars, the server trims it) and `freeSpace` (default off).
+   */
+  createGame(name: string, options?: CreateGameOptions): Promise<CreateGameRes>;
+  /** `reclaim` asks for the seat already held under `name` (lost phone); without it a taken name rejects with `name-taken`. */
+  joinGame(code: string, name: string, options?: { reclaim?: boolean }): Promise<JoinGameRes>;
   whoAmI(code: string): Promise<WhoAmIRes>;
   subscribe(
     gameId: string,
@@ -64,8 +78,18 @@ export interface GameClient {
   addTask(gameId: string, text: string, taskId?: string): Promise<void>;
   deleteTask(gameId: string, taskId: string): Promise<void>;
   launch(gameId: string): Promise<void>;
-  /** Host, lobby only: sets the game's options. */
+  /**
+   * Host, lobby only: sets the game's options. Kept for the server's op (and the legacy backend); the UI no
+   * longer calls it: settings are chosen before the game exists and sent with `createGame`.
+   */
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void>;
+  /** Host: binds the roster name `key` to a joined seat, or unbinds it (`seatId` null). */
+  bindName(gameId: string, key: string, seatId: string | null): Promise<void>;
+  /**
+   * Host, lobby only: takes the roster name `key` off the roster and drops the hold on its tasks (they turn
+   * ordinary: visible to everyone, dealt like any task). The task text keeps the mention.
+   */
+  retireName(gameId: string, key: string): Promise<void>;
   /** Sets the square to `marked` (idempotent on retry). */
   toggleMark(gameId: string, cellIndex: number, marked: boolean): Promise<ToggleMarkRes>;
   end(gameId: string): Promise<void>;

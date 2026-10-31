@@ -56,7 +56,7 @@ describe('RoomConnection', () => {
     expect(room.status).toBe('ready');
     expect(snaps).toHaveLength(0);
     sock.serverSend(FULL);
-    expect(snaps).toEqual([{ game: GAME, mySeatId: 's1', seats: SEATS, view: VIEW, board: null, bingos: [], standings: [], reclaims: [] }]);
+    expect(snaps).toEqual([{ game: GAME, mySeatId: 's1', seats: SEATS, view: VIEW, board: null, bingos: [], standings: [], reclaims: [], roster: [] }]);
     // A later frame replaces only the sections it carries.
     sock.serverSend({ t: 'state', rev: 4, view: [] });
     expect(snaps).toHaveLength(2);
@@ -71,9 +71,24 @@ describe('RoomConnection', () => {
     FakeSocket.last().serverSend(FULL);
     expect(snaps).toHaveLength(1);
     expect(snaps[0].standings).toEqual([]);
+    expect(snaps[0].roster).toEqual([]);
     expect(tasksPerBoardOf(snaps[0].game)).toBe(25);
     expect(dealableFor(snaps[0].game, 's1')).toBe(0);
     expect(freeSpaceOf(snaps[0].game)).toBe(false);
+  });
+
+  it('merges the roster section; a later frame without it keeps the held roster', async () => {
+    const room = makeRoom();
+    const snaps: GameSnapshot[] = [];
+    room.onSnapshot((s) => snaps.push(s));
+    await handshake(FakeSocket.last());
+    const roster = [{ key: 'jess', display: 'Jess', seatId: null }];
+    FakeSocket.last().serverSend({ ...FULL, roster });
+    expect(snaps[0].roster).toEqual(roster);
+    FakeSocket.last().serverSend({ t: 'state', rev: FULL.rev + 1, roster: [{ key: 'jess', display: 'Jess', seatId: 's1' }] });
+    expect(snaps[1].roster).toEqual([{ key: 'jess', display: 'Jess', seatId: 's1' }]);
+    FakeSocket.last().serverSend({ t: 'state', rev: FULL.rev + 2, view: [] });
+    expect(snaps[2].roster).toEqual([{ key: 'jess', display: 'Jess', seatId: 's1' }]);
   });
 
   it('merges the standings section and the new game fields when the frame carries them', async () => {

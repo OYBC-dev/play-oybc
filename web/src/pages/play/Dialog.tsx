@@ -1,5 +1,6 @@
 import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { RisoCard } from '../../components/riso/RisoCard';
+import { RisoSectionLabel } from '../../components/riso/RisoSectionLabel';
 import { useModalFocus } from './useModalFocus';
 import styles from './Dialog.module.css';
 
@@ -13,13 +14,17 @@ export interface DialogProps {
   children: ReactNode;
   /** Where focus goes on close (defaults to whatever was focused on open). */
   returnFocus?: RefObject<HTMLElement | null>;
+  /** Optional red kicker above the title. */
+  kicker?: string;
+  /** Extra class on the card (e.g. a larger title or tighter padding). */
+  className?: string;
 }
 
 /**
  * Centered modal dialog over a scrim: role=dialog + aria-modal, labelled by
  * its title, focus moves in and is trapped, Escape or a scrim tap closes.
  */
-export function Dialog({ title, onClose, children, returnFocus }: DialogProps) {
+export function Dialog({ title, onClose, children, returnFocus, kicker, className }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const openedAt = useRef(performance.now());
@@ -31,8 +36,15 @@ export function Dialog({ title, onClose, children, returnFocus }: DialogProps) {
       onClick={(e) => { if (e.target === e.currentTarget && performance.now() - openedAt.current > SCRIM_GUARD_MS) onClose(); }}
     >
       <div ref={ref} className={styles.box} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={onKeyDown}>
-        <RisoCard padded shadow="large" className={styles.card}>
-          <h2 id={titleId} className={styles.title}>{title}</h2>
+        <RisoCard padded shadow="large" className={className ? `${styles.card} ${className}` : styles.card}>
+          {kicker ? (
+            <div className={styles.head}>
+              <RisoSectionLabel variant="kicker">{kicker}</RisoSectionLabel>
+              <h2 id={titleId} className={styles.title}>{title}</h2>
+            </div>
+          ) : (
+            <h2 id={titleId} className={styles.title}>{title}</h2>
+          )}
           {children}
         </RisoCard>
       </div>

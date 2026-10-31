@@ -10,6 +10,7 @@ export type RisoIconName =
   | 'boards'
   | 'home'
   | 'tasks'
+  | 'list'
   | 'you'
   | 'plus'
   | 'back'
@@ -48,6 +49,17 @@ const PATHS: Record<RisoIconName, React.ReactNode> = {
     </>
   ),
   tasks: (
+    <>
+      <line x1="8" y1="6" x2="20" y2="6" />
+      <line x1="8" y1="12" x2="20" y2="12" />
+      <line x1="8" y1="18" x2="20" y2="18" />
+      <circle cx="4" cy="6" r="1.3" />
+      <circle cx="4" cy="12" r="1.3" />
+      <circle cx="4" cy="18" r="1.3" />
+    </>
+  ),
+  /** Bulleted list (the host menu's Roster item); same strokes as `tasks`. */
+  list: (
     <>
       <line x1="8" y1="6" x2="20" y2="6" />
       <line x1="8" y1="12" x2="20" y2="12" />

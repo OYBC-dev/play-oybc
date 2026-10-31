@@ -5,17 +5,17 @@ final class MentionsTests: XCTestCase {
     func testFindsPartialBeforeCaret() {
         XCTAssertEqual(Mentions.active(in: "hi @co", caret: 6), ActiveMention(start: 3, partial: "co"))
         XCTAssertNil(Mentions.active(in: "a@co", caret: 4))
-        XCTAssertEqual(Mentions.options(partial: Mentions.active(in: "hi @co there", caret: 12)!.partial, seatNames: ["Cody"]), [])
+        XCTAssertEqual(Mentions.options(partial: Mentions.active(in: "hi @co there", caret: 12)!.partial, seatNames: ["Cody"]).map(\.name), [])
     }
 
     func testOptionsByPrefixThenSomeoneAnyone() {
-        XCTAssertEqual(Mentions.options(partial: "", seatNames: ["Cody", "Pat"]), ["Cody", "Pat", "someone", "anyone"])
-        XCTAssertEqual(Mentions.options(partial: "an", seatNames: ["Cody", "Anna"]), ["Anna", "anyone"])
+        XCTAssertEqual(Mentions.options(partial: "", seatNames: ["Cody", "Pat"]).map(\.name), ["Cody", "Pat", "someone", "anyone"])
+        XCTAssertEqual(Mentions.options(partial: "an", seatNames: ["Cody", "Anna"]).map(\.name), ["Anna", "anyone"])
     }
 
     func testMultiWordNameAndLeadingSpace() {
         XCTAssertEqual(Mentions.active(in: "hi @Mary J", caret: 10), ActiveMention(start: 3, partial: "Mary J"))
-        XCTAssertEqual(Mentions.options(partial: "Mary J", seatNames: ["Mary Jane", "Pat"]), ["Mary Jane"])
+        XCTAssertEqual(Mentions.options(partial: "Mary J", seatNames: ["Mary Jane", "Pat"]).map(\.name), ["Mary Jane"])
         XCTAssertNil(Mentions.active(in: "hi @ x", caret: 6))
         XCTAssertEqual(Mentions.active(in: "@Mary  J", caret: 8)?.partial, "Mary J")
     }
@@ -24,9 +24,26 @@ final class MentionsTests: XCTestCase {
     /// mentionable; the picker must keep offering it ahead of the keyword, and keep the keywords.
     func testSeatNameLongerThanKeywordIsOfferedFirst() {
         XCTAssertEqual(Mentions.active(in: "@Someone E", caret: 10)?.partial, "Someone E")
-        XCTAssertEqual(Mentions.options(partial: "Someone E", seatNames: ["Someone Else"]), ["Someone Else"])
-        XCTAssertEqual(Mentions.options(partial: "someone", seatNames: ["Someone Else", "Pat"]), ["Someone Else", "someone"])
-        XCTAssertEqual(Mentions.options(partial: "any", seatNames: ["Someone Else"]), ["anyone"])
+        XCTAssertEqual(Mentions.options(partial: "Someone E", seatNames: ["Someone Else"]).map(\.name), ["Someone Else"])
+        XCTAssertEqual(Mentions.options(partial: "someone", seatNames: ["Someone Else", "Pat"]).map(\.name), ["Someone Else", "someone"])
+        XCTAssertEqual(Mentions.options(partial: "any", seatNames: ["Someone Else"]).map(\.name), ["anyone"])
+    }
+
+    func testFinishedMentionOffersNoRowsSoReturnSubmits() {
+        let roster = [RosterName(key: "jo", display: "Jo", seatId: nil)]
+        XCTAssertEqual(Mentions.options(partial: "Cody ", seatNames: ["Cody", "Cody B"]), [])
+        XCTAssertEqual(Mentions.options(partial: "Jo ", seatNames: ["Jo Ann"], roster: roster), [])
+        XCTAssertEqual(Mentions.options(partial: "Co", seatNames: ["Cody", "Pat"]).map(\.name), ["Cody"])
+        XCTAssertEqual(Mentions.options(partial: "Cody B", seatNames: ["Cody", "Cody B"]).map(\.name), ["Cody B"])
+        XCTAssertEqual(Mentions.options(partial: "Mary ", seatNames: ["Mary Jane"]).map(\.name), ["Mary Jane"])
+        // Curly apostrophes fold in the prefix compare.
+        XCTAssertEqual(Mentions.options(partial: "O’", seatNames: ["O'Neil"]).map(\.name), ["O'Neil"])
+        // Pick "Cody", then Return: no rows are offered, so Return submits instead of re-picking.
+        let m = Mentions.active(in: "hi @Co", caret: 6)!
+        let picked = Mentions.pick("Cody", mention: m, in: "hi @Co", caret: 6)
+        XCTAssertEqual(picked.text, "hi @Cody ")
+        let after = Mentions.active(in: picked.text, caret: picked.caret)!
+        XCTAssertNil(Mentions.returnPick(Mentions.options(partial: after.partial, seatNames: ["Cody", "Pat"])))
     }
 
     func testPickReplacesMentionAndCapsLength() {
@@ -51,7 +68,7 @@ final class JoinCodeTests: XCTestCase {
     }
 
     func testJoinLink() {
-        XCTAssertEqual(GameConstants.joinLink(code: "HX7KQ"), "https://play-oybc.web.app/g/HX7KQ")
+        XCTAssertEqual(GameConstants.joinLink(code: "HX7KQ"), "https://play.oybc.com/g/HX7KQ")
     }
 }
 

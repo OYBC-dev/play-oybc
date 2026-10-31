@@ -1,4 +1,4 @@
-import { generateGameCode } from 'game-core';
+import { generateGameCode, MAX_GAME_NAME_LENGTH } from 'game-core';
 import { verifyIdToken } from './auth';
 import { AppError } from './errors';
 
@@ -60,7 +60,7 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
 }
 
 /**
- * `POST /api/createGame {name}` with a Firebase bearer token: claims a fresh code on its room, retrying on a
+ * `POST /api/createGame {name, gameName?, freeSpace?}` with a Firebase bearer token: claims a fresh code on its room, retrying on a
  * taken code (409), and answers `{gameId, code, seatId}`; `401`/`400 {code}`/`429 {code:'resource-exhausted'}` otherwise,
  * or `503 {code:'try-again'}` when Google's signing keys could not be fetched.
  */
@@ -74,17 +74,23 @@ async function createGame(req: Request, env: Env): Promise<Response> {
     return json({ code: 'unauthenticated' }, 401, true);
   }
   let name: unknown;
+  let gameName: unknown;
+  let freeSpace: unknown;
   try {
-    ({ name } = (await req.json()) as { name?: unknown });
+    ({ name, gameName, freeSpace } = (await req.json()) as { name?: unknown; gameName?: unknown; freeSpace?: unknown });
   } catch {
     return json({ code: 'invalid-argument' }, 400, true);
   }
   if (typeof name !== 'string') return json({ code: 'invalid-name' }, 400, true);
+  if (gameName !== undefined && typeof gameName !== 'string') return json({ code: 'invalid-argument' }, 400, true);
+  if (freeSpace !== undefined && typeof freeSpace !== 'boolean') return json({ code: 'invalid-argument' }, 400, true);
+  const title = (gameName ?? '').trim().replace(/\s+/g, ' ');
+  if (title.length > MAX_GAME_NAME_LENGTH) return json({ code: 'invalid-argument' }, 400, true);
   for (let i = 0; i < CLAIM_ATTEMPTS; i++) {
     const code = generateGameCode();
     const gameId = crypto.randomUUID();
     const res = await roomFor(env, code).fetch('https://room/internal/claim', {
-      method: 'POST', body: JSON.stringify({ gameId, code, uid, name }),
+      method: 'POST', body: JSON.stringify({ gameId, code, uid, name, gameName: title || undefined, freeSpace: freeSpace === true }),
     });
     if (res.status === 409) continue;
     if (res.status !== 200) return json(await res.json().catch(() => ({ code: 'unknown' })), res.status, true);

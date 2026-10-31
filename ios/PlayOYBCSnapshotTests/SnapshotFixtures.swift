@@ -58,14 +58,15 @@ enum SnapshotFixtures {
                             seats: seats + [longNameSeat], view: view, board: nil, bingos: [], reclaims: [])
     }
 
-    /// Ready to launch: a full pool and nobody short.
-    static func lobbyReady() -> GameSnapshot {
+    /// Ready to launch: a full pool and nobody short (seen by `mySeatId`, the host by default).
+    static func lobbyReady(mySeatId: String = "s1") -> GameSnapshot {
         let authors = seats.map(\.name)
         let view = taskTexts.enumerated().map { i, text in
-            PoolViewEntry(taskId: "r\(i)", authorName: authors[i % authors.count], text: i == 3 ? nil : text, mine: i % authors.count == 0)
+            PoolViewEntry(taskId: "r\(i)", authorName: authors[i % authors.count], text: i == 3 ? nil : text,
+                          mine: authors[i % authors.count] == seats.first { $0.seatId == mySeatId }?.name)
         }
         return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 0, "s3": 0, "s4": 0],
-                                       dealable: ["s1": 25, "s2": 25, "s3": 25, "s4": 25]), mySeatId: "s1", seats: seats,
+                                       dealable: ["s1": 25, "s2": 25, "s3": 25, "s4": 25]), mySeatId: mySeatId, seats: seats,
                             view: view, board: nil, bingos: [], reclaims: [])
     }
 

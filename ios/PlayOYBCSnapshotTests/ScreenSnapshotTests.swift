@@ -9,6 +9,12 @@ final class ScreenSnapshotTests: XCTestCase {
     private let recordMode: SnapshotTestingConfiguration.Record? = .missing
     private typealias F = SnapshotFixtures
 
+    override func setUp() {
+        super.setUp()
+        // The task explainer opens on a device's first lobby; every lobby frame here is a later visit.
+        HowTasksWork.markSeen(.standard)
+    }
+
     /// Asserts one baseline per colour scheme (`<test>.light.png` / `<test>.dark.png`).
     /// `drawHierarchy` renders through the window so SwiftUI blur filters show (the lobby's
     /// hidden rows); the default layer render drops them. Window renders go through the GPU
@@ -85,9 +91,58 @@ final class ScreenSnapshotTests: XCTestCase {
         assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(), gameId: "g1"), height: screen, drawHierarchy: true)
     }
 
-    /// The QR tile's share sheet at its medium detent.
-    func testLobbyShareSheet() {
-        assertBoth(ShareSheetView(code: "HX7KQ", onDone: {}), height: 420)
+    /// Game settings before create (handoff v2 §1): a typed game name, Free space off.
+    func testGameSettings() {
+        let model = GameSettingsModel(service: FakeGameService(), hostName: "Stephen")
+        model.gameName = "Halloween at Stephen's"
+        assertBoth(GameSettingsView(model: model, onBack: {}, onCreated: { _ in }), height: 720)
+    }
+
+    /// Free space on: the derived count reads 24.
+    func testGameSettingsFreeSpace() {
+        let model = GameSettingsModel(service: FakeGameService(), hostName: "Stephen")
+        model.freeSpace = true
+        assertBoth(GameSettingsView(model: model, onBack: {}, onCreated: { _ in }), height: 720)
+    }
+
+    /// Expanded sheet, host, pool filling: QR + share, readiness with the red lines, players short first.
+    func testLobbySheetExpandedHostFilling() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s1"), gameId: "g1", sheetExpanded: true),
+                   height: screen, drawHierarchy: true)
+    }
+
+    /// Expanded sheet, host, ready: olive, "Pool is full · Ready to launch", one all-set row, dark Launch.
+    func testLobbySheetExpandedHostReady() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(), gameId: "g1", sheetExpanded: true),
+                   height: screen, drawHierarchy: true)
+    }
+
+    /// Expanded sheet, player, filling: "You've added 1 · 3 more to go" and the red "Pool needs N more tasks" pill.
+    func testLobbySheetExpandedPlayer() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobby(mySeatId: "s2"), gameId: "g1", animateWaiting: false,
+                             sheetExpanded: true), height: screen, drawHierarchy: true)
+    }
+
+    /// Expanded sheet, player, ready: "Waiting for host to start" with the dots.
+    func testLobbySheetExpandedPlayerReady() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(mySeatId: "s2"), gameId: "g1", animateWaiting: false,
+                             sheetExpanded: true), height: screen, drawHierarchy: true)
+    }
+
+    /// Collapsed sheet, player, ready: the mini "Waiting for host" pill under Copy link.
+    func testLobbyGuestReady() {
+        assertBoth(LobbyView(service: FakeGameService(), snapshot: F.lobbyReady(mySeatId: "s2"), gameId: "g1", animateWaiting: false),
+                   height: screen, drawHierarchy: true)
+    }
+
+    /// "How tasks work" on a first lobby.
+    func testHowTasksWorkFirstJoin() {
+        assertBoth(ZStack { RisoPaperBackground(); HowTasksWorkView(entry: .firstJoin(name: "Cody"), onClose: {}) }, height: screen)
+    }
+
+    /// "How tasks work" from the (i) bubble.
+    func testHowTasksWorkInfo() {
+        assertBoth(ZStack { RisoPaperBackground(); HowTasksWorkView(entry: .info, onClose: {}) }, height: screen)
     }
 
     func testPlayWithLineAndBanner() {

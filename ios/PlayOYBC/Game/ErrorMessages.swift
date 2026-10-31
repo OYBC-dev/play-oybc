@@ -18,6 +18,9 @@ enum ErrorMessages {
         "unknown-seat": "That player is not in this game",
         "invalid-text": "Task text is empty or too long",
         "reclaim-cooldown": "Wait a minute before asking again",
+        "name-not-found": "That name is gone",
+        "seat-not-found": "That player left",
+        "name-taken": "That name is taken",
     ]
 
     /// Copy for any error thrown by a service call.

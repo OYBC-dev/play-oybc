@@ -2,7 +2,7 @@ import { GRID_SIZE, centerTypeFor } from './constants';
 import { resolveMentionRefs } from './mentions';
 import { fillableCellCount, placeBoard } from './placement';
 import { fisherYatesShuffle } from './shuffle';
-import { PoolTask, Seat } from './types';
+import { NameStates, PoolTask, Seat } from './types';
 import { MentionContext, canBeDealt, mentionContext } from './visibility';
 
 /**
@@ -21,6 +21,8 @@ export interface DealOptions {
   anyoneAssignment?: Readonly<Record<string, string>>;
   /** Tasks already dealt to some board (late join): never dealt again. */
   excludeTaskIds?: ReadonlySet<string>;
+  /** The host's name names (a bound name resolves to its seat). */
+  names?: NameStates;
 }
 
 /** Legacy deal options: FREE center, no assignment, no exclusions. */
@@ -87,7 +89,7 @@ export function dealBoard(
   rng: () => number = Math.random,
   opts: DealOptions = LEGACY_DEAL,
 ): BoardCell[] {
-  const ctx = mentionContext(tasks, seats);
+  const ctx = mentionContext(tasks, seats, opts.names);
   const eligible = tasks.filter((t) => isEligible(t, seatId, opts, ctx));
   const needed = tasksPerBoard(opts.freeSpace);
   if (eligible.length < needed) throw new Error('insufficient-pool');
@@ -97,7 +99,7 @@ export function dealBoard(
   return grid.map((task): BoardCell => {
     if (!task) return { kind: 'free' };
     const someoneName = others.length ? others[Math.floor(rng() * others.length)].name : null;
-    const { text, refs } = resolveMentionRefs(task.text, seats, someoneName);
+    const { text, refs } = resolveMentionRefs(task.text, seats, someoneName, opts.names);
     return refs.length ? { kind: 'task', taskId: task.id, text, refs } : { kind: 'task', taskId: task.id, text };
   });
 }
@@ -114,15 +116,17 @@ export function dealBoard(
  * {@link dealBoard} deals each seat's assigned tasks first, so an assigned
  * task appears on exactly one board whenever the lobby is ready.
  *
+ * @param names the host's name names
  * @returns task id → seat id (empty without seats or `@anyone` tasks).
  */
 export function assignAnyone(
   tasks: readonly PoolTask[],
   seats: readonly Seat[],
   rng: () => number,
+  names?: NameStates,
 ): Record<string, string> {
   const out: Record<string, string> = {};
-  const ctx = mentionContext(tasks, seats);
+  const ctx = mentionContext(tasks, seats, names);
   const anyone = fisherYatesShuffle(tasks.filter((t) => t.mentions.anyone), rng);
   const order = fisherYatesShuffle(seats, rng);
   if (!order.length) return out;

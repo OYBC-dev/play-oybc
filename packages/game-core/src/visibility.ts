@@ -1,6 +1,6 @@
 import { resolveMentionRefs, scanMentions } from './mentions';
 import { isNearName, nameKey } from './names';
-import { PoolTask, PoolViewEntry, Seat } from './types';
+import { NameStates, PoolTask, PoolViewEntry, Seat } from './types';
 
 /**
  * What visibility and dealing resolve a task against: the current seats and
@@ -11,6 +11,8 @@ import { PoolTask, PoolViewEntry, Seat } from './types';
  */
 export interface MentionContext {
   seats: readonly Seat[];
+  /** The host's name states the scans were made with. */
+  names?: NameStates;
   identified: ReadonlySet<string>;
   /** One scan per task, by task id (a task missing here is scanned on demand). */
   scans: ReadonlyMap<string, TaskScan>;
@@ -22,7 +24,7 @@ export interface TaskScan {
   referenced: ReadonlySet<string>;
   /** The seats the task names exactly (stored at authoring or matched by name now); what identifies a seat. */
   named: ReadonlySet<string>;
-  /** Whether the text names someone no current seat matches. */
+  /** Whether the text names someone no current seat matches and the host has not retired (the hold). */
   unbound: boolean;
 }
 
@@ -30,17 +32,21 @@ export interface TaskScan {
  * Scans one task against the current seats: the seats matched when it was
  * written, every `@Name` that matches a seat now (a name written before its
  * person joined resolves the moment they do), and every seat an unbound name
- * nearly names ("@Cody" keeps the task from "Cody B").
+ * nearly names ("@Cody" keeps the task from "Cody B"). A name the host retired
+ * ("not coming", or released at launch) holds nobody else back: the task reads
+ * as ordinary to everyone it does not refer to.
  */
-export function scanTask(task: PoolTask, seats: readonly Seat[]): TaskScan {
+export function scanTask(task: PoolTask, seats: readonly Seat[], names?: NameStates): TaskScan {
   const named = new Set(task.mentions.seatIds);
   const referenced = new Set(named);
   let unbound = false;
-  for (const t of scanMentions(task.text, seats)) {
+  for (const t of scanMentions(task.text, seats, names)) {
     if (t.kind === 'seat') { named.add(t.seat.seatId); referenced.add(t.seat.seatId); }
     else if (t.kind === 'unknown') {
-      unbound = true;
       const key = nameKey(t.token.slice(1));
+      // A retired name (not coming, or released at launch) holds nobody back, but a seat that nearly
+      // carries it may still be that person: they stay kept from the task.
+      if (!names?.get(key)?.retired) unbound = true;
       for (const s of seats) if (isNearName(key, nameKey(s.name))) referenced.add(s.seatId);
     }
   }
@@ -48,30 +54,30 @@ export function scanTask(task: PoolTask, seats: readonly Seat[]): TaskScan {
 }
 
 /** The seats a task refers to right now (see {@link scanTask}). */
-export function referencedSeatIds(task: PoolTask, seats: readonly Seat[]): Set<string> {
-  return new Set(scanTask(task, seats).referenced);
+export function referencedSeatIds(task: PoolTask, seats: readonly Seat[], names?: NameStates): Set<string> {
+  return new Set(scanTask(task, seats, names).referenced);
 }
 
-/** Whether the task names someone no current seat matches. */
-export function hasUnboundName(task: PoolTask, seats: readonly Seat[]): boolean {
-  return scanTask(task, seats).unbound;
+/** Whether the task holds a name no current seat matches and the host has not retired. */
+export function hasUnboundName(task: PoolTask, seats: readonly Seat[], names?: NameStates): boolean {
+  return scanTask(task, seats, names).unbound;
 }
 
 /** The context for `tasks` and `seats`: each task scanned once; identified = every seat some task names exactly. */
-export function mentionContext(tasks: readonly PoolTask[], seats: readonly Seat[]): MentionContext {
+export function mentionContext(tasks: readonly PoolTask[], seats: readonly Seat[], names?: NameStates): MentionContext {
   const identified = new Set<string>();
   const scans = new Map<string, TaskScan>();
   for (const task of tasks) {
-    const scan = scanTask(task, seats);
+    const scan = scanTask(task, seats, names);
     scans.set(task.id, scan);
     for (const id of scan.named) identified.add(id);
   }
-  return { seats, identified, scans };
+  return { seats, names, identified, scans };
 }
 
 /** The task's scan from the context, or a fresh one for a task the context never saw. */
 export function scanOf(task: PoolTask, ctx: MentionContext): TaskScan {
-  return ctx.scans.get(task.id) ?? scanTask(task, ctx.seats);
+  return ctx.scans.get(task.id) ?? scanTask(task, ctx.seats, ctx.names);
 }
 
 /** Whether `seatId` is kept from the task: it refers to them, or it names someone absent and the seat is not identified. */
@@ -119,7 +125,7 @@ export function buildPoolView(
       const base = { taskId: t.id, authorName: names.get(t.authorSeatId) ?? '' };
       const mine = t.authorSeatId === viewerSeatId;
       if (!canSeeText(t, viewerSeatId, ctx)) return { ...base, text: null, mine };
-      const { text, refs } = resolveMentionRefs(t.text, seats, POOL_SOMEONE_NAME);
+      const { text, refs } = resolveMentionRefs(t.text, seats, POOL_SOMEONE_NAME, ctx.names);
       return refs.length ? { ...base, text, refs, mine } : { ...base, text, mine };
     });
 }

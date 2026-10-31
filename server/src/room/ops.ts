@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, nameKey, nearMissMentions, normalizeName, parseMentions, shortfalls,
+  CENTER_INDEX, MAX_GAME_NAME_LENGTH, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, rosterHas, scanTask, shortfalls, unboundKeys,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -53,21 +53,28 @@ function requireLobby(game: GameRow): void {
 }
 
 /**
- * Creates the game on an empty room with the caller as host.
- * @throws AppError `resource-exhausted` if the room already holds a game (caller retries with another code); `invalid-name`.
+ * Creates the game on an empty room with the caller as host, with the settings chosen before creation
+ * (`freeSpace`, default off; `gameName`, optional, trimmed, ≤ 40 chars).
+ * @throws AppError `resource-exhausted` if the room already holds a game (caller retries with another code); `invalid-name`;
+ *   `invalid-argument` for a game name over the limit.
  */
-export function claimGame(state: GameState, ctx: OpCtx, args: { gameId: string; code: string; name: string }): OpOut<CreateGameRes> {
+export function claimGame(
+  state: GameState, ctx: OpCtx, args: { gameId: string; code: string; name: string; gameName?: string; freeSpace?: boolean },
+): OpOut<CreateGameRes> {
   if (state.game) throw new AppError('resource-exhausted');
   const name = normalizeName(args.name);
   if (!name) throw new AppError('invalid-name');
+  const gameName = (args.gameName ?? '').trim().replace(/\s+/g, ' ');
+  if (gameName.length > MAX_GAME_NAME_LENGTH) throw new AppError('invalid-argument');
   const seatId = ctx.newId();
   state.putGame({
     gameId: args.gameId, code: args.code, stage: 'lobby', hostSeatId: seatId, createdAt: ctx.now,
-    bingoCount: 0, reviewGate: false, freeSpace: false, rev: 0, lastMutationAt: ctx.now,
+    bingoCount: 0, reviewGate: false, freeSpace: args.freeSpace === true, rev: 0, lastMutationAt: ctx.now,
+    ...(gameName && { gameName }),
   });
   state.putSeat({ seatId, name, nameKey: nameKey(name), joinedAt: ctx.now });
   state.putMember(ctx.uid, seatId);
-  return { result: { gameId: args.gameId, code: args.code, seatId }, push: { all: ['game', 'seats', 'view'] } };
+  return { result: { gameId: args.gameId, code: args.code, seatId }, push: { all: ['game', 'seats', 'view', 'roster'] } };
 }
 
 /** A fresh board's marks: all clear, except the centre when the game has free space. */
@@ -78,10 +85,12 @@ function freshMarks(freeSpace: boolean): boolean[] {
 }
 
 /**
- * Joins: resumes a member, files a reclaim on a name clash, else seats the caller (dealing a board when playing).
- * @throws AppError `game-not-found`, `game-ended`, `invalid-name`, `reclaim-cooldown`, `resource-exhausted`, `not-ready`.
+ * Joins: resumes a member, else seats the caller (dealing a board when playing). A name someone here already
+ * holds (or the host bound to someone) is `name-taken`, so the newcomer picks another; with `reclaim: true`
+ * it files a reclaim on that seat instead (the lost-phone case, approved by the host).
+ * @throws AppError `game-not-found`, `game-ended`, `invalid-name`, `name-taken`, `reclaim-cooldown`, `resource-exhausted`, `not-ready`.
  */
-export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOut<JoinGameRes> {
+export function join(state: GameState, ctx: OpCtx, args: { name: string; reclaim?: unknown }): OpOut<JoinGameRes> {
   const game = requireGame(state);
   const existing = state.seatOf(ctx.uid);
   if (existing) return { result: { status: 'resumed', gameId: game.gameId, seatId: existing }, push: { all: [] } };
@@ -90,8 +99,11 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   if (!name) throw new AppError('invalid-name');
 
   const key = nameKey(name);
-  const taken = [...state.seats.values()].find((s) => s.nameKey === key);
+  // A seat with that name, or the seat the host bound that name to: the explicit binding wins until the host rebinds.
+  const boundSeatId = state.names.get(key)?.seatId ?? null;
+  const taken = [...state.seats.values()].find((s) => s.nameKey === key) ?? (boundSeatId === null ? undefined : state.seats.get(boundSeatId));
   if (taken) {
+    if (args.reclaim !== true) throw new AppError('name-taken', { name: taken.name });
     const mine = [...state.reclaims.values()].filter((r) => r.requesterUid === ctx.uid && r.seatId === taken.seatId);
     const pending = mine.find((r) => r.status === 'pending');
     if (pending) return { result: { status: 'reclaim-pending', gameId: game.gameId, reclaimId: pending.id }, push: { all: [] } };
@@ -109,7 +121,7 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   if (state.seats.size >= MAX_SEATS) throw new AppError('resource-exhausted');
   const seatId = ctx.newId();
   const seat = { seatId, name, nameKey: key, joinedAt: ctx.now };
-  const push: Push = { all: ['game', 'seats', 'view'] };
+  const push: Push = { all: ['game', 'seats', 'view', 'roster'] };
   let board = null;
   if (game.stage === 'playing') {
     // An `@anyone` task already on some board stays on that one board; plain tasks are shared across boards.
@@ -120,7 +132,7 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
     let cells;
     try {
       cells = dealBoard(state.poolTasks(), [...state.seatList(), { seatId, name, joinedAt: ctx.now }], seatId, ctx.rng, {
-        freeSpace: game.freeSpace, excludeTaskIds,
+        freeSpace: game.freeSpace, excludeTaskIds, names: state.nameStates(),
       });
     } catch {
       throw new AppError('not-ready');
@@ -157,12 +169,14 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   if (!text || text.length > MAX_TASK_LENGTH) throw new AppError('invalid-text');
   if (state.tasks.size >= MAX_TASKS) throw new AppError('resource-exhausted');
   const seats = state.seatList();
-  const nearMiss = nearMissMentions(text, seats)[0];
+  const names = state.nameStates();
+  const nearMiss = nearMissMentions(text, seats, names)[0];
   if (nearMiss !== undefined) throw new AppError('unknown-mention', { token: nearMiss });
-  const mentions = parseMentions(text, seats);
-  if (mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
+  const mentions = parseMentions(text, seats, names);
+  const task = { id: taskId, text, authorSeatId: seatId, mentions, createdAt: ctx.now };
+  if (scanTask(task, seats, names).named.has(seatId)) throw new AppError('self-mention');
   state.putTask({ taskId, text, authorSeatId: seatId, mentions, createdAt: ctx.now });
-  return { result: { taskId }, push: { all: ['game', 'view'] } };
+  return { result: { taskId }, push: { all: ['game', 'view', 'roster'] } };
 }
 
 /**
@@ -191,7 +205,7 @@ export function deleteTask(state: GameState, ctx: OpCtx, args: { taskId: string 
   if (!target) throw new AppError('not-found');
   if (target.authorSeatId !== seatId && game.hostSeatId !== seatId) throw new AppError('permission-denied');
   state.deleteTask(taskId);
-  return { result: {}, push: { all: ['game', 'view'] } };
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
 }
 
 /** Throws `not-host` unless the caller holds the host seat; returns that seatId. */
@@ -213,17 +227,20 @@ export function launch(state: GameState, ctx: OpCtx, _args: Record<string, never
   const tasks = state.poolTasks();
   const seats = state.seatList();
   const { freeSpace } = game;
-  const short = shortfalls(tasks, seats, { freeSpace });
+  const short = shortfalls(tasks, seats, { freeSpace, names: state.nameStates() });
   if (Object.keys(short).length > 0) throw new AppError('not-ready', { shortfalls: short });
-  const anyoneAssignment = assignAnyone(tasks, seats, ctx.rng);
+  // A name nobody joined under is released: its tasks deal as ordinary ones (the host confirmed the list).
+  for (const key of unboundKeys(tasks, seats, state.nameStates())) state.putNameState(key, { seatId: null, retired: true });
+  const names = state.nameStates();
+  const anyoneAssignment = assignAnyone(tasks, seats, ctx.rng, names);
   const perSeat: Record<string, Section[]> = {};
   for (const seat of seats) {
-    const cells = dealBoard(tasks, seats, seat.seatId, ctx.rng, { freeSpace, anyoneAssignment });
+    const cells = dealBoard(tasks, seats, seat.seatId, ctx.rng, { freeSpace, anyoneAssignment, names });
     state.putBoard({ seatId: seat.seatId, cells, marks: freshMarks(freeSpace), completedLines: [], announcedLines: [] });
     perSeat[seat.seatId] = ['board'];
   }
   state.putGame({ ...game, stage: 'playing', launchedAt: ctx.now });
-  return { result: {}, push: { all: ['game', 'standings'], perSeat } };
+  return { result: {}, push: { all: ['game', 'standings', 'roster', 'view'], perSeat } };
 }
 
 /**
@@ -358,6 +375,41 @@ export function adminSeats(state: GameState): Array<{ seatId: string; name: stri
 
 /** Every client-callable operation by its protocol name. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Host-only, any stage but ended: points a referenced name at a seat (`seatId`) or at nobody (`null`).
+ * The binding changes who a task is kept from and what it shows, so everyone's view, the counts and the roster go out.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `game-ended`, `invalid-argument`,
+ *   `name-not-found` (not a name the roster lists), `seat-not-found`.
+ */
+export function bindName(state: GameState, ctx: OpCtx, args: { key?: unknown; seatId?: unknown }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  if (game.stage === 'ended') throw new AppError('game-ended');
+  if (typeof args.key !== 'string' || (args.seatId !== null && typeof args.seatId !== 'string')) throw new AppError('invalid-argument');
+  const key = nameKey(args.key);
+  if (!rosterHas(buildRoster(state.poolTasks(), state.seatList(), state.nameStates()), key)) throw new AppError('name-not-found');
+  if (args.seatId !== null && !state.seats.has(args.seatId)) throw new AppError('seat-not-found');
+  state.putNameState(key, { seatId: args.seatId, retired: false });
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
+}
+
+/**
+ * Host-only, any stage but ended: retires a referenced name ("not coming"). The name leaves the roster and holds
+ * nobody back: its tasks read as ordinary ones (still bold) and deal to everyone, while someone who later joins
+ * under that exact name is still kept from them.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `game-ended`, `invalid-argument`, `name-not-found`.
+ */
+export function retireName(state: GameState, ctx: OpCtx, args: { key?: unknown }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  if (game.stage === 'ended') throw new AppError('game-ended');
+  if (typeof args.key !== 'string') throw new AppError('invalid-argument');
+  const key = nameKey(args.key);
+  if (!rosterHas(buildRoster(state.poolTasks(), state.seatList(), state.nameStates()), key)) throw new AppError('name-not-found');
+  state.putNameState(key, { seatId: null, retired: true });
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
+}
+
 export const OPS: Record<Op, (state: GameState, ctx: OpCtx, args: any) => OpOut<unknown>> = {
-  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions,
+  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions, bindName, retireName,
 };

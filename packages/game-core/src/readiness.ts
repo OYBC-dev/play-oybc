@@ -1,6 +1,6 @@
 import { tasksPerBoard } from './deal';
-import { PoolTask, Seat } from './types';
-import { MentionContext, canBeDealt, mentionContext, scanOf } from './visibility';
+import { NameStates, PoolTask, Seat } from './types';
+import { MentionContext, mentionContext, scanOf } from './visibility';
 
 /**
  * Tasks each seat is guaranteed at launch: the non-`@anyone` tasks dealable to
@@ -11,27 +11,22 @@ import { MentionContext, canBeDealt, mentionContext, scanOf } from './visibility
  * yet counts only for identified seats (see `mentionContext`). A seat at or
  * above `tasksPerBoard` therefore always deals.
  *
- * @param opts the game's options (accepted for symmetry with `shortfalls`; the count does not depend on them)
+ * @param opts the game's options; only `names` (the host's name names) affects the count
  * @param ctx a context built for these tasks and seats, to share with other derivations
  * @returns seatId → guaranteed dealable count.
  */
 export function dealableCounts(
   tasks: readonly PoolTask[],
   seats: readonly Seat[],
-  opts: { freeSpace: boolean },
-  ctx: MentionContext = mentionContext(tasks, seats),
+  opts: { freeSpace: boolean; names?: NameStates },
+  ctx: MentionContext = mentionContext(tasks, seats, opts.names),
 ): Record<string, number> {
-  void opts;
-  const pure = (t: PoolTask) => {
-    if (!t.mentions.anyone) return false;
-    const scan = scanOf(t, ctx);
-    return scan.referenced.size === 0 && !scan.unbound;
-  };
+  const pure = (t: PoolTask) => t.mentions.anyone && scanOf(t, ctx).referenced.size === 0;
   const anyoneCount = tasks.filter(pure).length;
   const anyoneShare = seats.length ? Math.floor(anyoneCount / seats.length) : 0;
   const out: Record<string, number> = {};
   for (const seat of seats) {
-    out[seat.seatId] = tasks.filter((t) => !t.mentions.anyone && canBeDealt(t, seat.seatId, ctx)).length + anyoneShare;
+    out[seat.seatId] = tasks.filter((t) => !t.mentions.anyone && !scanOf(t, ctx).referenced.has(seat.seatId)).length + anyoneShare;
   }
   return out;
 }
@@ -59,8 +54,8 @@ export function shortfallsFromCounts(counts: Readonly<Record<string, number>>, n
 export function shortfalls(
   tasks: readonly PoolTask[],
   seats: readonly Seat[],
-  opts: { freeSpace: boolean } = { freeSpace: true },
-  ctx: MentionContext = mentionContext(tasks, seats),
+  opts: { freeSpace: boolean; names?: NameStates } = { freeSpace: true },
+  ctx: MentionContext = mentionContext(tasks, seats, opts.names),
 ): Record<string, number> {
   return shortfallsFromCounts(dealableCounts(tasks, seats, opts, ctx), tasksPerBoard(opts.freeSpace));
 }

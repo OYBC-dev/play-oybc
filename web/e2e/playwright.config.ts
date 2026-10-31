@@ -17,6 +17,12 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 390, height: 844 },
     trace: 'retain-on-failure',
+    // Every phone has already seen "How tasks work", so the first-lobby explainer does not cover the flows
+    // under test; touchup.spec.ts starts from empty storage to exercise it.
+    storageState: {
+      cookies: [],
+      origins: [{ origin: `http://127.0.0.1:${PORT}`, localStorage: [{ name: 'oybc.howto.seen', value: '1' }] }],
+    },
   },
   projects: [{
     name: 'chromium',
