@@ -51,7 +51,7 @@ describe('shortfalls options', () => {
 });
 
 describe('readiness guarantees launch (property)', () => {
-  it('whenever shortfalls is empty, assignAnyone + dealBoard succeeds for every seat', () => {
+  it('whenever shortfalls is empty, every seat deals and every @anyone task lands on exactly one board', () => {
     const rng = makeSeededRng(20261030);
     const int = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
     let readyRuns = 0;
@@ -73,8 +73,13 @@ describe('readiness guarantees launch (property)', () => {
       if (Object.keys(shortfalls(tasks, party, { freeSpace })).length > 0) continue;
       readyRuns++;
       const assignment = assignAnyone(tasks, party, rng);
-      for (const s of party) {
-        expect(() => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment })).not.toThrow();
+      const boards = party.map((s) => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment }));
+      const onBoards = (id: string) =>
+        boards.filter((b) => b.some((c) => c.kind === 'task' && c.taskId === id)).length;
+      for (const t of tasks) {
+        if (!t.mentions.anyone) continue;
+        const namesEverySeat = party.every((s) => t.mentions.seatIds.includes(s.seatId));
+        expect(onBoards(t.id)).toBe(namesEverySeat ? 0 : 1);
       }
     }
     expect(readyRuns).toBeGreaterThan(20);

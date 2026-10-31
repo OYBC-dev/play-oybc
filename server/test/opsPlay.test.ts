@@ -242,7 +242,7 @@ describe('free space', () => {
 });
 
 describe('@anyone at launch', () => {
-  it('two @anyone tasks across three seats each land on at most one board', () => {
+  it('two @anyone tasks across three seats each land on exactly one board', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const { state, ids } = lobby(true, true);
       addTask(state, ctxFor('u2'), { taskId: 'any1', text: '@anyone dances' });
@@ -250,7 +250,7 @@ describe('@anyone at launch', () => {
       launch(state, { ...ctxFor('u1'), rng: seeded(seed) }, {});
       for (const id of ['any1', 'any2']) {
         const holders = Object.values(ids).filter((seat) => taskIdsOf(state.boards.get(seat)!).includes(id));
-        expect(holders.length).toBeLessThanOrEqual(1);
+        expect(holders.length).toBe(1);
       }
     }
   });

@@ -135,6 +135,33 @@ describe('dealBoard options', () => {
     const b = dealBoard(tasks, seats, 's1', makeSeededRng(1), { freeSpace: true, anyoneAssignment: {} });
     expect(ids(b)).toContain('any');
   });
+  it('deals every @anyone task assigned to the seat, even from a large pool', () => {
+    const anyone = Array.from({ length: 4 }, (_, i) => mk('any' + i, '@anyone sings', { anyone: true }));
+    const tasks = [...plain(60), ...anyone];
+    const assignment = { any0: 's1', any1: 's1', any2: 's2', any3: 's3' };
+    for (let seed = 0; seed < 30; seed++) {
+      const b = ids(dealBoard(tasks, seats, 's1', makeSeededRng(seed), { freeSpace: false, anyoneAssignment: assignment }));
+      expect(b).toHaveLength(25);
+      expect(b).toEqual(expect.arrayContaining(['any0', 'any1']));
+      expect(b).not.toContain('any2');
+      expect(b).not.toContain('any3');
+    }
+  });
+  it('a seat assigned more than a board of @anyone tasks gets a board of them and no plain task', () => {
+    const anyone = Array.from({ length: 30 }, (_, i) => mk('any' + i, '@anyone sings', { anyone: true }));
+    const assignment = Object.fromEntries(anyone.map((t) => [t.id, 's1']));
+    const b = ids(dealBoard([...plain(40), ...anyone], seats, 's1', makeSeededRng(3), { freeSpace: true, anyoneAssignment: assignment }));
+    expect(b).toHaveLength(24);
+    expect(new Set(b).size).toBe(24);
+    expect(b.every((i) => i.startsWith('any'))).toBe(true);
+  });
+  it('a mixed @anyone + @Name task assigned to the seat is dealt first too', () => {
+    const mixed = mk('mx', '@anyone hugs @Bo', { anyone: true, seatIds: ['s2'] });
+    for (let seed = 0; seed < 20; seed++) {
+      const b = dealBoard([...plain(60), mixed], seats, 's1', makeSeededRng(seed), { freeSpace: true, anyoneAssignment: { mx: 's1' } });
+      expect(ids(b)).toContain('mx');
+    }
+  });
   it('never deals excludeTaskIds', () => {
     const excluded = new Set(['t0', 't1', 't2', 't3', 't4']);
     const b = dealBoard(plain(30), seats, 's1', makeSeededRng(9), { freeSpace: false, excludeTaskIds: excluded });

@@ -45,11 +45,36 @@ function isEligible(task: PoolTask, seatId: string, opts: DealOptions): boolean 
 }
 
 /**
+ * Picks exactly `needed` of `eligible` for one seat, the `@anyone` tasks
+ * assigned to that seat first: `[...assigned (capped at needed),
+ * ...shuffle(rest).slice(0, needed - assigned)]`. Callers guarantee
+ * `eligible.length >= needed`.
+ */
+function assignedFirst(
+  eligible: readonly PoolTask[],
+  seatId: string,
+  assignment: Readonly<Record<string, string>>,
+  needed: number,
+  rng: () => number,
+): PoolTask[] {
+  const isMine = (t: PoolTask) => t.mentions.anyone && assignment[t.id] === seatId;
+  const mine = eligible.filter(isMine).slice(0, needed);
+  const rest = fisherYatesShuffle(eligible.filter((t) => !isMine(t)), rng);
+  return [...mine, ...rest.slice(0, needed - mine.length)];
+}
+
+/**
  * Deals a 5x5 board for one seat: shuffles the eligible tasks, centers FREE
  * when `opts.freeSpace`, and resolves mentions for display (see
  * {@link resolveMentionRefs}): each `@someone` becomes one other seat
  * (consistent within a task), `@Name` the seat's name, `@anyone` "Anyone".
  * Task cells carry `refs` when the text has a resolved mention.
+ *
+ * With `opts.anyoneAssignment`, the `@anyone` tasks assigned to this seat are
+ * dealt first (up to the board's task count) and the rest of the board is
+ * drawn at random from the other eligible tasks, so every assigned task lands
+ * on exactly its seat's board. Without an assignment (legacy deal) the board
+ * is a random draw from every eligible task.
  *
  * @param opts defaults to the legacy deal (FREE center, no assignment, no exclusions)
  * @throws Error('insufficient-pool') when fewer than `tasksPerBoard(opts.freeSpace)` tasks are eligible.
@@ -62,9 +87,11 @@ export function dealBoard(
   opts: DealOptions = LEGACY_DEAL,
 ): BoardCell[] {
   const eligible = tasks.filter((t) => isEligible(t, seatId, opts));
-  if (eligible.length < tasksPerBoard(opts.freeSpace)) throw new Error('insufficient-pool');
+  const needed = tasksPerBoard(opts.freeSpace);
+  if (eligible.length < needed) throw new Error('insufficient-pool');
   const others = seats.filter((s) => s.seatId !== seatId);
-  const grid = placeBoard({ items: eligible, gridSize: GRID_SIZE, centerType: centerTypeFor(opts.freeSpace), randomize: true, rng });
+  const items = opts.anyoneAssignment ? assignedFirst(eligible, seatId, opts.anyoneAssignment, needed, rng) : eligible;
+  const grid = placeBoard({ items, gridSize: GRID_SIZE, centerType: centerTypeFor(opts.freeSpace), randomize: true, rng });
   return grid.map((task): BoardCell => {
     if (!task) return { kind: 'free' };
     const someoneName = others.length ? others[Math.floor(rng() * others.length)].name : null;
@@ -82,6 +109,8 @@ export function dealBoard(
  * mixed `@anyone` + `@Name` task goes to one seat it does not name (the
  * emptiest such seat); one that names every seat stays unassigned. Filling the
  * emptiest seat keeps every seat at >= `floor(pure / seats)` either way.
+ * {@link dealBoard} deals each seat's assigned tasks first, so an assigned
+ * task appears on exactly one board whenever the lobby is ready.
  *
  * @returns task id → seat id (empty without seats or `@anyone` tasks).
  */
