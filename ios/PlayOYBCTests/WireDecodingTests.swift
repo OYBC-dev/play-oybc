@@ -62,6 +62,20 @@ final class WireDecodingTests: XCTestCase {
         guard case .none = s.board else { return XCTFail("an absent board must decode as absent") }
     }
 
+    func testMalformedRefsDecodeEmptyAndKeepTheFrame() throws {
+        let frame = try decode(#"""
+        {"t":"state","rev":3,
+         "view":[{"taskId":"t1","authorName":"Ann","text":"Sing","mine":true,"refs":"bad"}],
+         "board":{"cells":[{"kind":"task","taskId":"t1","text":"Sing","refs":[1,2]}],"marks":[false],"completedLines":[],"announcedLines":[]},
+         "bingos":[]}
+        """#)
+        guard case let .state(s) = frame else { return XCTFail("not a state frame") }
+        XCTAssertEqual(s.view, [PoolViewEntry(taskId: "t1", authorName: "Ann", text: "Sing", mine: true)])
+        guard case let .some(.some(board)) = s.board else { return XCTFail("board missing") }
+        XCTAssertEqual(board.cells, [.task(taskId: "t1", text: "Sing")])
+        XCTAssertEqual(s.bingos, [])
+    }
+
     func testAckFailureCarriesDetailsToken() throws {
         let frame = try decode(#"{"t":"ack","id":"a3","ok":false,"code":"unknown-mention","details":{"token":"@zed"}}"#)
         guard case let .ack(a) = frame else { return XCTFail("not an ack") }

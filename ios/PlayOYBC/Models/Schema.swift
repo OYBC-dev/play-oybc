@@ -71,10 +71,10 @@ struct Standing: Codable, Equatable {
 }
 
 /// Mention references: UTF-16 `[start, end)` pairs into a display text. Decodes `[[Int]]` and
-/// keeps only well-formed pairs; absent → empty.
+/// keeps only well-formed pairs; absent or malformed (not `[[Int]]`) → empty, never a throw.
 enum MentionRefs {
-    static func decode<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) throws -> [[Int]] {
-        let raw = try c.decodeIfPresent([[Int]].self, forKey: key) ?? []
+    static func decode<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) -> [[Int]] {
+        let raw = ((try? c.decodeIfPresent([[Int]].self, forKey: key)) ?? nil) ?? []
         return raw.filter { $0.count == 2 && $0[0] >= 0 && $0[0] < $0[1] }
     }
 }
@@ -118,7 +118,7 @@ struct PoolViewEntry: Codable, Equatable {
         authorName = try c.decode(String.self, forKey: .authorName)
         text = try c.decodeIfPresent(String.self, forKey: .text)
         mine = try c.decode(Bool.self, forKey: .mine)
-        refs = try MentionRefs.decode(c, .refs)
+        refs = MentionRefs.decode(c, .refs)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -155,7 +155,7 @@ enum BoardCell: Codable, Equatable {
         case "free": self = .free
         case "task":
             self = .task(taskId: try c.decode(String.self, forKey: .taskId), text: try c.decode(String.self, forKey: .text),
-                         refs: try MentionRefs.decode(c, .refs))
+                         refs: MentionRefs.decode(c, .refs))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "unknown cell kind \(other)")
         }

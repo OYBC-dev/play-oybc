@@ -5,7 +5,6 @@ import Foundation
 enum SnapshotFixtures {
     /// 2026-10-31 21:00:00 UTC.
     static let fixedNow: Double = 1_793_480_400_000
-    static let utc = TimeZone(identifier: "UTC")!
 
     static let seats: [Seat] = [
         Seat(seatId: "s1", doc: SeatDoc(name: "Stephen", nameKey: "stephen", joinedAt: fixedNow)),
@@ -124,14 +123,6 @@ enum SnapshotFixtures {
         let bingos: Int = i == 1 ? 12 : max(0, 4 - i)
         return Standing(seatId: "s\(i)", name: name, bingos: bingos, marked: 24 - i, bestLine: bingos == 0 ? 4 - i % 3 : 3,
                         firstBingoSeq: bingos == 0 ? nil : i)
-    }
-
-    /// Ten bingos with 24+ character names; one player reaches #12.
-    static let longNameBingos: [BingoDoc] = (1...10).map { (i: Int) -> BingoDoc in
-        let name: String = i % 2 == 0 ? "Bartholomew Fitzgerald-Smythe" : "Maximilian Featherstonehaugh"
-        let number: Int = i == 10 ? 12 : (i % 3 == 0 ? 2 : 1)
-        let at: Double = fixedNow + Double(i) * 420_000
-        return BingoDoc(seq: i, seatId: "s\(i)", name: name, line: "row_0", playerBingoNumber: number, at: at, status: .announced)
     }
 
     /// Every task square at the 120-character maximum (the clamp check).
