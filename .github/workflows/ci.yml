@@ -120,7 +120,7 @@ jobs:
       needs.changes.outputs.ios == 'true'
       && (vars.IOS_CI_BACKEND == '' || vars.IOS_CI_BACKEND == 'github')
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60 # TEMP: CI re-record, reverted before merge
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
