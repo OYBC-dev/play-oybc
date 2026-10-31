@@ -16,11 +16,18 @@ describe('segments', () => {
   it('a range covering the whole text is one bold run', () => {
     expect(segments('Someone', [[0, 7]])).toEqual([{ text: 'Someone', ref: true }]);
   });
-  it('clamps out-of-range and drops empty or overlapping ranges', () => {
+  it('clamps out-of-range and drops empty or fully covered ranges', () => {
     expect(segments('Ann sings', [[0, 3], [1, 2], [5, 5], [4, 99]])).toEqual([
       { text: 'Ann', ref: true },
       { text: ' ', ref: false },
       { text: 'sings', ref: true },
+    ]);
+  });
+  it('a partial overlap is trimmed to start where the earlier range ends', () => {
+    expect(segments('Ann Bo sings', [[0, 3], [2, 6]])).toEqual([
+      { text: 'Ann', ref: true },
+      { text: ' Bo', ref: true },
+      { text: ' sings', ref: false },
     ]);
   });
   it('the empty string has no runs', () => {

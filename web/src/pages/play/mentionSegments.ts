@@ -3,8 +3,8 @@ export interface TextSegment { text: string; ref: boolean }
 
 /**
  * Splits display `text` into plain and mention runs by `refs` (UTF-16 `[start, end)` ranges into `text`).
- * Ranges are clamped to the text, sorted, and any overlap with an earlier range is dropped; empty runs are
- * omitted. No refs = one plain run.
+ * Ranges are sorted and clamped to the text; a range overlapping an earlier one is trimmed to start where
+ * that one ends (dropped if nothing is left). Empty runs are omitted. No refs = one plain run.
  *
  * @param text Display text (mentions already resolved to names).
  * @param refs Mention ranges, if any.

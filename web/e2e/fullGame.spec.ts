@@ -18,11 +18,29 @@ async function marks(page: Page): Promise<string[]> {
   return page.locator('button[data-marked]').evaluateAll((els) => els.map((e) => e.getAttribute('data-marked') ?? ''));
 }
 
-/** Pool size: three launch boards of 25 can use 75 distinct tasks, and the mid-game joiner needs 25 none of them hold. */
-const POOL = 100;
+/** Pool size: 25 per board with the @Stephen task not dealable to Stephen. */
+const POOL = 30;
+
+/**
+ * Checks one board's mention rendering: no label carries '@', and a "Stephen falls asleep" square (if dealt)
+ * carries data-ref and the name in <b>. Free space is off, so there is no Free centre.
+ * @returns Whether this board holds the "Stephen falls asleep" square.
+ */
+async function checkMentions(page: Page): Promise<boolean> {
+  const cells = page.locator('button[data-marked]');
+  await expect(cells).toHaveCount(25);
+  await expect(page.locator('button[data-free="true"]')).toHaveCount(0);
+  const labels = await cells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+  expect(labels.filter((l) => l.includes('@'))).toEqual([]);
+  expect(labels.filter((l) => l.includes('falls asleep')).every((l) => l === 'Stephen falls asleep')).toBe(true);
+  const asleep = page.getByRole('button', { name: 'Stephen falls asleep' });
+  if ((await asleep.count()) === 0) return false;
+  await expect(asleep).toHaveAttribute('data-ref', 'true');
+  await expect(asleep.locator('b')).toHaveText('Stephen');
+  return true;
+}
 
 test('three phones play a full game', async ({ browser }) => {
-  test.setTimeout(240_000);
   const A = await phone(browser);
   const B = await phone(browser);
   const C = await phone(browser);
@@ -68,21 +86,8 @@ test('three phones play a full game', async ({ browser }) => {
   await launch.click();
   for (const p of [A, B, C]) await expect(p.page.getByTestId('stage-playing')).toBeVisible();
 
-  // Board cells show mentions resolved: "@Stephen falls asleep" reads "Stephen falls asleep".
-  for (const p of [B, C]) {
-    const cells = p.page.locator('button[data-marked]');
-    await expect(cells).toHaveCount(25);
-    const labels = await cells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
-    expect(labels.filter((l) => l.includes('@'))).toEqual([]);
-    expect(labels.filter((l) => l.includes('falls asleep')).every((l) => l === 'Stephen falls asleep')).toBe(true);
-    // Free space is off: no Free centre, and a mention cell carries data-ref with the name in bold.
-    await expect(p.page.locator('button[data-free="true"]')).toHaveCount(0);
-    const asleep = p.page.getByRole('button', { name: 'Stephen falls asleep' });
-    if (await asleep.count()) {
-      await expect(asleep).toHaveAttribute('data-ref', 'true');
-      await expect(asleep.locator('b')).toHaveText('Stephen');
-    }
-  }
+  // Board cells show mentions resolved: "@Stephen falls asleep" reads "Stephen falls asleep" (checked on D too, below).
+  const drewMention = [await checkMentions(B.page), await checkMentions(C.page)];
 
   // 4. A marks the first row; B and C see the banner, A does not.
   const aCells = A.page.locator('button[data-marked]');
@@ -114,6 +119,8 @@ test('three phones play a full game', async ({ browser }) => {
   await join(D.page, code, 'Josh');
   await expect(D.page.getByTestId('stage-playing')).toBeVisible();
   await expect(D.page.locator('button[data-marked]')).toHaveCount(25);
+  drewMention.push(await checkMentions(D.page));
+  expect(drewMention.some(Boolean), 'none of B, C, D was dealt "Stephen falls asleep" (25 of 30 each); rerun').toBe(true);
 
   // 7. E joins as "cody": waits; A allows; E gets Cody's board and marks.
   const E = await phone(browser);

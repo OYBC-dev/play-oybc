@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RisoButton } from '../../components/riso/RisoButton';
-import { tasksPerBoardOf, type GameClient, type GameSnapshot } from '../../game/GameClient';
+import type { GameClient, GameSnapshot } from '../../game/GameClient';
 import { HostMenu } from '../host/HostMenu';
 import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { BingoBanner } from './BingoBanner';
@@ -37,7 +37,7 @@ export function PlayScreen({ client, snapshot, gameId, onLeave }: {
       )}
       {leaderboard && (
         <Sheet title="Leaderboard" onClose={() => setLeaderboard(false)}>
-          <Leaderboard standings={snapshot.standings} tasksPerBoard={tasksPerBoardOf(game)} />
+          <Leaderboard standings={snapshot.standings} />
         </Sheet>
       )}
     </div>

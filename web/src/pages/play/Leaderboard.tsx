@@ -11,9 +11,9 @@ export const standingMeta = (s: Standing): string =>
 
 /**
  * The standings, one row per player in server order: rank, name, a gold bingo pill (hidden at 0) and a
- * muted squares line. `tasksPerBoard` is accepted for callers that size by it; the rows do not show it.
+ * muted squares line.
  */
-export function Leaderboard({ standings }: { standings: Standing[]; tasksPerBoard: number }) {
+export function Leaderboard({ standings }: { standings: Standing[] }) {
   if (standings.length === 0) {
     return (
       <div className={styles.empty}>
