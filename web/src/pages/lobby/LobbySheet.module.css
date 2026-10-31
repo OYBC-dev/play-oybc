@@ -25,7 +25,7 @@
 .count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-muted); }
 .ready .count { color: var(--riso-on-color); }
 .error { flex: none; font-size: 13px; }
-/* Free space: a native checkbox drawn as a Riso switch (2px ink border, paper-2 track, blue when on). */
+/* Free space: a native checkbox drawn as a Riso switch (2px ink border, paper-2 track, blue when on; ink-static on the ready sheet). */
 .option { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
 .optionLabel { font-family: var(--riso-font-head); font-size: 15px; font-weight: 800; }
 .switch {
@@ -42,6 +42,8 @@
 .switch:checked { background: var(--riso-blue); }
 .switch:checked::before { transform: translateX(22px); }
 .switch:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+/* On the blue ready sheet a blue "on" track would vanish: ink-static instead (iOS mirrors this). */
+.ready .switch:checked { background: var(--riso-ink-static); }
 .ready .switch:focus-visible { outline-color: var(--riso-on-color); }
 .switch:disabled { opacity: 0.55; cursor: default; }
 .ready .error { color: var(--riso-on-color); }

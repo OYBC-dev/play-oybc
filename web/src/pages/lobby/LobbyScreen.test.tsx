@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GameSnapshot, SnapshotGame } from '../../game/GameClient';
@@ -249,6 +251,11 @@ describe('LobbyScreen', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Free space' }));
     expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Free space' })).toBeChecked();
+  });
+
+  it('the switch turns ink-static, not blue, when on over the blue ready sheet', () => {
+    const css = readFileSync(`${process.cwd()}/src/pages/lobby/LobbySheet.module.css`, 'utf8');
+    expect(css).toMatch(/\.ready \.switch:checked \{ background: var\(--riso-ink-static\); \}/);
   });
 
   it('guests get no Free space row', () => {
