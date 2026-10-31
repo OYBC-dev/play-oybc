@@ -18,7 +18,11 @@ async function marks(page: Page): Promise<string[]> {
   return page.locator('button[data-marked]').evaluateAll((els) => els.map((e) => e.getAttribute('data-marked') ?? ''));
 }
 
+/** Pool size: three launch boards of 25 can use 75 distinct tasks, and the mid-game joiner needs 25 none of them hold. */
+const POOL = 100;
+
 test('three phones play a full game', async ({ browser }) => {
+  test.setTimeout(240_000);
   const A = await phone(browser);
   const B = await phone(browser);
   const C = await phone(browser);
@@ -36,19 +40,29 @@ test('three phones play a full game', async ({ browser }) => {
   await expect(B.page.getByTestId('stage-lobby')).toBeVisible();
   await expect(C.page.getByTestId('stage-lobby')).toBeVisible();
 
-  // 2. B mentions Stephen: A sees it blurred, C sees the text.
+  // Only the host gets the Free space switch, off by default.
+  await expect(A.page.getByRole('switch', { name: 'Free space' })).not.toBeChecked();
+  await expect(B.page.getByRole('switch')).toHaveCount(0);
+
+  // 2. B mentions Stephen: A sees it blurred, C sees the display text with the name in bold and no '@'.
   await B.page.getByLabel('Task', { exact: true }).fill('@Stephen falls asleep');
   await B.page.getByRole('button', { name: 'Add' }).click();
-  await expect(C.page.getByText('@Stephen falls asleep')).toBeVisible();
+  const cRow = C.page.locator('li', { hasText: 'Stephen falls asleep' });
+  await expect(cRow).toBeVisible();
+  await expect(cRow.locator('b')).toHaveText('Stephen');
+  await expect(C.page.getByText('@Stephen')).toHaveCount(0);
   await expect(A.page.getByTestId('redacted')).toHaveCount(1);
-  await expect(A.page.getByText('@Stephen falls asleep')).toHaveCount(0);
+  await expect(A.page.locator('li', { hasText: 'falls asleep' })).toHaveCount(0);
 
-  // 3. Seed the pool to 30 through the UI, then A launches.
-  for (let i = 2; i <= 30; i++) {
+  // 3. Seed the pool through the UI (every seat gets at least 25 dealable: the @Stephen task is not Stephen's), then A launches.
+  for (let i = 2; i <= POOL; i++) {
     await A.page.getByLabel('Task', { exact: true }).fill(`Task ${i}`);
     await A.page.getByRole('button', { name: 'Add' }).click();
     await expect(A.page.getByLabel('Task', { exact: true })).toHaveValue('');
   }
+  await expect(C.page.getByText(`${POOL} in pool`)).toBeVisible();
+  await expect(C.page.getByTestId('pool-count')).toHaveText(`${POOL} / 25`);
+  await expect(A.page.getByTestId('pool-count')).toHaveText(`${POOL - 1} / 25`);
   const launch = A.page.getByRole('button', { name: 'Launch' });
   await expect(launch).toBeEnabled();
   await launch.click();
@@ -61,6 +75,13 @@ test('three phones play a full game', async ({ browser }) => {
     const labels = await cells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
     expect(labels.filter((l) => l.includes('@'))).toEqual([]);
     expect(labels.filter((l) => l.includes('falls asleep')).every((l) => l === 'Stephen falls asleep')).toBe(true);
+    // Free space is off: no Free centre, and a mention cell carries data-ref with the name in bold.
+    await expect(p.page.locator('button[data-free="true"]')).toHaveCount(0);
+    const asleep = p.page.getByRole('button', { name: 'Stephen falls asleep' });
+    if (await asleep.count()) {
+      await expect(asleep).toHaveAttribute('data-ref', 'true');
+      await expect(asleep.locator('b')).toHaveText('Stephen');
+    }
   }
 
   // 4. A marks the first row; B and C see the banner, A does not.
@@ -107,14 +128,18 @@ test('three phones play a full game', async ({ browser }) => {
   expect(await eCells.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(bLabels);
   expect(await marks(E.page)).toEqual(bMarks);
 
-  // 8. A ends the game: everyone still seated sees the leaderboard with Stephen first.
+  // 8. A ends the game: everyone still seated sees the standings with Stephen first (one bingo, five squares).
   // B was displaced by E's approved reclaim (the server deletes the old member doc), so B has no read access any more.
   await A.page.getByRole('button', { name: 'Menu' }).click();
   await A.page.getByRole('menuitem', { name: 'End game' }).click();
   await A.page.getByRole('dialog', { name: 'End the game?' }).getByRole('button', { name: 'End game' }).click();
   for (const p of [A, C, D, E]) {
     await expect(p.page.getByTestId('stage-ended')).toBeVisible();
-    await expect(p.page.locator('ol li').first()).toContainText('Stephen');
+    const rows = p.page.getByTestId('standing');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.first()).toContainText('Stephen');
+    await expect(rows.first()).toContainText('1 bingo');
+    await expect(rows.first()).toContainText('5 squares');
   }
 
   for (const c of [A.ctx, B.ctx, C.ctx, ...extra]) await c.close();
