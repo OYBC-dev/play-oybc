@@ -40,13 +40,13 @@ struct GameView: View {
         } else if let snap = vm.snapshot {
             switch snap.game.stage {
             case .lobby:
-                LobbyView(service: service, snapshot: snap, gameId: vm.gameId)
+                LobbyView(service: service, snapshot: snap, gameId: vm.gameId, onLeave: onHome)
             case .playing:
                 PlayView(service: service, snapshot: snap, gameId: vm.gameId,
                          banners: vm.banners, pendingCells: vm.pendingCells, slowCells: vm.slowCells,
                          toggleError: vm.error.map(ErrorMessages.message(for:)),
                          onToggle: { i in _Concurrency.Task { await vm.toggle(cell: i) } },
-                         onDismissBanner: { vm.dismissBanner() })
+                         onDismissBanner: { vm.dismissBanner() }, onLeave: onHome)
             case .ended:
                 EndedView(snapshot: snap, onHome: onHome)
             }

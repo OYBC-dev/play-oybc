@@ -10,6 +10,8 @@ struct LobbyView: View {
     let service: GameService
     let snapshot: GameSnapshot
     let gameId: String
+    /// "Leave game" from the menu: forget the game on this device and go Home.
+    var onLeave: () -> Void = {}
     @State var deleting: Set<String> = []
     @State var deleteError: String?
     @State var playersOpen = false
@@ -23,8 +25,7 @@ struct LobbyView: View {
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
     private var seats: [Seat] { LobbyLogic.seatsByJoin(snapshot.seats) }
-    /// `endGame` only ends a playing game server-side, so the lobby offers Make host alone.
-    private var menuModel: HostMenuModel { HostMenuModel(snapshot: snapshot, canEnd: false) }
+    private var menuModel: HostMenuModel { HostMenuModel(snapshot: snapshot, canEnd: true) }
 
     var body: some View {
         ZStack {
@@ -32,7 +33,8 @@ struct LobbyView: View {
             ScrollView { content }.scrollDismissesKeyboard(.interactively)
         }
         .overlay { sheet }
-        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused)
+        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused,
+                  onLeave: onLeave)
         .accessibilityIdentifier("stage-lobby")
     }
 
@@ -91,7 +93,7 @@ struct LobbyView: View {
 }
 
 /// The lobby header (README §3): large "Pool" title with the "{n} / 24" count; the avatar stack
-/// and, for the host once someone else has joined, the dots menu on the right. At large text
+/// and the game dots menu on the right. At large text
 /// sizes the avatars and menu wrap under the title.
 struct LobbyHeaderView: View {
     let poolCount: Int

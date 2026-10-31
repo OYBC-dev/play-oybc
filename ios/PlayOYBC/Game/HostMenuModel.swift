@@ -1,33 +1,42 @@
 import Foundation
 
-/// What the host dots menu offers for one snapshot (web `HostMenu`). Pure, so the
+/// What the game dots menu offers one seat for one snapshot (web `HostMenu`): every seat gets
+/// "Leave game"; the host also gets "Make host" and, where offered, "End game". Pure, so the
 /// rules are unit-testable without a view.
 struct HostMenuModel: Equatable {
     /// This seat hosts the game.
     let isHost: Bool
     /// Every other seated player, in join order: the "Make host" candidates.
     let candidates: [Seat]
-    /// "End game" is offered (the board only: the server ends a playing game only).
+    /// The screen offers "End game" to the host (the server ends a game from the lobby or while playing).
     let canEnd: Bool
+    /// The game is still in the lobby (the End game confirm leaves out the in-play line).
+    let inLobby: Bool
 
     /// - Parameters:
     ///   - snapshot: The game as this seat sees it.
-    ///   - canEnd: Offer "End game" (true on the board, false in the lobby).
+    ///   - canEnd: Offer the host "End game" (true in the lobby and on the board).
     init(snapshot: GameSnapshot, canEnd: Bool) {
         isHost = snapshot.game.hostSeatId == snapshot.mySeatId
         candidates = LobbyLogic.seatsByJoin(snapshot.seats).filter { $0.seatId != snapshot.mySeatId }
         self.canEnd = canEnd
+        inLobby = snapshot.game.stage == .lobby
     }
 
-    /// The dots button shows for the host when it has something to offer: the board always
-    /// (End game), the lobby only once another player has joined.
-    var showsButton: Bool { isHost && (canEnd || !candidates.isEmpty) }
+    /// The dots button shows for every seat: everyone can leave.
+    var showsButton: Bool { true }
+
+    /// "Make host" is listed (host only).
+    var showsMakeHost: Bool { isHost }
 
     /// "Make host" is disabled, not hidden, when nobody else is seated.
     var makeHostEnabled: Bool { !candidates.isEmpty }
 
-    /// "End game" is listed.
-    var showsEndGame: Bool { canEnd }
+    /// "End game" is listed (host only, where the screen offers it).
+    var showsEndGame: Bool { isHost && canEnd }
+
+    /// "Leave game" is listed: always, for every seat.
+    var showsLeave: Bool { true }
 }
 
 /// What the host menu currently has open.

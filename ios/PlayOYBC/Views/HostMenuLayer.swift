@@ -10,7 +10,7 @@ struct HostMenuAnchorKey: PreferenceKey {
     }
 }
 
-/// The host's 44pt dots button (web `HostMenu` trigger): paper-2 keyline tile, 3pt hard shadow.
+/// The game menu's 44pt dots button, for every seat (web `HostMenu` trigger): paper-2 keyline tile, 3pt hard shadow.
 /// Publishes its bounds for `hostMenu(...)`, which draws the menu and dialogs.
 struct HostMenuButton: View {
     let open: Bool
@@ -37,8 +37,8 @@ struct HostMenuButton: View {
 // MARK: - Menu + dialogs layer
 
 extension View {
-    /// Draws the host menu under the dots button and the Make host / End game dialogs over
-    /// this view. Apply it to the screen's root so the scrim covers everything.
+    /// Draws the game menu under the dots button and the host's Make host / End game dialogs
+    /// over this view. Apply it to the screen's root so the scrim covers everything.
     ///
     /// - Parameters:
     ///   - stage: What is open; nil when closed.
@@ -46,9 +46,11 @@ extension View {
     ///   - service: Performs the transfer / end calls.
     ///   - gameId: The game.
     ///   - triggerFocus: The dots button's VoiceOver focus, restored on close.
+    ///   - onLeave: "Leave game": forget the game on this device and go Home (no confirm; rejoining by code restores the seat).
     func hostMenu(stage: Binding<HostMenuStage?>, model: HostMenuModel, service: GameService, gameId: String,
-                  triggerFocus: AccessibilityFocusState<Bool>.Binding) -> some View {
-        modifier(HostMenuLayer(stage: stage, model: model, service: service, gameId: gameId, triggerFocus: triggerFocus))
+                  triggerFocus: AccessibilityFocusState<Bool>.Binding, onLeave: @escaping () -> Void) -> some View {
+        modifier(HostMenuLayer(stage: stage, model: model, service: service, gameId: gameId, triggerFocus: triggerFocus,
+                               onLeave: onLeave))
     }
 }
 
@@ -58,6 +60,7 @@ private struct HostMenuLayer: ViewModifier {
     let service: GameService
     let gameId: String
     var triggerFocus: AccessibilityFocusState<Bool>.Binding
+    let onLeave: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let menuWidth: CGFloat = 216
@@ -66,7 +69,7 @@ private struct HostMenuLayer: ViewModifier {
         content
             .overlayPreferenceValue(HostMenuAnchorKey.self) { anchor in
                 GeometryReader { geo in
-                    if model.isHost, stage == .menu, let anchor {
+                    if model.showsButton, stage == .menu, let anchor {
                         let button = geo[anchor]
                         ZStack(alignment: .topLeading) {
                             // Outside tap closes (and swallows the tap, like the web popover).
@@ -75,7 +78,7 @@ private struct HostMenuLayer: ViewModifier {
                                 .onTapGesture(perform: close)
                                 .accessibilityHidden(true)
                             HostMenuCard(model: model, onMakeHost: { stage = .makeHost },
-                                         onEndGame: { stage = .endGame }, onClose: close)
+                                         onEndGame: { stage = .endGame }, onLeave: leave, onClose: close)
                                 .frame(width: Self.menuWidth)
                                 .padding(.leading, max(0, button.maxX - Self.menuWidth))
                                 .padding(.top, button.maxY + 8)
@@ -90,8 +93,8 @@ private struct HostMenuLayer: ViewModifier {
                     case .makeHost:
                         MakeHostDialog(service: service, gameId: gameId, candidates: model.candidates, onClose: close)
                             .transition(.opacity)
-                    case .endGame where model.canEnd:
-                        EndGameDialog(service: service, gameId: gameId, onClose: close)
+                    case .endGame where model.showsEndGame:
+                        EndGameDialog(service: service, gameId: gameId, inLobby: model.inLobby, onClose: close)
                             .transition(.opacity)
                     default:
                         EmptyView()
@@ -106,34 +109,54 @@ private struct HostMenuLayer: ViewModifier {
         // After the overlay leaves the accessibility tree, or VoiceOver ignores the request.
         DispatchQueue.main.async { triggerFocus.wrappedValue = true }
     }
+
+    private func leave() {
+        stage = nil
+        onLeave()
+    }
 }
 
 // MARK: - Menu card
 
-/// The 216pt popover menu (README §8 Menu): "Make host" (disabled with no other players) and,
-/// on the board, a hairline then a red "End game".
+/// The 216pt popover menu (README §8 Menu). The host gets "Make host" (disabled with no other
+/// players) and a red "End game", then a hairline; every seat gets "Leave game" (web `HostMenu`).
 struct HostMenuCard: View {
     let model: HostMenuModel
     let onMakeHost: () -> Void
     let onEndGame: () -> Void
+    let onLeave: () -> Void
     let onClose: () -> Void
 
-    private enum Item: Hashable { case makeHost, endGame }
+    private enum Item: Hashable { case makeHost, endGame, leave }
     @AccessibilityFocusState private var focus: Item?
+
+    /// The first enabled item, which takes VoiceOver focus on open (as web does).
+    private var firstItem: Item {
+        if model.showsMakeHost && model.makeHostEnabled { return .makeHost }
+        return model.showsEndGame ? .endGame : .leave
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            item("Make host", systemImage: "person", color: .risoInk, enabled: model.makeHostEnabled, action: onMakeHost)
-                .accessibilityFocused($focus, equals: .makeHost)
+            if model.showsMakeHost {
+                item("Make host", systemImage: "person", color: .risoInk, enabled: model.makeHostEnabled, action: onMakeHost)
+                    .accessibilityFocused($focus, equals: .makeHost)
+            }
             if model.showsEndGame {
+                item("End game", systemImage: "rectangle.portrait.and.arrow.right", color: .risoDanger, enabled: true, action: onEndGame)
+                    .accessibilityFocused($focus, equals: .endGame)
+            }
+            if model.showsMakeHost || model.showsEndGame {
                 Rectangle()
                     .fill(Color.risoHair)
                     .frame(height: 1)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .accessibilityHidden(true)
-                item("End game", systemImage: "rectangle.portrait.and.arrow.right", color: .risoDanger, enabled: true, action: onEndGame)
-                    .accessibilityFocused($focus, equals: .endGame)
+            }
+            if model.showsLeave {
+                item("Leave game", systemImage: "arrow.backward.square", color: .risoInk, enabled: true, action: onLeave)
+                    .accessibilityFocused($focus, equals: .leave)
             }
         }
         .padding(6)
@@ -145,7 +168,7 @@ struct HostMenuCard: View {
         .accessibilityAction(.escape, onClose)
         .onAppear {
             // Focus the first enabled item, as web does.
-            DispatchQueue.main.async { focus = model.makeHostEnabled ? .makeHost : .endGame }
+            DispatchQueue.main.async { focus = firstItem }
         }
     }
 
@@ -260,21 +283,25 @@ struct MakeHostDialog: View {
     }
 }
 
-/// "End the game?" confirm (web `EndGameDialog`).
+/// "End the game?" confirm (web `EndGameDialog`). In the lobby the marking/leaderboard line,
+/// which only describes a game in play, is left out.
 struct EndGameDialog: View {
     let service: GameService
     let gameId: String
+    var inLobby = false
     let onClose: () -> Void
     @State var busy = false
     @State var error: String?
 
     var body: some View {
         RisoDialog(title: "End the game?", onClose: onClose) {
-            Text("Marking stops for everyone and the final leaderboard goes up.")
-                .font(.risoBody(15))
-                .lineSpacing(4)
-                .foregroundStyle(Color.risoInk)
-                .fixedSize(horizontal: false, vertical: true)
+            if !inLobby {
+                Text("Marking stops for everyone and the final leaderboard goes up.")
+                    .font(.risoBody(15))
+                    .lineSpacing(4)
+                    .foregroundStyle(Color.risoInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let error { ErrorText(error) }
             HStack(alignment: .top, spacing: 8) {
                 RisoButton(title: "Cancel", kind: .ghost, fullWidth: true, action: onClose)
