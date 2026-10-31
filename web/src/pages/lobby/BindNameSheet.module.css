@@ -1,12 +1,14 @@
-/* Radio list, matching the Make host dialog (22px ring, blue fill when selected). */
+/* Bottom sheet on the shared Sheet shell, with the roster frame's 40px bottom padding (above the home indicator). */
+.sheet[role='dialog'] { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+/* Radio list, matching the Make host dialog (22px ring, blue fill + cream dot when selected, 46px rows). */
 .radios { display: flex; flex-direction: column; }
 .radio {
   appearance: none; border: 0; border-top: 1px solid var(--riso-hair); background: transparent;
-  box-sizing: border-box; width: 100%; min-height: 48px; padding: 0 6px;
+  box-sizing: border-box; width: 100%; min-height: 46px; padding: 0 6px;
   display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
   font-family: var(--riso-font-head); font-weight: 700; font-size: 16px; color: var(--riso-ink);
 }
-.radio:disabled { cursor: progress; opacity: 0.6; }
+.radio:disabled { cursor: progress; }
 .radio:focus-visible, .retire:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
 .ring {
   flex: none; box-sizing: border-box; width: 22px; height: 22px; border-radius: 999px;
@@ -17,11 +19,11 @@
 .ring[data-checked='true'] > span { background: var(--riso-on-color); }
 .radioName { min-width: 0; overflow-wrap: anywhere; }
 .nobody { color: var(--riso-muted); }
-.actions { display: flex; gap: 8px; margin-top: 4px; }
-.actions > * { flex: 1 1 0; min-width: 0; }
 .retire {
-  appearance: none; align-self: center; min-height: 44px; padding: 0 16px; border: 0; background: transparent; cursor: pointer;
-  font-family: var(--riso-font-head); font-weight: 700; font-size: 15px; color: var(--riso-red-text); border-radius: var(--riso-r-card);
+  appearance: none; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; background: transparent; cursor: pointer;
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 15px; color: var(--riso-red-text);
 }
 .retire:disabled { opacity: 0.45; cursor: not-allowed; }
-.who { margin: 0; font-family: var(--riso-font-head); font-weight: 800; font-size: 19px; letter-spacing: -0.01em; line-height: 1.15; overflow-wrap: anywhere; }
+.actions { display: flex; gap: 8px; margin-top: 4px; }
+.actions > * { flex: 1 1 0; min-width: 0; }

@@ -1,0 +1,10 @@
+/* A roster name nobody has yet: 38px pill, 2px dashed ink keyline, no fill, muted text.
+   Shared by the player chip list and the Launch? confirm. */
+.chip {
+  display: inline-flex; align-items: center; max-width: 100%; box-sizing: border-box; height: 38px; padding: 0 14px;
+  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700; color: var(--riso-muted);
+  background: transparent; border: 2px dashed var(--riso-ink); border-radius: 999px;
+}
+.text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Not tappable (guests): keyline muted too, so it does not read as a button. */
+.static { border-color: var(--riso-muted); }

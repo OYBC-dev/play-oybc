@@ -1,5 +1,5 @@
 import type { RosterName } from 'game-core';
-import { activeMention, mentionOptions, type MentionOption } from './mentions';
+import { activeMention, ADD_ROW_MIN, mentionOptions, type MentionOption } from './mentions';
 
 const names = (rows: MentionOption[]) => rows.map((r) => r.name);
 
@@ -38,7 +38,7 @@ describe('mentions helpers', () => {
       expect(mentionOptions('', ['Jamie', 'Pat'], roster)).toEqual([
         { name: 'Jamie', kind: 'player' },
         { name: 'Pat', kind: 'player' },
-        { name: 'Jo', kind: 'bound' },
+        { name: 'Jo', kind: 'bound', seatId: 's2' },
         { name: 'Jess', kind: 'unbound' },
         { name: 'Jay', kind: 'unbound' },
         { name: 'someone', kind: 'keyword' },
@@ -46,17 +46,42 @@ describe('mentions helpers', () => {
       ]);
       expect(mentionOptions('J', ['Jamie', 'Pat'], roster)).toEqual([
         { name: 'Jamie', kind: 'player' },
-        { name: 'Jo', kind: 'bound' },
+        { name: 'Jo', kind: 'bound', seatId: 's2' },
         { name: 'Jess', kind: 'unbound' },
         { name: 'Jay', kind: 'unbound' },
       ]);
+    });
+
+    it('offers the add row from 2 characters, never for one', () => {
+      expect(ADD_ROW_MIN).toBe(2);
+      expect(mentionOptions('K', ['Pat'], roster)).toEqual([]);
+      expect(mentionOptions('Kr', ['Pat'], roster)).toEqual([{ name: 'Kr', kind: 'add' }]);
+      // One character still lists what it matches, just no add row.
+      expect(mentionOptions('J', [], roster).map((r) => r.kind)).toEqual(['bound', 'unbound', 'unbound']);
+    });
+
+    it('never offers a name bound to yourself (a self-mention), but still never re-adds it', () => {
+      const ctx = { selfSeatId: 's2', seatIds: new Set(['s1', 's2']) };
+      expect(names(mentionOptions('', ['Pat'], roster, ['Pat', 'Me'], ctx))).toEqual(['Pat', 'Jess', 'Jay', 'someone', 'anyone']);
+      expect(mentionOptions('Jo', ['Pat'], roster, ['Pat', 'Me'], ctx)).toEqual([]);
+    });
+
+    it('treats a name bound to a seat no longer here as unbound', () => {
+      expect(mentionOptions('Jo', ['Pat'], roster, ['Pat'], { seatIds: new Set(['s1']) })).toEqual([{ name: 'Jo', kind: 'unbound' }]);
+    });
+
+    it('prefix-matches through nameKey folding (case and curly apostrophes)', () => {
+      expect(names(mentionOptions('o’n', ["O'Neil", 'Pat']))).toEqual(["O'Neil"]);
+      expect(names(mentionOptions("o'n", ['O’Neil']))).toEqual(['O’Neil']);
+      // A finished mention ("@Cody ") does not reopen on the same name.
+      expect(mentionOptions('Cody ', ['Cody'])).toEqual([]);
     });
 
     it('adds a valid new name only when nothing matches it exactly', () => {
       expect(mentionOptions('Kim', ['Pat'], roster)).toEqual([{ name: 'Kim', kind: 'add' }]);
       expect(mentionOptions('Je', ['Pat'], roster)).toEqual([{ name: 'Jess', kind: 'unbound' }, { name: 'Je', kind: 'add' }]);
       expect(mentionOptions('jess', ['Pat'], roster)).toEqual([{ name: 'Jess', kind: 'unbound' }]);
-      expect(mentionOptions('JO', ['Pat'], roster)).toEqual([{ name: 'Jo', kind: 'bound' }]);
+      expect(mentionOptions('JO', ['Pat'], roster)).toEqual([{ name: 'Jo', kind: 'bound', seatId: 's2' }]);
       expect(mentionOptions('pat', ['Pat'], roster)).toEqual([{ name: 'Pat', kind: 'player' }]);
     });
 

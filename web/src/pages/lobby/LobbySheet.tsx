@@ -5,6 +5,8 @@ import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { RisoIcon } from '../../components/riso/RisoIcon';
 import { RisoSectionLabel } from '../../components/riso/RisoSectionLabel';
+import { Dialog } from '../play/Dialog';
+import chip from './RosterChip.module.css';
 import styles from './LobbySheet.module.css';
 
 /** QR tile colours are static (never themed) so the code always scans. */
@@ -90,6 +92,8 @@ function FreeSpaceRow({ on, onChange }: { on: boolean; onChange: (freeSpace: boo
  * The lobby's fixed bottom sheet: game code with your `dealable / needed` count, and for the host the
  * shortfall lines, a QR tile that expands to a large QR with Copy link / Done, the Free space switch,
  * and Launch. Players get the code and Copy link. Reports its rendered height so the page can pad under it.
+ * With roster names nobody joined under (`unboundNames`), Launch first asks "Launch?" showing them as
+ * dashed chips (launch releases those names: their tasks deal as ordinary ones); without, it fires at once.
  */
 export function LobbySheet({
   snapshot,
@@ -97,6 +101,7 @@ export function LobbySheet({
   onLaunch,
   onFreeSpace,
   onHeight,
+  unboundNames = [],
 }: {
   snapshot: GameSnapshot;
   isHost: boolean;
@@ -105,6 +110,8 @@ export function LobbySheet({
   onFreeSpace?: (freeSpace: boolean) => Promise<void>;
   /** Called with the sheet's height in px whenever it changes. */
   onHeight?: (px: number) => void;
+  /** Host: roster names nobody has yet, in roster order (Launch confirms first when any). */
+  unboundNames?: string[];
 }) {
   const { game, mySeatId } = snapshot;
   const { code } = game;
@@ -112,6 +119,7 @@ export function LobbySheet({
   const [qrOpen, setQrOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const lines = isHost ? shortfallLines(snapshot) : [];
@@ -128,6 +136,7 @@ export function LobbySheet({
   }, [onHeight]);
 
   const launch = async () => {
+    setConfirming(false);
     setBusy(true);
     setError(null);
     try {
@@ -140,43 +149,58 @@ export function LobbySheet({
   };
 
   return (
-    <div ref={ref} className={ready ? `${styles.sheet} ${styles.ready}` : styles.sheet} data-testid="lobby-sheet" data-ready={ready || undefined}>
-      <div className={styles.handle} aria-hidden="true" />
-      {isHost && onFreeSpace && <FreeSpaceRow on={freeSpaceOf(game)} onChange={onFreeSpace} />}
-      <div className={styles.row}>
-        <div className={styles.info}>
-          <RisoSectionLabel>Game code</RisoSectionLabel>
-          <div className={styles.code} aria-label="Game code">{code}</div>
-          {lines.length > 0 && (
-            <div className={styles.shorts} data-testid="shortfalls">
-              {lines.map((l) => <div key={l} className={styles.short}>{l}</div>)}
-            </div>
+    <>
+      <div ref={ref} className={ready ? `${styles.sheet} ${styles.ready}` : styles.sheet} data-testid="lobby-sheet" data-ready={ready || undefined}>
+        <div className={styles.handle} aria-hidden="true" />
+        {isHost && onFreeSpace && <FreeSpaceRow on={freeSpaceOf(game)} onChange={onFreeSpace} />}
+        <div className={styles.row}>
+          <div className={styles.info}>
+            <RisoSectionLabel>Game code</RisoSectionLabel>
+            <div className={styles.code} aria-label="Game code">{code}</div>
+            {lines.length > 0 && (
+              <div className={styles.shorts} data-testid="shortfalls">
+                {lines.map((l) => <div key={l} className={styles.short}>{l}</div>)}
+              </div>
+            )}
+            {lines.length === 0 && <div className={styles.count}>{dealableFor(game, mySeatId)} / {tasksPerBoardOf(game)}</div>}
+          </div>
+          {isHost ? (
+            <>
+              <button type="button" className={styles.tile} aria-label="Share" aria-expanded={qrOpen} onClick={() => setQrOpen((o) => !o)}>
+                <QRCodeSVG value={link} marginSize={2} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
+              </button>
+              <RisoButton kind={ready ? 'dark' : 'primary'} size="large" disabled={!ready || busy} onClick={() => (unboundNames.length > 0 ? setConfirming(true) : void launch())}>Launch</RisoButton>
+            </>
+          ) : (
+            <CopyLinkButton link={link} size="small" />
           )}
-          {lines.length === 0 && <div className={styles.count}>{dealableFor(game, mySeatId)} / {tasksPerBoardOf(game)}</div>}
         </div>
-        {isHost ? (
-          <>
-            <button type="button" className={styles.tile} aria-label="Share" aria-expanded={qrOpen} onClick={() => setQrOpen((o) => !o)}>
+        {error && <p className={`error ${styles.error}`} role="alert">{error}</p>}
+        {isHost && qrOpen && (
+          <div className={styles.expanded}>
+            <div role="img" aria-label="QR code" className={styles.bigQr}>
               <QRCodeSVG value={link} marginSize={2} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
-            </button>
-            <RisoButton kind={ready ? 'dark' : 'primary'} size="large" disabled={!ready || busy} onClick={() => void launch()}>Launch</RisoButton>
-          </>
-        ) : (
-          <CopyLinkButton link={link} size="small" />
+            </div>
+            <div className={styles.actions}>
+              <CopyLinkButton link={link} fullWidth />
+              <RisoButton kind="ghost" fullWidth onClick={() => setQrOpen(false)}>Done</RisoButton>
+            </div>
+          </div>
         )}
       </div>
-      {error && <p className={`error ${styles.error}`} role="alert">{error}</p>}
-      {isHost && qrOpen && (
-        <div className={styles.expanded}>
-          <div role="img" aria-label="QR code" className={styles.bigQr}>
-            <QRCodeSVG value={link} marginSize={2} fgColor={QR_INK} bgColor={QR_PAPER} className={styles.qrSvg} />
+      {confirming && (
+        <Dialog title="Launch?" onClose={() => setConfirming(false)}>
+          <ul className={styles.unbound} aria-label="Nobody yet">
+            {unboundNames.map((n) => (
+              <li key={n} className={chip.chip}><span className={chip.text}>{n}</span></li>
+            ))}
+          </ul>
+          <div className={styles.confirmActions}>
+            <RisoButton kind="ghost" fullWidth onClick={() => setConfirming(false)}>Cancel</RisoButton>
+            <RisoButton kind="dark" fullWidth onClick={() => void launch()}>Launch</RisoButton>
           </div>
-          <div className={styles.actions}>
-            <CopyLinkButton link={link} fullWidth />
-            <RisoButton kind="ghost" fullWidth onClick={() => setQrOpen(false)}>Done</RisoButton>
-          </div>
-        </div>
+        </Dialog>
       )}
-    </div>
+    </>
   );
 }

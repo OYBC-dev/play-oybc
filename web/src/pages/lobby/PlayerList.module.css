@@ -7,18 +7,29 @@
 }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot { display: flex; max-width: 100%; }
-/* A roster name nobody has yet: same pill, dashed keyline on paper. */
-.dashed { border-style: dashed; background: var(--riso-paper); }
+/* A roster name bound to this player: a small solid-keyline pill inside the player's pill. */
 .tag {
-  position: relative; flex: none; display: inline-flex; align-items: center; max-width: 120px;
-  font-family: var(--riso-font-head); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--riso-muted);
+  position: relative; flex: none; display: inline-flex; align-items: center; max-width: 120px; box-sizing: border-box;
+  height: 22px; padding: 0 8px; margin: 0;
+  font-family: var(--riso-font-head); font-size: 12px; font-weight: 700; color: var(--riso-ink);
+  background: var(--riso-paper); border: 1.5px solid var(--riso-ink); border-radius: 999px;
 }
 .tagText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tagButton, .pillButton { appearance: none; cursor: pointer; position: relative; }
-.tagButton { border: 0; background: transparent; padding: 0 2px; height: 34px; }
-/* Both are drawn inside a 38px pill: stretch the hit area to 44px. */
-.tagButton::after, .pillButton::after { content: ''; position: absolute; inset: -5px -4px; }
-.pillButton::after { inset: -5px 0; }
-.tagButton:hover { color: var(--riso-ink); }
-.tagButton:focus-visible, .pillButton:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+/* Guests: muted keyline + text (not a button). */
+.tagStatic { color: var(--riso-muted); border-color: var(--riso-muted); }
+.tagButton, .chipButton { appearance: none; cursor: pointer; position: relative; }
+/* Beat the page-wide `.page button { min-height: 44px }`: the hit areas come from ::before, not the box. */
+.tagButton.tagButton, .chipButton.chipButton { min-height: 0; }
+/* 22px tag → 44px hit area. */
+.tagButton::before { content: ''; position: absolute; inset: -11px; }
+/* 38px chip → 44px hit area. */
+.chipButton::before { content: ''; position: absolute; inset: -3px 0; }
+.tagButton:focus-visible, .chipButton:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+/* A retired name's chip: width and opacity to 0 over 180ms, then it unmounts. */
+.leaving { overflow: hidden; pointer-events: none; animation: chipOut 180ms ease forwards; }
+@keyframes chipOut {
+  from { max-width: var(--chip-w); opacity: 1; }
+  to { max-width: 0; opacity: 0; margin-right: -8px; }
+}
+.leaving > * { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .leaving { animation: none; display: none; } }

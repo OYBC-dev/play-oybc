@@ -71,7 +71,10 @@ export interface GameClient {
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void>;
   /** Host: binds the roster name `key` to a joined seat, or unbinds it (`seatId` null). */
   bindName(gameId: string, key: string, seatId: string | null): Promise<void>;
-  /** Host: drops the roster name `key` from every task (its `@` goes, the word stays). */
+  /**
+   * Host, lobby only: takes the roster name `key` off the roster and drops the hold on its tasks (they turn
+   * ordinary: visible to everyone, dealt like any task). The task text keeps the mention.
+   */
   retireName(gameId: string, key: string): Promise<void>;
   /** Sets the square to `marked` (idempotent on retry). */
   toggleMark(gameId: string, cellIndex: number, marked: boolean): Promise<ToggleMarkRes>;

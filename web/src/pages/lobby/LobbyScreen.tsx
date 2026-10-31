@@ -8,11 +8,15 @@ import { BindNameSheet } from './BindNameSheet';
 import { LobbySheet } from './LobbySheet';
 import { PlayerList } from './PlayerList';
 import { PoolList } from './PoolList';
+import { useNarrow } from './useNarrow';
 import { usePoolEdits } from './usePoolEdits';
 import styles from './LobbyScreen.module.css';
 
 /** Scroll padding under the content when the sheet has not been measured yet. */
 const SHEET_FALLBACK_PX = 150;
+/** Avatars before "+N": 5, or 3 on a phone (the Pool title collides with 5 at 390px). */
+const STACK_MAX = 5;
+const STACK_MAX_NARROW = 3;
 
 /** The pre-game lobby: pool header + players, game menu, composer, live pool, and the share/launch sheet. */
 export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
@@ -26,11 +30,14 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
   const { rows, add, remove, deleteError } = usePoolEdits(client, gameId, snapshot.view);
   const playersId = useId();
   const onSheetHeight = useCallback((px: number) => setSheetHeight(px), []);
+  const narrow = useNarrow();
 
   const seats = [...snapshot.seats].sort((a, b) => a.joinedAt - b.joinedAt);
   const others = seats.filter((s) => s.seatId !== mySeatId).map((s) => s.name);
   const myName = seats.find((s) => s.seatId === mySeatId)?.name;
   const roster = snapshot.roster ?? [];
+  const seatIds = new Set(seats.map((s) => s.seatId));
+  const unboundNames = roster.filter((r) => r.seatId === null || !seatIds.has(r.seatId)).map((r) => r.display);
   // Live row for the open sheet; a name that left the roster (retired, its tasks deleted) closes it.
   const binding = isHost && bindingKey !== null ? roster.find((r) => r.key === bindingKey) ?? null : null;
   const padBottom = sheetHeight === null ? SHEET_FALLBACK_PX : Math.max(130, sheetHeight + 16);
@@ -45,8 +52,8 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
           <span className={styles.inPool}>{snapshot.view.length} in pool</span>
         </div>
         <div className={styles.headerActions}>
-          <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
-          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} />
+          <AvatarStack seats={seats} max={narrow ? STACK_MAX_NARROW : STACK_MAX} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
+          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} onOpenRoster={() => setPlayersOpen(true)} />
         </div>
       </header>
       {playersOpen && <PlayerList snapshot={snapshot} id={playersId} isHost={isHost} onOpenName={setBindingKey} />}
@@ -59,7 +66,7 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
           <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
         </div>
       )}
-      <AddTaskForm onAdd={add} seatNames={others} roster={roster} myName={myName} />
+      <AddTaskForm onAdd={add} seatNames={others} roster={roster} myName={myName} seats={seats} mySeatId={mySeatId} />
       {deleteError && <p className="error" role="alert">{deleteError}</p>}
       <PoolList entries={rows} isHost={isHost} onDelete={(id) => void remove(id)} />
       <LobbySheet
@@ -68,6 +75,7 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
         onLaunch={() => client.launch(gameId)}
         onFreeSpace={(freeSpace) => client.setOptions(gameId, { freeSpace })}
         onHeight={onSheetHeight}
+        unboundNames={isHost ? unboundNames : []}
       />
     </div>
   );
