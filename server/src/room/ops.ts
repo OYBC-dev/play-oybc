@@ -112,9 +112,11 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   const push: Push = { all: ['game', 'seats', 'view'] };
   let board = null;
   if (game.stage === 'playing') {
-    // Every task already on some board stays unique to it (this is what keeps an `@anyone` task on one board).
+    // An `@anyone` task already on some board stays on that one board; plain tasks are shared across boards.
     const excludeTaskIds = new Set<string>();
-    for (const b of state.boards.values()) for (const c of b.cells) if (c.kind === 'task') excludeTaskIds.add(c.taskId);
+    for (const b of state.boards.values()) {
+      for (const c of b.cells) if (c.kind === 'task' && state.tasks.get(c.taskId)?.mentions.anyone) excludeTaskIds.add(c.taskId);
+    }
     let cells;
     try {
       cells = dealBoard(state.poolTasks(), [...state.seatList(), { seatId, name, joinedAt: ctx.now }], seatId, ctx.rng, {

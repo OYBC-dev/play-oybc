@@ -257,30 +257,46 @@ describe('@anyone at launch', () => {
 });
 
 describe('join while playing', () => {
-  /** Host alone with `n` plain tasks, free space off, launched. */
-  function soloLaunched(n: number) {
+  /** Host alone with `n` plain tasks (plus whatever `extra` seeds), free space off, launched. */
+  function soloLaunched(n: number, extra?: (state: GameState) => void) {
     const state = fresh();
     const g = claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' }).result;
     for (let i = 0; i < n; i++) addTask(state, ctxFor('u1'), { taskId: `t${i}`, text: `plain ${i}` });
+    extra?.(state);
     launch(state, ctxFor('u1'), {});
     return { state, host: g.seatId };
   }
-  it('a late joiner gets no task already on another board', () => {
-    // 50 tasks, the host holds 25: only the other 25 may be dealt, and the same rng would otherwise repeat the host's deal.
-    const { state, host } = soloLaunched(50);
+  const plain = (state: GameState, id: string) =>
+    state.putTask({ taskId: id, text: `plain ${id}`, authorSeatId: 'x', mentions: { seatIds: [], someone: false, anyone: false }, createdAt: 99 });
+  const anyone = (state: GameState, id: string) =>
+    state.putTask({ taskId: id, text: `@anyone ${id}`, authorSeatId: 'x', mentions: { seatIds: [], someone: false, anyone: true }, createdAt: 99 });
+  const joinWith = (state: GameState, rng: () => number) =>
+    taskIdsOf(state.boards.get((join(state, { ...ctxFor(`late${++counter}`), rng }, { name: `Late ${counter}` }).result as { seatId: string }).seatId)!);
+
+  it('a late joiner shares plain tasks with existing boards', () => {
+    // Exactly 25 plain tasks, all already on the host's board: the joiner still gets a board of the same 25.
+    const { state, host } = soloLaunched(25);
     const out = join(state, ctxFor('u2'), { name: 'Cody' });
     const seat = (out.result as { seatId: string }).seatId;
-    const hostIds = new Set(taskIdsOf(state.boards.get(host)!));
     const mine = taskIdsOf(state.boards.get(seat)!);
-    expect(mine).toHaveLength(25);
-    expect(mine.filter((id) => hostIds.has(id))).toEqual([]);
+    expect(new Set(mine)).toEqual(new Set(taskIdsOf(state.boards.get(host)!)));
     expect(state.boards.get(seat)!.marks.filter(Boolean)).toHaveLength(0);
     expect(out.push.all).toContain('standings');
   });
-  it('a late join with too few undealt tasks is not-ready', () => {
-    const { state } = soloLaunched(49);
+  it('an @anyone task already on a board never reaches a late joiner', () => {
+    // 24 plain + one @anyone: the host (25 needed) must hold the @anyone task.
+    const { state, host } = soloLaunched(24, (s) => anyone(s, 'any1'));
+    expect(taskIdsOf(state.boards.get(host)!)).toContain('any1');
+    // Without one more plain task the joiner has only 24 eligible.
     expect(codeOf(() => join(state, ctxFor('u2'), { name: 'Cody' }))).toBe('not-ready');
-    expect(state.seatOf('u2')).toBeNull();
+    plain(state, 'extra');
+    for (let seed = 1; seed <= 20; seed++) expect(joinWith(state, seeded(seed))).not.toContain('any1');
+  });
+  it('an @anyone task on no board may reach a late joiner', () => {
+    const { state } = soloLaunched(25);
+    anyone(state, 'any2');
+    const dealt = Array.from({ length: 20 }, (_, i) => joinWith(state, seeded(i + 1)).includes('any2'));
+    expect(dealt).toContain(true);
   });
 });
 
