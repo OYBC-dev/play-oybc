@@ -28,7 +28,7 @@ struct PlayView: View {
     var body: some View {
         ZStack(alignment: .top) {
             RisoPage(gutter: Riso.gutter, top: 10, spacing: 14) {
-                BoardHeaderView(code: snapshot.game.code, showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu,
+                BoardHeaderView(code: snapshot.game.code, gameName: snapshot.game.gameName, showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu,
                                 menuFocus: $dotsFocused,
                                 onLeaderboard: { leaderboard = true },
                                 onMenu: { hostMenu = hostMenu == .menu ? nil : .menu })
@@ -57,6 +57,8 @@ struct PlayView: View {
 /// dots button on the right. At large text sizes the actions wrap under the pill.
 struct BoardHeaderView: View {
     let code: String
+    /// The host's game name, shown after the code pill when set.
+    var gameName: String? = nil
     let showsMenu: Bool
     var menuOpen = false
     var menuFocus: AccessibilityFocusState<Bool>.Binding
@@ -67,11 +69,11 @@ struct BoardHeaderView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
                 pill
-                Spacer(minLength: 0)
+                nameSlot
                 actions
             }
             VStack(alignment: .leading, spacing: 10) {
-                pill
+                HStack(spacing: 10) { pill; nameSlot }
                 actions
             }
         }
@@ -93,6 +95,29 @@ struct BoardHeaderView: View {
             .clipShape(Capsule())
             .fixedSize()
             .accessibilityIdentifier("game-code")
+    }
+
+    /// The flexible gap after the pill, carrying the game name as an overlay: its ideal width stays zero,
+    /// so a long name truncates inside whatever room is left and never changes the fit or pushes
+    /// Leaderboard or the menu off screen.
+    private var nameSlot: some View {
+        Spacer(minLength: 0)
+            .frame(minHeight: 36)
+            .overlay(alignment: .leading) { name }
+    }
+
+    /// The game name: one muted truncating line.
+    @ViewBuilder
+    private var name: some View {
+        if let gameName, !gameName.isEmpty {
+            Text(gameName)
+                .font(.risoBody(13, .semibold))
+                .foregroundStyle(Color.risoMuted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(0)
+                .accessibilityIdentifier("game-name")
+        }
     }
 
     private var actions: some View {

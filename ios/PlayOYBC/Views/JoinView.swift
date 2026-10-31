@@ -81,3 +81,32 @@ struct JoinView: View {
         _Concurrency.Task { await model.submit(name: name, reclaim: reclaim) }
     }
 }
+
+/// The game being joined, under the code: its name (when the host set one) over `Host · {name}`.
+/// Renders nothing until whoAmI has answered.
+struct JoinGameIdentity: View {
+    let gameName: String?
+    let hostName: String?
+
+    var body: some View {
+        if gameName != nil || hostName != nil {
+            VStack(alignment: .leading, spacing: 2) {
+                if let gameName {
+                    Text(gameName)
+                        .font(.risoHead(17, .bold))
+                        .foregroundStyle(Color.risoInk)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let hostName {
+                    Text("Host · \(hostName)")
+                        .font(.risoBody(13, .semibold))
+                        .foregroundStyle(Color.risoMuted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+}

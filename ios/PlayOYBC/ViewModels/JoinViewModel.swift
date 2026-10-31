@@ -19,18 +19,24 @@ final class JoinViewModel: ObservableObject {
     @Published private(set) var denied = false
     /// The last join failed `name-taken`: offer "That's me" (a reclaim) beside picking another name.
     @Published private(set) var taken = false
+    /// The game's name as the host set it (nil until known, or when the host set none).
+    @Published private(set) var gameName: String?
+    /// The host seat's display name (nil until known).
+    @Published private(set) var hostName: String?
     let code: String
     private let service: GameService
     private var watchTask: _Concurrency.Task<Void, Never>?
 
     init(service: GameService, code: String, phase: Phase = .checking, error: String? = nil, denied: Bool = false,
-         taken: Bool = false) {
+         taken: Bool = false, gameName: String? = nil, hostName: String? = nil) {
         self.service = service
         self.code = code
         self.phase = phase
         self.error = error
         self.denied = denied
         self.taken = taken
+        self.gameName = gameName
+        self.hostName = hostName
     }
 
     deinit { watchTask?.cancel() }
@@ -39,8 +45,10 @@ final class JoinViewModel: ObservableObject {
     func check() async {
         phase = .checking
         do {
-            if let me = try await service.whoAmI(code: code) {
-                phase = .seated(gameId: me.gameId, seatId: me.seatId)
+            let me = try await service.whoAmI(code: code)
+            absorb(me)
+            if let me, let seatId = me.seatId {
+                phase = .seated(gameId: me.gameId, seatId: seatId)
             } else {
                 phase = .name
             }
@@ -71,6 +79,13 @@ final class JoinViewModel: ObservableObject {
         }
     }
 
+    /// Keeps the header's game and host names; an answer without them leaves the last known values.
+    private func absorb(_ me: WhoAmIRes?) {
+        guard let me else { return }
+        if let name = me.gameName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty { gameName = name }
+        if let host = me.hostName?.trimmingCharacters(in: .whitespacesAndNewlines), !host.isEmpty { hostName = host }
+    }
+
     private func backToName(_ message: String) {
         denied = false
         error = message
@@ -92,8 +107,10 @@ final class JoinViewModel: ObservableObject {
                         return
                     case .approved:
                         do {
-                            if let me = try await service.whoAmI(code: code) {
-                                self.phase = .seated(gameId: me.gameId, seatId: me.seatId)
+                            let me = try await service.whoAmI(code: code)
+                            self.absorb(me)
+                            if let me, let seatId = me.seatId {
+                                self.phase = .seated(gameId: me.gameId, seatId: seatId)
                             } else {
                                 self.backToName(ErrorMessages.fallback)
                             }

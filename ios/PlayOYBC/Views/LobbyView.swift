@@ -237,9 +237,10 @@ struct LobbyHeaderView: View {
             // Under "Pool", outside the fit test so a long name never pushes the avatars to a second line.
             if let gameName, !gameName.isEmpty {
                 Text(gameName)
-                    .font(.risoBody(13, .semibold))
-                    .foregroundStyle(Color.risoMuted)
+                    .font(.risoHead(15, .bold))
+                    .foregroundStyle(Color.risoInk)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .accessibilityIdentifier("game-name")
             }
         }

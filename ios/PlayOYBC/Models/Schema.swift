@@ -270,7 +270,39 @@ enum JoinGameRes: Codable, Equatable {
 }
 
 struct WhoAmIReq: Codable, Equatable { var code: String }
-struct WhoAmIRes: Codable, Equatable { var gameId: String; var seatId: String }
+/// Where this uid stands in a game. `seatId` nil = not seated yet; `gameName` absent when the host set none.
+/// Decodes the older `{gameId, seatId}` shape too.
+struct WhoAmIRes: Codable, Equatable {
+    var gameId: String
+    var seatId: String?
+    var gameName: String?
+    var hostName: String?
+
+    init(gameId: String, seatId: String?, gameName: String? = nil, hostName: String? = nil) {
+        self.gameId = gameId
+        self.seatId = seatId
+        self.gameName = gameName
+        self.hostName = hostName
+    }
+
+    private enum Keys: String, CodingKey { case gameId, seatId, gameName, hostName }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        gameId = try c.decode(String.self, forKey: .gameId)
+        seatId = try c.decodeIfPresent(String.self, forKey: .seatId)
+        gameName = try c.decodeIfPresent(String.self, forKey: .gameName)
+        hostName = try c.decodeIfPresent(String.self, forKey: .hostName)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(gameId, forKey: .gameId)
+        try c.encodeIfPresent(seatId, forKey: .seatId)
+        try c.encodeIfPresent(gameName, forKey: .gameName)
+        try c.encodeIfPresent(hostName, forKey: .hostName)
+    }
+}
 struct AddTaskReq: Codable, Equatable { var gameId: String; var text: String }
 struct AddTaskRes: Codable, Equatable { var taskId: String }
 struct DeleteTaskReq: Codable, Equatable { var gameId: String; var taskId: String }

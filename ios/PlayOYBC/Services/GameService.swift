@@ -24,6 +24,8 @@ protocol GameService {
     /// Joins as `name`. A name held by someone here (or bound by the host to someone) fails `name-taken`
     /// unless `reclaim` is true, which asks the host for that seat (the lost-phone case → `reclaimPending`).
     func joinGame(code: String, name: String, reclaim: Bool) async throws -> JoinGameRes
+    /// Where this uid stands in `code`'s game (seat, game name, host name). Nil only from a backend that
+    /// cannot say (the legacy callable when not seated); a missing game throws `game-not-found`.
     func whoAmI(code: String) async throws -> WhoAmIRes?
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error>
     func addTask(gameId: String, text: String) async throws
