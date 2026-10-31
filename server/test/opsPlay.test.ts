@@ -203,15 +203,29 @@ describe('mark', () => {
 });
 
 describe('end', () => {
-  it('rejects non-host, ends for host, rejects non-playing', () => {
-    const { state } = lobby();
-    expect(codeOf(() => end(state, ctxFor('u1'), {}))).toBe('wrong-stage');
-    launch(state, ctxFor('u1'), {});
+  it('rejects non-host, ends for host while playing, rejects an ended game', () => {
+    const { state } = playing();
     expect(codeOf(() => end(state, ctxFor('u2'), {}))).toBe('not-host');
     const out = end(state, ctxFor('u1', NOW + 9), {});
     expect(state.game!.stage).toBe('ended');
     expect(state.game!.endedAt).toBe(NOW + 9);
     expect(out.push.all).toEqual(['game']);
+    expect(codeOf(() => end(state, ctxFor('u1'), {}))).toBe('wrong-stage');
+  });
+  it('ends from the lobby: no boards, no bingos, launch refused afterwards', () => {
+    const { state, ids } = lobby();
+    expect(codeOf(() => end(state, ctxFor('u2'), {}))).toBe('not-host');
+    const out = end(state, ctxFor('u1', NOW + 5), {});
+    expect(state.game).toMatchObject({ stage: 'ended', endedAt: NOW + 5, bingoCount: 0 });
+    expect(out.push.all).toEqual(['game']);
+    expect(state.boards.size).toBe(0);
+    expect(bingos(state)).toEqual([]);
+    expect(codeOf(() => end(state, ctxFor('u1'), {}))).toBe('wrong-stage');
+    expect(codeOf(() => launch(state, ctxFor('u1'), {}))).toBe('wrong-stage');
+    const sections = buildSections(state, ids.u2, ALL_SECTIONS);
+    expect(sections.game).toMatchObject({ stage: 'ended' });
+    expect(sections.board ?? null).toBeNull();
+    expect(sections.bingos).toEqual([]);
   });
 });
 
