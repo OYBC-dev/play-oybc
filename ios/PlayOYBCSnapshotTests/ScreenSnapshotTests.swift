@@ -6,7 +6,7 @@ import XCTest
 /// Visual baselines for every Play screen, light and dark, at iPhone 17 width.
 @MainActor
 final class ScreenSnapshotTests: XCTestCase {
-    private let recordMode: SnapshotTestingConfiguration.Record? = .all // TEMP: CI re-record, reverted before merge
+    private let recordMode: SnapshotTestingConfiguration.Record? = .missing
     private typealias F = SnapshotFixtures
 
     /// Asserts one baseline per colour scheme (`<test>.light.png` / `<test>.dark.png`).
