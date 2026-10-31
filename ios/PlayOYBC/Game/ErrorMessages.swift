@@ -10,6 +10,7 @@ enum ErrorMessages {
         "game-ended": "That game has ended",
         "reclaim-not-found": "That request is gone",
         "unknown-mention": "No one here goes by that name",
+        "duplicate-task": "Already in the pool",
         "self-mention": "You can't mention yourself",
         "not-host": "Only the host can do that",
         "wrong-stage": "That isn't available right now",

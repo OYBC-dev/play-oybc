@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_GAME_NAME_LENGTH, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, rosterHas, scanTask, shortfalls, unboundKeys,
+  CENTER_INDEX, MAX_GAME_NAME_LENGTH, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, rosterHas, scanTask, shortfalls, taskTextKey, unboundKeys,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -152,8 +152,9 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string; reclaim
  * A `@Name` nobody here has yet is accepted as an unbound name (kept from whoever might be that person
  * until they join; see game-core `visibility.ts`), unless it nearly names someone who is here
  * ("@Cody" with "Cody B" seated): that is `unknown-mention`, so the author picks the real name.
+ * A text already in the pool (same words, ignoring case, spacing and trailing punctuation) is `duplicate-task`.
  * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `invalid-text`,
- *   `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
+ *   `duplicate-task`, `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
  */
 export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; text: string }): OpOut<AddTaskRes> {
   const game = requireGame(state);
@@ -168,6 +169,8 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   const text = typeof args.text === 'string' ? args.text.trim() : '';
   if (!text || text.length > MAX_TASK_LENGTH) throw new AppError('invalid-text');
   if (state.tasks.size >= MAX_TASKS) throw new AppError('resource-exhausted');
+  const key = taskTextKey(text);
+  for (const t of state.tasks.values()) if (taskTextKey(t.text) === key) throw new AppError('duplicate-task');
   const seats = state.seatList();
   const names = state.nameStates();
   const nearMiss = nearMissMentions(text, seats, names)[0];

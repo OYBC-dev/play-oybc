@@ -109,6 +109,10 @@ describe('LobbyScreen', () => {
     client.addTask = () => Promise.reject(appError('self-mention'));
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(await screen.findByText("You can't mention yourself")).toBeInTheDocument();
+    client.addTask = () => Promise.reject(appError('duplicate-task'));
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('Already in the pool')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task')).toHaveValue('Hey @Bob');
   });
 
   it('a delete hides the row at once; a failed delete restores it and shows the error', async () => {

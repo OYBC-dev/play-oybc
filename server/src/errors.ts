@@ -3,7 +3,7 @@ import type { Push } from './room/ops';
 
 /** Every error code a client may read (`details.code` on web, `AppError.code` on iOS). */
 export type AppErrorCode =
-  | 'invalid-name' | 'invalid-text' | 'game-not-found' | 'game-ended' | 'unknown-mention' | 'name-not-found' | 'seat-not-found' | 'name-taken'
+  | 'invalid-name' | 'invalid-text' | 'game-not-found' | 'game-ended' | 'unknown-mention' | 'name-not-found' | 'seat-not-found' | 'name-taken' | 'duplicate-task'
   | 'self-mention' | 'not-host' | 'wrong-stage' | 'not-ready' | 'invalid-cell'
   | 'unknown-seat' | 'reclaim-not-found' | 'reclaim-cooldown'
   | 'unauthenticated' | 'permission-denied' | 'not-found' | 'invalid-argument' | 'resource-exhausted'

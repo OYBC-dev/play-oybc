@@ -346,6 +346,14 @@ describe('addTask', () => {
       expect(view(state, s4).find((e) => e.taskId === a)!.text).toBeNull();
     });
   });
+  it('a text already in the pool is duplicate-task, whoever wrote it, ignoring case, spacing and trailing punctuation', () => {
+    const { state } = setup();
+    add(state, 'u2', 'Someone spills a drink');
+    expect(codeOf(() => add(state, 'u3', ' someone  SPILLS a drink! '))).toBe('duplicate-task');
+    expect(codeOf(() => add(state, 'u2', 'Someone spills a drink.'))).toBe('duplicate-task');
+    expect(codeOf(() => add(state, 'u3', 'Someone spills their drink'))).toBeUndefined();
+    expect(state.tasks.size).toBe(2);
+  });
   it('rejects self-mention and bad text', () => {
     const { state } = setup();
     expect(codeOf(() => add(state, 'u2', '@Cody dances'))).toBe('self-mention');

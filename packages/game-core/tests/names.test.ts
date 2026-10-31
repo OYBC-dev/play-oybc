@@ -1,4 +1,4 @@
-import { isNearName, nameKey, normalizeName } from '../src/names';
+import { isNearName, nameKey, normalizeName, taskTextKey } from '../src/names';
 
 describe('names', () => {
   it('trims and collapses whitespace', () => {
@@ -39,5 +39,11 @@ describe('names', () => {
     expect(isNearName('mike', 'michael')).toBe(false);
     expect(isNearName('samantha', 'sam')).toBe(false);
     expect(isNearName('seth', 'cody b')).toBe(false);
+  });
+  it('taskTextKey folds case, spacing, apostrophes and trailing punctuation', () => {
+    expect(taskTextKey(' Someone  spills a drink! ')).toBe('someone spills a drink');
+    expect(taskTextKey('Someone spills a drink...')).toBe('someone spills a drink');
+    expect(taskTextKey("@Cody’s hat falls off?")).toBe("@cody's hat falls off");
+    expect(taskTextKey('Different task')).not.toBe(taskTextKey('Different task 2'));
   });
 });

@@ -46,3 +46,12 @@ export function isNearName(key: string, seatKey: string): boolean {
   if (key === first || key === first + 's') return true;
   return key.length >= 3 && first.startsWith(key);
 }
+
+/**
+ * Key for spotting a task already in the pool: trimmed, whitespace collapsed,
+ * curly apostrophes folded, lower-cased, and trailing `.`, `!`, `?` dropped, so
+ * "Someone spills a drink!" and " someone  spills a drink" are the same task.
+ */
+export function taskTextKey(text: string): string {
+  return foldApostrophes(squash(text)).toLowerCase().replace(/[.!?]+$/u, '').trimEnd();
+}
