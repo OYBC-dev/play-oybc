@@ -5,6 +5,11 @@ function squash(raw: string): string {
   return raw.trim().replace(/\s+/g, ' ');
 }
 
+/** Curly apostrophes (what the iOS keyboard types) read as the plain one. */
+export function foldApostrophes(raw: string): string {
+  return raw.replace(/[’‘]/g, "'");
+}
+
 /**
  * Normalizes a display name: trimmed, whitespace collapsed, 1-20 chars of
  * letters/digits/space/apostrophe/hyphen. Returns null when invalid or when
@@ -18,7 +23,26 @@ export function normalizeName(raw: string): string | null {
   return name;
 }
 
-/** Case- and whitespace-insensitive key for uniqueness checks and mention matching. */
+/** Case-, whitespace- and apostrophe-insensitive key for uniqueness checks and mention matching. */
 export function nameKey(name: string): string {
-  return squash(name).toLowerCase();
+  return foldApostrophes(squash(name)).toLowerCase();
+}
+
+/** The first word of a name key ("cody b" → "cody"). */
+export function firstWord(key: string): string {
+  return key.split(' ')[0];
+}
+
+/**
+ * Whether an unbound name key plausibly names the seat with `seatKey`: the same
+ * key, the seat's first name, or a prefix of it / extended by it (3+ chars either
+ * way), so "@Cody", "@Cod" and "@Codys" all reach "Cody B". Used to keep a task
+ * from a seat the text nearly names and to refuse such a mention while that seat is here.
+ */
+export function isNearName(key: string, seatKey: string): boolean {
+  if (key === seatKey) return true;
+  const first = firstWord(seatKey);
+  if (key === first) return true;
+  if (key.length < 3 || first.length < 3) return false;
+  return first.startsWith(key) || key.startsWith(first);
 }

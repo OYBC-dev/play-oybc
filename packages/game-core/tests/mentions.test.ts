@@ -1,4 +1,4 @@
-import { parseMentions, resolveMentionRefs } from '../src/mentions';
+import { nearMissMentions, parseMentions, resolveMentionRefs } from '../src/mentions';
 import { Seat } from '../src/types';
 
 const seat = (seatId: string, name: string): Seat => ({ seatId, name, joinedAt: 0 });
@@ -37,6 +37,20 @@ describe('parseMentions', () => {
     expect(parseMentions('@Zed’s hat', seats).names).toEqual(['zed']);
     expect(parseMentions('@Zed- hat', seats).names).toEqual(['zed']);
     expect(parseMentions("@O'Neil waves", seats).names).toEqual(["o'neil"]);
+  });
+  it('a curly apostrophe still matches the seat, and a whole-word fold matches a final sigma', () => {
+    const party = [seat('o', "O'Neil"), seat('g', 'ΟΔΥΣΣΕΑΣ')];
+    expect(parseMentions('@O’Neil waves', party)).toEqual({ ...none, seatIds: ['o'] });
+    expect(parseMentions("@o'neil waves", party)).toEqual({ ...none, seatIds: ['o'] });
+    expect(parseMentions('@οδυσσεας dances', party)).toEqual({ ...none, seatIds: ['g'] });
+    expect(parseMentions('@ΟΔΥΣΣΕΑΣ dances', party)).toEqual({ ...none, seatIds: ['g'] });
+  });
+  it('nearMissMentions: an unknown token that nearly names someone here', () => {
+    const party = [seat('c', 'Cody B'), seat('m', 'Mary Jane')];
+    expect(nearMissMentions('@Cody streaks', party)).toEqual(['@Cody']);
+    expect(nearMissMentions('@Mary sings with @Codys', party)).toEqual(['@Mary', '@Codys']);
+    expect(nearMissMentions('@Jess sings', party)).toEqual([]);
+    expect(nearMissMentions('@Cody B streaks', party)).toEqual([]);
   });
   it('a typed multi-word name binds only its first word until that seat exists', () => {
     expect(parseMentions('@Jess Smith sings', seats).names).toEqual(['jess']);

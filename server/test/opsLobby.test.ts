@@ -214,6 +214,14 @@ describe('addTask', () => {
       expect(view(state, s3)[0].text).toBe('bob sings');
       expect(game(state, s1).dealable).toEqual({ [s1]: 1, [s2]: 1, [s3]: 1, [s4]: 0 });
     });
+    it('is refused with the token when it nearly names someone who is here', () => {
+      const { state } = setup();
+      let err: AppError | undefined;
+      try { add(state, 'u1', '@Cod streaks'); } catch (e) { err = e as AppError; }
+      expect(err?.code).toBe('unknown-mention');
+      expect(err?.details?.token).toBe('@Cod');
+      expect(codeOf(() => add(state, 'u1', '@Cody streaks'))).toBeUndefined();
+    });
     it('a task row stored without names still loads', () => {
       const { state, s1, s3 } = setup();
       state.putTask({ taskId: 'old', text: 'plain', authorSeatId: s1, mentions: { seatIds: [], someone: false, anyone: false }, createdAt: 1 });

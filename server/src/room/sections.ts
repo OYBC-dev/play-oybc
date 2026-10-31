@@ -1,4 +1,4 @@
-import { buildPoolView, dealableCounts, shortfalls, standings, tasksPerBoard, type Standing } from 'game-core';
+import { buildPoolView, dealableCounts, mentionContext, shortfallsFromCounts, standings, tasksPerBoard, type MentionContext, type Standing } from 'game-core';
 import type { Section, StateMsg } from '../protocol';
 import type { GameState } from './state';
 
@@ -23,27 +23,39 @@ export function buildStandings(state: GameState): Standing[] {
 }
 
 /**
+ * Work shared across the frames of one push: the pool scanned once (`ctx`) and the seat-independent
+ * `game` section built once. Pass a fresh `{}` per push; never reuse one across state changes.
+ */
+export interface SectionMemo { ctx?: MentionContext; game?: StateMsg['game'] }
+
+/**
  * Builds the requested sections of a state push as one seat sees them.
  * Reclaims are host-only; `seatId` null (a spectator) gets an empty view, no board and no reclaims.
  * Sections the game cannot yet supply (no game row) are omitted for `game`. The `game` section carries the
  * free-space option, `tasksPerBoard`, and per-seat `shortfalls` / `dealable` computed under that option.
  * `shortfalls` / `dealable` are lobby-time readiness over the whole pool: after launch they ignore the late-join exclusion.
+ * @param memo shared across the frames of one push (see {@link SectionMemo})
  */
-export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[]): Partial<StateMsg> {
+export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[], memo: SectionMemo = {}): Partial<StateMsg> {
   const out: Partial<StateMsg> = {};
+  const ctx = (): MentionContext => (memo.ctx ??= mentionContext(state.poolTasks(), state.seatList()));
   for (const section of sections) {
     switch (section) {
       case 'game': {
         const g = state.game;
         if (!g) break;
-        const { gameId: _gameId, rev: _rev, lastMutationAt: _last, ...rest } = g;
-        const opts = { freeSpace: g.freeSpace };
-        const tasks = state.poolTasks();
-        const seats = state.seatList();
-        out.game = {
-          ...rest, tasksPerBoard: tasksPerBoard(g.freeSpace),
-          shortfalls: shortfalls(tasks, seats, opts), dealable: dealableCounts(tasks, seats, opts),
-        };
+        if (!memo.game) {
+          const { gameId: _gameId, rev: _rev, lastMutationAt: _last, ...rest } = g;
+          const opts = { freeSpace: g.freeSpace };
+          const tasks = state.poolTasks();
+          const seats = state.seatList();
+          const dealable = dealableCounts(tasks, seats, opts, ctx());
+          memo.game = {
+            ...rest, tasksPerBoard: tasksPerBoard(g.freeSpace),
+            shortfalls: shortfallsFromCounts(dealable, tasksPerBoard(g.freeSpace)), dealable,
+          };
+        }
+        out.game = memo.game;
         break;
       }
       case 'standings':
@@ -55,7 +67,7 @@ export function buildSections(state: GameState, seatId: string | null, sections:
           .map(({ seatId: id, name, nameKey, joinedAt }) => ({ seatId: id, name, nameKey, joinedAt }));
         break;
       case 'view':
-        out.view = seatId === null ? [] : buildPoolView(state.poolTasks(), state.seatList(), seatId);
+        out.view = seatId === null ? [] : buildPoolView(state.poolTasks(), state.seatList(), seatId, ctx());
         break;
       case 'board': {
         const b = seatId === null ? undefined : state.boards.get(seatId);

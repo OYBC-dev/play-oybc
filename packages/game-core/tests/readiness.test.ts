@@ -1,5 +1,6 @@
 import { assignAnyone, dealBoard } from '../src/deal';
 import { dealableCounts, shortfalls } from '../src/readiness';
+import { canBeDealt, mentionContext } from '../src/visibility';
 import { makeSeededRng } from './seededRng';
 import { PoolTask, Seat } from '../src/types';
 
@@ -82,13 +83,19 @@ describe('readiness guarantees launch (property)', () => {
       readyRuns++;
       const assignment = assignAnyone(tasks, party, rng);
       const boards = party.map((s) => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment }));
+      const ctx = mentionContext(tasks, party);
+      const byId = new Map(tasks.map((t) => [t.id, t]));
       const onBoards = (id: string) =>
         boards.filter((b) => b.some((c) => c.kind === 'task' && c.taskId === id)).length;
       for (const t of tasks) {
         if (!t.mentions.anyone) continue;
-        const namesEverySeat = party.every((s) => t.mentions.seatIds.includes(s.seatId));
-        expect(onBoards(t.id)).toBe(namesEverySeat ? 0 : 1);
+        const someSeat = party.some((s) => canBeDealt(t, s.seatId, ctx));
+        expect(onBoards(t.id)).toBe(someSeat ? 1 : 0);
       }
+      // Safety: no board holds a task its seat may not be dealt.
+      party.forEach((s, i) => {
+        for (const c of boards[i]) if (c.kind === 'task') expect(canBeDealt(byId.get(c.taskId)!, s.seatId, ctx)).toBe(true);
+      });
     }
     expect(readyRuns).toBeGreaterThan(20);
   });

@@ -103,6 +103,14 @@ describe('visibility', () => {
       expect(canBeDealt(mixed, 's2', c4)).toBe(true);
       expect(canBeDealt(mixed, 's3', c4)).toBe(false);
     });
+    it('a name that nearly names someone here keeps the task from them even when they are identified', () => {
+      const party2 = [seat('s1', 'Jo'), seat('s2', 'Cody B'), seat('s3', 'Seth')];
+      const near: PoolTask = { ...task('n', { names: ['cody'] }), text: '@Cody streaks' };
+      const c5 = mentionContext([near, about('c', ['s2'])], party2);
+      expect(canSeeText(near, 's2', c5)).toBe(false);
+      expect(canBeDealt(near, 's2', c5)).toBe(false);
+      expect(canSeeText(near, 's3', c5)).toBe(false);
+    });
     it('buildPoolView shows the typed name bold and hides the row from an unidentified seat', () => {
       const v = buildPoolView([jess, cody], party, 's2');
       expect(v[0]).toMatchObject({ taskId: 'j', text: 'Jess sings', refs: [[0, 4]] });

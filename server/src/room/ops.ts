@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, nameKey, normalizeName, parseMentions, shortfalls,
+  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, nameKey, nearMissMentions, normalizeName, parseMentions, shortfalls,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -138,9 +138,10 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
 /**
  * Adds a pool task in the lobby; idempotent on a repeated `taskId` by the same author.
  * A `@Name` nobody here has yet is accepted as an unbound name (kept from whoever might be that person
- * until they join; see game-core `visibility.ts`).
+ * until they join; see game-core `visibility.ts`), unless it nearly names someone who is here
+ * ("@Cody" with "Cody B" seated): that is `unknown-mention`, so the author picks the real name.
  * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `invalid-text`,
- *   `self-mention`, `resource-exhausted`.
+ *   `unknown-mention` (details.token), `self-mention`, `resource-exhausted`.
  */
 export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; text: string }): OpOut<AddTaskRes> {
   const game = requireGame(state);
@@ -155,7 +156,10 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   const text = typeof args.text === 'string' ? args.text.trim() : '';
   if (!text || text.length > MAX_TASK_LENGTH) throw new AppError('invalid-text');
   if (state.tasks.size >= MAX_TASKS) throw new AppError('resource-exhausted');
-  const mentions = parseMentions(text, state.seatList());
+  const seats = state.seatList();
+  const nearMiss = nearMissMentions(text, seats)[0];
+  if (nearMiss !== undefined) throw new AppError('unknown-mention', { token: nearMiss });
+  const mentions = parseMentions(text, seats);
   if (mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
   state.putTask({ taskId, text, authorSeatId: seatId, mentions, createdAt: ctx.now });
   return { result: { taskId }, push: { all: ['game', 'view'] } };

@@ -1,6 +1,6 @@
 import { CLOSE, type Section, type ServerMsg } from '../protocol';
 import type { Push } from './ops';
-import { ALL_SECTIONS, buildSections } from './sections';
+import { ALL_SECTIONS, buildSections, type SectionMemo } from './sections';
 import type { GameState } from './state';
 
 /** What a socket carries across hibernation once `hello` succeeded. */
@@ -34,11 +34,12 @@ export function socketsFor(ctx: DurableObjectState, uid: string): WebSocket[] {
 export function broadcast(ctx: DurableObjectState, state: GameState, push: Push, rev: number, onError: (e: unknown) => void): void {
   const evicted = new Set(push.evictUids ?? []);
   const frames = new Map<string, string>();
+  const memo: SectionMemo = {};
   const frameFor = (seatId: string | null, sections: readonly Section[]): string => {
     const key = `${seatId ?? ''}|${sections.join(',')}`;
     let frame = frames.get(key);
     if (frame === undefined) {
-      frame = JSON.stringify({ t: 'state', rev, ...buildSections(state, seatId, sections) } satisfies ServerMsg);
+      frame = JSON.stringify({ t: 'state', rev, ...buildSections(state, seatId, sections, memo) } satisfies ServerMsg);
       frames.set(key, frame);
     }
     return frame;

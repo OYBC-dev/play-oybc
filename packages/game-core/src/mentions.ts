@@ -1,4 +1,4 @@
-import { nameKey } from './names';
+import { foldApostrophes, isNearName, nameKey } from './names';
 import { Seat, TaskMentions } from './types';
 
 const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
@@ -6,21 +6,26 @@ const isJoiner = (ch: string | undefined): boolean => ch === '-' || ch === "'" |
 const isSpace = (ch: string | undefined): boolean => ch !== undefined && /\s/u.test(ch);
 
 /**
- * Matches `key` (lower-case, single-spaced) at `start`, treating any run of
- * whitespace in the text as one space. Returns the end index or -1.
+ * Matches `key` (a `nameKey`: lower-case, single-spaced, plain apostrophes) at
+ * `start`, treating any run of whitespace in the text as one space. The text is
+ * folded the same way as a whole, so letters that lower-case differently on
+ * their own (final sigma, dotted İ) still match. Returns the end index or -1.
  */
 function matchKey(text: string, start: number, key: string): number {
   let t = start;
+  let taken = '';
   for (const ch of key) {
     if (ch === ' ') {
       if (!isSpace(text[t])) return -1;
       while (isSpace(text[t])) t++;
+      taken += ' ';
     } else {
-      if (t >= text.length || text[t].toLowerCase() !== ch) return -1;
+      if (t >= text.length || isSpace(text[t])) return -1;
+      taken += text[t];
       t++;
     }
   }
-  return t;
+  return foldApostrophes(taken).toLowerCase() === key ? t : -1;
 }
 
 /** True when a match ending at `end` is a whole token (not a prefix of a longer name). */
@@ -116,6 +121,20 @@ export function parseMentions(text: string, seats: readonly Seat[]): TaskMention
     else { const key = nameKey(t.token.slice(1)); if (!names.includes(key)) names.push(key); }
   }
   return names.length ? { seatIds, someone, anyone, names } : { seatIds, someone, anyone };
+}
+
+/**
+ * The `@word` tokens that match no seat but nearly name one that is here
+ * ({@link isNearName}: "@Cody" with "Cody B" seated). An add should refuse these
+ * rather than file a name the person next to you will read.
+ */
+export function nearMissMentions(text: string, seats: readonly Seat[]): string[] {
+  const keys = seats.map((s) => nameKey(s.name));
+  const out: string[] = [];
+  for (const t of scanMentions(text, seats)) {
+    if (t.kind === 'unknown' && keys.some((k) => isNearName(nameKey(t.token.slice(1)), k))) out.push(t.token);
+  }
+  return out;
 }
 
 /**
