@@ -80,7 +80,7 @@ describe('launch', () => {
       expect(b.completedLines).toEqual([]);
       expect(b.announcedLines).toEqual([]);
     }
-    expect(out.push.all).toEqual(['game', 'standings']);
+    expect(out.push.all).toEqual(['game', 'standings', 'roster', 'view']);
     expect(out.push.perSeat).toEqual({ [ids.u1]: ['board'], [ids.u2]: ['board'], [ids.u3]: ['board'] });
   });
   it('rejects a second launch and addTask after launch', () => {
@@ -292,15 +292,16 @@ describe('join while playing', () => {
     plain(state, 'extra');
     for (let seed = 1; seed <= 20; seed++) expect(joinWith(state, seeded(seed))).not.toContain('any1');
   });
-  it('a task naming someone not here yet never reaches them, nor an unidentified late joiner', () => {
+  it('launch releases a name nobody joined under: dealt like a plain task, except to the person if they join later', () => {
     const ghost = (s: GameState) =>
       s.putTask({ taskId: 'gh', text: '@Ghost trips', authorSeatId: 'x', mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost'] }, createdAt: 99 });
-    const { state, host } = soloLaunched(25, ghost);
-    expect(taskIdsOf(state.boards.get(host)!)).not.toContain('gh');
+    // 24 plain + the Ghost task: the host's 25-cell board must hold it.
+    const { state, host } = soloLaunched(24, ghost);
+    expect(taskIdsOf(state.boards.get(host)!)).toContain('gh');
+    expect(state.names.get('ghost')).toEqual({ seatId: null, retired: true });
     const other = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
-    expect(taskIdsOf(state.boards.get(other.seatId)!)).not.toContain('gh');
-    const them = join(state, ctxFor('u3'), { name: 'Ghost' }).result as { seatId: string };
-    expect(taskIdsOf(state.boards.get(them.seatId)!)).not.toContain('gh');
+    expect(taskIdsOf(state.boards.get(other.seatId)!)).toContain('gh');
+    expect(codeOf(() => join(state, ctxFor('u3'), { name: 'Ghost' }))).toBe('not-ready');
   });
   it('an @anyone task on no board may reach a late joiner', () => {
     const { state } = soloLaunched(25);

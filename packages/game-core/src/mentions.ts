@@ -1,5 +1,5 @@
 import { foldApostrophes, isNearName, nameKey } from './names';
-import { NameBindings, Seat, TaskMentions } from './types';
+import { NameStates, Seat, TaskMentions } from './types';
 
 const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 const isJoiner = (ch: string | undefined): boolean => ch === '-' || ch === "'" || ch === '’';
@@ -60,7 +60,7 @@ function unknownNameEnd(text: string, start: number): number {
 export type MentionToken =
   | { kind: 'someone'; start: number; end: number }
   | { kind: 'anyone'; start: number; end: number }
-  | { kind: 'seat'; seat: Seat; start: number; end: number }
+  | { kind: 'seat'; seat: Seat; start: number; end: number; bound?: true }
   | { kind: 'unknown'; start: number; end: number; token: string };
 
 /**
@@ -69,10 +69,10 @@ export type MentionToken =
  * seat named "Someone Else" beats the `someone` keyword; on an equal-length tie
  * the keyword wins. An `@` preceded by a
  * letter/digit, or not followed by a letter/digit, is plain text. Every other
- * `@word` is an `unknown` token spanning the word, unless `bindings` maps its
+ * `@word` is an `unknown` token spanning the word, unless `names` binds its
  * key to a seat that is here: then it is that seat's token (the host said who it is).
  */
-export function scanMentions(text: string, seats: readonly Seat[], bindings?: NameBindings): MentionToken[] {
+export function scanMentions(text: string, seats: readonly Seat[], names?: NameStates): MentionToken[] {
   const byLength = seats
     .map((seat) => ({ seat, key: nameKey(seat.name) }))
     .sort((a, b) => b.key.length - a.key.length);
@@ -97,10 +97,10 @@ export function scanMentions(text: string, seats: readonly Seat[], bindings?: Na
     for (const c of candidates) if (!token || c.end > token.end) token = c;
     if (!token) {
       const stop = unknownNameEnd(text, start);
-      const boundSeatId = bindings?.get(nameKey(text.slice(start, stop)));
-      const bound = boundSeatId === undefined ? undefined : seats.find((s) => s.seatId === boundSeatId);
+      const boundSeatId = names?.get(nameKey(text.slice(start, stop)))?.seatId ?? null;
+      const bound = boundSeatId === null ? undefined : seats.find((s) => s.seatId === boundSeatId);
       token = bound
-        ? { kind: 'seat', seat: bound, start: i, end: stop }
+        ? { kind: 'seat', seat: bound, start: i, end: stop, bound: true }
         : { kind: 'unknown', start: i, end: stop, token: '@' + text.slice(start, stop) };
     }
     tokens.push(token);
@@ -111,19 +111,21 @@ export function scanMentions(text: string, seats: readonly Seat[], bindings?: Na
 
 /**
  * Parses @mentions (token rules in {@link scanMentions}). A `@word` that is
- * neither a keyword nor a seat name is a name nobody here has yet: its
- * `nameKey` lands in `names` (absent when there are none). Never fails.
+ * neither a keyword nor a seat's own name is a referenced name: its `nameKey`
+ * lands in `names` (absent when there are none), whether the host has bound it
+ * or not, so a binding is always re-resolved at read time and a rebind undoes
+ * a wrong one. Only a seat's own name goes in `seatIds`. Never fails.
  */
-export function parseMentions(text: string, seats: readonly Seat[], bindings?: NameBindings): TaskMentions {
+export function parseMentions(text: string, seats: readonly Seat[], states?: NameStates): TaskMentions {
   const seatIds: string[] = [];
   const names: string[] = [];
   let someone = false;
   let anyone = false;
-  for (const t of scanMentions(text, seats, bindings)) {
+  for (const t of scanMentions(text, seats, states)) {
     if (t.kind === 'someone') someone = true;
     else if (t.kind === 'anyone') anyone = true;
-    else if (t.kind === 'seat') { if (!seatIds.includes(t.seat.seatId)) seatIds.push(t.seat.seatId); }
-    else { const key = nameKey(t.token.slice(1)); if (!names.includes(key)) names.push(key); }
+    else if (t.kind === 'seat' && !t.bound) { if (!seatIds.includes(t.seat.seatId)) seatIds.push(t.seat.seatId); }
+    else { const key = nameKey(text.slice(t.start + 1, t.end)); if (!names.includes(key)) names.push(key); }
   }
   return names.length ? { seatIds, someone, anyone, names } : { seatIds, someone, anyone };
 }
@@ -133,10 +135,10 @@ export function parseMentions(text: string, seats: readonly Seat[], bindings?: N
  * ({@link isNearName}: "@Cody" with "Cody B" seated). An add should refuse these
  * rather than file a name the person next to you will read.
  */
-export function nearMissMentions(text: string, seats: readonly Seat[], bindings?: NameBindings): string[] {
+export function nearMissMentions(text: string, seats: readonly Seat[], names?: NameStates): string[] {
   const keys = seats.map((s) => nameKey(s.name));
   const out: string[] = [];
-  for (const t of scanMentions(text, seats, bindings)) {
+  for (const t of scanMentions(text, seats, names)) {
     if (t.kind === 'unknown' && keys.some((k) => isNearName(nameKey(t.token.slice(1)), k))) out.push(t.token);
   }
   return out;
@@ -153,12 +155,12 @@ function rewriteMentions(
   text: string,
   seats: readonly Seat[],
   render: (t: MentionToken) => string | null,
-  bindings?: NameBindings,
+  names?: NameStates,
 ): { text: string; refs: Array<[number, number]> } {
   const refs: Array<[number, number]> = [];
   let out = '';
   let last = 0;
-  for (const t of scanMentions(text, seats, bindings)) {
+  for (const t of scanMentions(text, seats, names)) {
     const value = render(t);
     if (value === null) continue;
     out += text.slice(last, t.start);
@@ -188,9 +190,9 @@ export function resolveMentionDisplay(
   text: string,
   seats: readonly Seat[],
   someoneName: string | null,
-  bindings?: NameBindings,
+  names?: NameStates,
 ): string {
-  return resolveMentionRefs(text, seats, someoneName, bindings).text;
+  return resolveMentionRefs(text, seats, someoneName, names).text;
 }
 
 /**
@@ -205,19 +207,19 @@ export function resolveMentionDisplay(
  * @param text raw task text
  * @param seats seats whose names `@Name` may match
  * @param someoneName the name `@someone` resolves to, or null to keep it
- * @param bindings the host's name bindings (a bound name shows as the seat's name)
+ * @param names the host's name names (a bound name shows as the seat's name)
  * @returns `{ text, refs }`, refs in ascending order
  */
 export function resolveMentionRefs(
   text: string,
   seats: readonly Seat[],
   someoneName: string | null,
-  bindings?: NameBindings,
+  names?: NameStates,
 ): { text: string; refs: Array<[number, number]> } {
   return rewriteMentions(text, seats, (t) => {
     if (t.kind === 'seat') return t.seat.name;
     if (t.kind === 'anyone') return 'Anyone';
     if (t.kind === 'someone') return someoneName;
     return t.token.slice(1);
-  }, bindings);
+  }, names);
 }

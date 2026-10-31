@@ -7,8 +7,10 @@ export interface Seat { seatId: string; name: string; joinedAt: number }
  * re-scan the text against the current seats (see `visibility.ts`).
  */
 export interface TaskMentions { seatIds: string[]; someone: boolean; anyone: boolean; names?: string[] }
-/** Explicit name bindings: a referenced name's key → the seat the host says it is. */
-export type NameBindings = ReadonlyMap<string, string>;
+/** What the host has said about a referenced name: who it is (`seatId`, null = nobody yet) or that they are not coming (`retired`). */
+export interface NameState { seatId: string | null; retired: boolean }
+/** Name states by key. A key with no entry is unbound. */
+export type NameStates = ReadonlyMap<string, NameState>;
 /** A name tasks refer to that no seat carries as its own; `seatId` is the host's binding (null = nobody yet). */
 export interface RosterName { key: string; display: string; seatId: string | null }
 /** A task in the shared pool. */

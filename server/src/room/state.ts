@@ -1,4 +1,4 @@
-import type { BingoDoc, BoardCell, NameBindings, PoolTask, ReclaimDoc, Seat, Stage, TaskMentions } from 'game-core';
+import type { BingoDoc, BoardCell, NameState, NameStates, PoolTask, ReclaimDoc, Seat, Stage, TaskMentions } from 'game-core';
 import type { Persistence } from './persistence';
 
 /**
@@ -28,8 +28,8 @@ export class GameState {
   boards = new Map<string, BoardRow>();
   bingos: BingoRow[] = [];
   reclaims = new Map<string, ReclaimRow>();
-  /** The host's name bindings: referenced-name key → seatId (see game-core `buildRoster`). */
-  bindings = new Map<string, string>();
+  /** What the host said about referenced names, by key: bound to a seat, nobody yet, or retired (see game-core `buildRoster`). */
+  names = new Map<string, NameState>();
 
   private readonly now: () => number;
 
@@ -44,7 +44,7 @@ export class GameState {
     for (const b of l.boards) this.boards.set(b.seatId, b);
     this.bingos = [...l.bingos];
     for (const r of l.reclaims) this.reclaims.set(r.id, r);
-    for (const [key, seatId] of l.bindings ?? []) this.bindings.set(key, seatId);
+    for (const [key, st] of l.names ?? []) this.names.set(key, st);
   }
 
   /** Bumps `rev` and `lastMutationAt` on the stored game (no-op before a game exists). */
@@ -75,19 +75,18 @@ export class GameState {
     if (i >= 0) this.bingos[i] = b; else this.bingos.push(b);
     this.bump(); }
   putReclaim(r: ReclaimRow): void { this.p.putReclaim(r); this.reclaims.set(r.id, r); this.bump(); }
-  putBinding(key: string, seatId: string): void { this.p.putBinding(key, seatId); this.bindings.set(key, seatId); this.bump(); }
-  deleteBinding(key: string): void { this.p.deleteBinding(key); this.bindings.delete(key); this.bump(); }
+  putNameState(key: string, st: NameState): void { this.p.putNameState(key, st); this.names.set(key, st); this.bump(); }
 
   /** Deletes every row of every table and forgets the game. */
   purge(): void {
     this.p.purge();
     this.game = null;
-    this.seats.clear(); this.members.clear(); this.tasks.clear(); this.boards.clear(); this.reclaims.clear(); this.bindings.clear();
+    this.seats.clear(); this.members.clear(); this.tasks.clear(); this.boards.clear(); this.reclaims.clear(); this.names.clear();
     this.bingos = [];
   }
 
-  /** The bindings in game-core's read-only shape. */
-  nameBindings(): NameBindings { return this.bindings; }
+  /** The name states in game-core's read-only shape. */
+  nameStates(): NameStates { return this.names; }
 
   /** Seats in game-core's `Seat` shape. */
   seatList(): Seat[] {

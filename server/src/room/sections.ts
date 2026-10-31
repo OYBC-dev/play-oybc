@@ -1,4 +1,4 @@
-import { buildPoolView, buildRoster, dealableCounts, mentionContext, shortfallsFromCounts, standings, tasksPerBoard, type MentionContext, type Standing } from 'game-core';
+import { buildPoolView, buildRoster, dealableCounts, mentionContext, shortfallsFromCounts, standings, tasksPerBoard, type MentionContext, type RosterName, type Standing } from 'game-core';
 import type { Section, StateMsg } from '../protocol';
 import type { GameState } from './state';
 
@@ -26,7 +26,7 @@ export function buildStandings(state: GameState): Standing[] {
  * Work shared across the frames of one push: the pool scanned once (`ctx`) and the seat-independent
  * `game` section built once. Pass a fresh `{}` per push; never reuse one across state changes.
  */
-export interface SectionMemo { ctx?: MentionContext; game?: StateMsg['game'] }
+export interface SectionMemo { ctx?: MentionContext; game?: StateMsg['game']; roster?: RosterName[] }
 
 /**
  * Builds the requested sections of a state push as one seat sees them.
@@ -38,7 +38,7 @@ export interface SectionMemo { ctx?: MentionContext; game?: StateMsg['game'] }
  */
 export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[], memo: SectionMemo = {}): Partial<StateMsg> {
   const out: Partial<StateMsg> = {};
-  const ctx = (): MentionContext => (memo.ctx ??= mentionContext(state.poolTasks(), state.seatList(), state.nameBindings()));
+  const ctx = (): MentionContext => (memo.ctx ??= mentionContext(state.poolTasks(), state.seatList(), state.nameStates()));
   for (const section of sections) {
     switch (section) {
       case 'game': {
@@ -46,7 +46,7 @@ export function buildSections(state: GameState, seatId: string | null, sections:
         if (!g) break;
         if (!memo.game) {
           const { gameId: _gameId, rev: _rev, lastMutationAt: _last, ...rest } = g;
-          const opts = { freeSpace: g.freeSpace, bindings: state.nameBindings() };
+          const opts = { freeSpace: g.freeSpace, names: state.nameStates() };
           const tasks = state.poolTasks();
           const seats = state.seatList();
           const dealable = dealableCounts(tasks, seats, opts, ctx());
@@ -62,7 +62,7 @@ export function buildSections(state: GameState, seatId: string | null, sections:
         out.standings = buildStandings(state);
         break;
       case 'roster':
-        out.roster = buildRoster(state.poolTasks(), state.seatList(), state.nameBindings());
+        out.roster = memo.roster ??= buildRoster(state.poolTasks(), state.seatList(), state.nameStates());
         break;
       case 'seats':
         out.seats = [...state.seats.values()]

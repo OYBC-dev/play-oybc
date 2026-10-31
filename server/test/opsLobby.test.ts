@@ -204,8 +204,8 @@ describe('addTask', () => {
     it('binds itself when that person joins: hidden from them, open to the others, counts moved', () => {
       const { state, s1, s2, s3 } = setup();
       add(state, 'u2', '@Bob sings');
-      // Nobody is identified yet, the author included: the task is dealt to no one.
-      expect(game(state, s1).dealable).toEqual({ [s1]: 0, [s2]: 0, [s3]: 0 });
+      // Launch releases unbound names, so the count holds nobody back.
+      expect(game(state, s1).dealable).toEqual({ [s1]: 1, [s2]: 1, [s3]: 1 });
       const out = join(state, ctxFor('u4'), { name: 'bob' });
       const s4 = (out.result as { seatId: string }).seatId;
       expect(out.push.all).toEqual(expect.arrayContaining(['game', 'seats', 'view']));
@@ -241,9 +241,9 @@ describe('addTask', () => {
     it('the host binds a name to a player who joined under a nickname: hidden from them, shown as their name, counts moved', () => {
       const { state, s1, s2, s3 } = setup();
       add(state, 'u1', '@Jess sings');
-      // Nobody is identified: hidden from Cody and Seth, dealt to no one.
+      // Nobody is identified: hidden from Cody and Seth; launch would release the name, so every count holds it.
       expect(view(state, s2)[0].text).toBeNull();
-      expect(game(state, s1).dealable).toEqual({ [s1]: 0, [s2]: 0, [s3]: 0 });
+      expect(game(state, s1).dealable).toEqual({ [s1]: 1, [s2]: 1, [s3]: 1 });
       const out = bindName(state, ctxFor('u1'), { key: 'Jess', seatId: s2 });
       expect(out.push.all).toEqual(['game', 'view', 'roster']);
       expect(roster(state, s1)).toEqual([{ key: 'jess', display: 'Jess', seatId: s2 }]);
@@ -256,14 +256,27 @@ describe('addTask', () => {
       expect(roster(state, s1)).toEqual([{ key: 'jess', display: 'Jess', seatId: null }]);
       expect(view(state, s3)[0].text).toBeNull();
     });
-    it('a bound name is typed as that player: a later @Jess task mentions Cody', () => {
-      const { state, s1, s2 } = setup();
+    it('a bound name is typed as that player (stored as the name): a later @Jess task is Cody\'s, and Cody cannot write one', () => {
+      const { state, s2, s3 } = setup();
       add(state, 'u1', '@Jess sings');
       bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 });
-      const id = add(state, 'u3', '@Jess dances');
-      expect(state.tasks.get(id)!.mentions).toEqual({ seatIds: [s2], someone: false, anyone: false });
+      const id = add(state, 'u1', '@Jess dances');
+      expect(state.tasks.get(id)!.mentions).toEqual({ seatIds: [], someone: false, anyone: false, names: ['jess'] });
+      expect(view(state, s2).find((e) => e.taskId === id)!.text).toBeNull();
       expect(codeOf(() => add(state, 'u2', '@Jess trips'))).toBe('self-mention');
-      void s1;
+      // Rebinding to Seth moves every @Jess task, the later one included.
+      bindName(state, ctxFor('u1'), { key: 'jess', seatId: s3 });
+      expect(view(state, s2).find((e) => e.taskId === id)!.text).toBe('Seth dances');
+      expect(view(state, s3).find((e) => e.taskId === id)!.text).toBeNull();
+    });
+    it('a join under a bound name files a reclaim on the bound seat (the binding wins)', () => {
+      const { state, s2 } = setup();
+      add(state, 'u1', '@Jess sings');
+      bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 });
+      const out = join(state, ctxFor('u4'), { name: 'Jess' }).result;
+      expect(out.status).toBe('reclaim-pending');
+      expect([...state.reclaims.values()][0]).toMatchObject({ seatId: s2, name: 'Jess' });
+      expect(state.seats.size).toBe(3);
     });
     it('bindings survive a reload', () => {
       const p = new MemoryPersistence();
@@ -273,7 +286,7 @@ describe('addTask', () => {
       add(state, 'u1', '@Jess sings');
       bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 });
       const again = new GameState(p, { now: () => clock });
-      expect(again.bindings.get('jess')).toBe(s2);
+      expect(again.names.get('jess')).toEqual({ seatId: s2, retired: false });
     });
     it('permissions and validation', () => {
       const { state, s2 } = setup();
@@ -286,20 +299,21 @@ describe('addTask', () => {
       expect(codeOf(() => retireName(state, ctxFor('u2'), { key: 'jess' }))).toBe('not-host');
       expect(codeOf(() => retireName(state, ctxFor('u1'), { key: 'zed' }))).toBe('name-not-found');
     });
-    it('retire drops the binding, rewrites every task and empties the roster row', () => {
+    it('retire drops the hold: the name leaves the roster, its tasks stay bold and open to everyone', () => {
       const { state, s1, s2, s3 } = setup();
       const a = add(state, 'u1', '@Jess sings with @Cody');
       const b = add(state, 'u3', "@Jess's hat");
-      bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 });
       const out = retireName(state, ctxFor('u1'), { key: 'Jess' });
       expect(out.push.all).toEqual(['game', 'view', 'roster']);
-      expect(state.tasks.get(a)!.text).toBe('Jess sings with @Cody');
-      expect(state.tasks.get(b)!).toMatchObject({ text: "Jess's hat", mentions: { seatIds: [], someone: false, anyone: false } });
-      expect(state.tasks.get(b)!.mentions.names).toBeUndefined();
-      expect(state.bindings.has('jess')).toBe(false);
+      expect(state.tasks.get(a)!.text).toBe('@Jess sings with @Cody');
+      expect(state.names.get('jess')).toEqual({ seatId: null, retired: true });
       expect(roster(state, s1)).toEqual([]);
-      expect(view(state, s3).find((e) => e.taskId === a)).toMatchObject({ text: 'Jess sings with Cody', refs: [[16, 20]] });
-      expect(view(state, s2).find((e) => e.taskId === b)!.text).toBe("Jess's hat");
+      expect(view(state, s3).find((e) => e.taskId === a)).toMatchObject({ text: 'Jess sings with Cody', refs: [[0, 4], [16, 20]] });
+      expect(view(state, s2).find((e) => e.taskId === b)).toMatchObject({ text: "Jess's hat", refs: [[0, 4]] });
+      expect(codeOf(() => bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 }))).toBe('name-not-found');
+      // Someone who joins as Jess later is still kept from them.
+      const s4 = (join(state, ctxFor('u4'), { name: 'Jess' }).result as { seatId: string }).seatId;
+      expect(view(state, s4).find((e) => e.taskId === a)!.text).toBeNull();
     });
   });
   it('rejects self-mention and bad text', () => {
