@@ -27,6 +27,18 @@ describe('dealableCounts', () => {
   });
 });
 
+describe('dealableCounts mixed @anyone', () => {
+  it('a mixed @anyone + @Name task adds nothing to the share or any seat', () => {
+    const pure = (id: string): PoolTask => ({ ...mk(id), mentions: { seatIds: [], someone: false, anyone: true } });
+    const base = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), pure('a1'), pure('a2')];
+    const mixed: PoolTask = { ...mk('x'), mentions: { seatIds: ['s2'], someone: false, anyone: true } };
+    const before = dealableCounts(base, seats, { freeSpace: true });
+    expect(before).toEqual({ s1: 10, s2: 10, s3: 10 });
+    expect(dealableCounts([...base, mixed], seats, { freeSpace: true })).toEqual(before);
+    expect(dealableCounts([...base, mixed, pure('a3')], seats, { freeSpace: true })).toEqual({ s1: 11, s2: 11, s3: 11 });
+  });
+});
+
 describe('shortfalls options', () => {
   const tasks = Array.from({ length: 24 }, (_, i) => mk('p' + i));
   it('needs 25 with freeSpace:false', () => {
@@ -53,6 +65,10 @@ describe('readiness guarantees launch (property)', () => {
       for (let i = 0; i < anyCount; i++) tasks.push({ ...mk('a' + i), mentions: { seatIds: [], someone: false, anyone: true } });
       const nameCount = int(0, 5);
       for (let i = 0; i < nameCount; i++) tasks.push(mk('n' + i, [party[int(0, n - 1)].seatId]));
+      const mixedCount = int(0, 5);
+      for (let i = 0; i < mixedCount; i++) {
+        tasks.push({ ...mk('x' + i), mentions: { seatIds: [party[int(0, n - 1)].seatId], someone: false, anyone: true } });
+      }
       const freeSpace = rng() < 0.5;
       if (Object.keys(shortfalls(tasks, party, { freeSpace })).length > 0) continue;
       readyRuns++;

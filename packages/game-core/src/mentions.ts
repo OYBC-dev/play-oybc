@@ -104,21 +104,30 @@ export function parseMentions(text: string, seats: readonly Seat[]): ParseMentio
   return { ok: true, mentions: { seatIds, someone, anyone } };
 }
 
-/** Rewrites each token for which `render` returns a string; other text is untouched. */
+/**
+ * Rewrites each token for which `render` returns a string; other text is
+ * untouched. The single scan-and-splice routine behind every mention rewrite.
+ *
+ * @returns the rewritten text and one `[start, end)` ref (UTF-16, in the
+ *   rewritten text) per rewritten token.
+ */
 function rewriteMentions(
   text: string,
   seats: readonly Seat[],
   render: (t: MentionToken) => string | null,
-): string {
+): { text: string; refs: Array<[number, number]> } {
+  const refs: Array<[number, number]> = [];
   let out = '';
   let last = 0;
   for (const t of scanMentions(text, seats)) {
     const value = render(t);
     if (value === null) continue;
-    out += text.slice(last, t.start) + value;
+    out += text.slice(last, t.start);
+    refs.push([out.length, out.length + value.length]);
+    out += value;
     last = t.end;
   }
-  return out + text.slice(last);
+  return { text: out + text.slice(last), refs };
 }
 
 /**
@@ -126,7 +135,7 @@ function rewriteMentions(
  * with `replacement`. Other text, `@anyone` and seat mentions are untouched.
  */
 export function replaceSomeone(text: string, replacement: string): string {
-  return rewriteMentions(text, [], (t) => (t.kind === 'someone' ? replacement : null));
+  return rewriteMentions(text, [], (t) => (t.kind === 'someone' ? replacement : null)).text;
 }
 
 /**
@@ -160,17 +169,10 @@ export function resolveMentionRefs(
   seats: readonly Seat[],
   someoneName: string | null,
 ): { text: string; refs: Array<[number, number]> } {
-  const refs: Array<[number, number]> = [];
-  let out = '';
-  let last = 0;
-  for (const t of scanMentions(text, seats)) {
-    const value =
-      t.kind === 'seat' ? t.seat.name : t.kind === 'anyone' ? 'Anyone' : t.kind === 'someone' ? someoneName : null;
-    if (value === null) continue;
-    out += text.slice(last, t.start);
-    refs.push([out.length, out.length + value.length]);
-    out += value;
-    last = t.end;
-  }
-  return { text: out + text.slice(last), refs };
+  return rewriteMentions(text, seats, (t) => {
+    if (t.kind === 'seat') return t.seat.name;
+    if (t.kind === 'anyone') return 'Anyone';
+    if (t.kind === 'someone') return someoneName;
+    return null;
+  });
 }

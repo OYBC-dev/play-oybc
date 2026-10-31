@@ -75,10 +75,13 @@ export function dealBoard(
 
 /**
  * Assigns each `@anyone` task to exactly one seat: shuffles the `@anyone` tasks
- * and the seats, then deals the tasks round-robin over the seats, so every
- * seat receives `floor(n / seats)` or `ceil(n / seats)` of them. A task that
- * also names seats skips them (it goes to the next seat in the rotation with
- * the fewest so far that may hold it); if it may go to no seat it stays unassigned.
+ * and the seats, then gives each task, in turn, to the seat holding the fewest
+ * so far (earliest in the shuffled seat order on a tie). For pure `@anyone`
+ * tasks (naming no seat) this is exactly round-robin over the shuffled seats,
+ * so every seat receives `floor(n / seats)` or `ceil(n / seats)` of them. A
+ * mixed `@anyone` + `@Name` task goes to one seat it does not name (the
+ * emptiest such seat); one that names every seat stays unassigned. Filling the
+ * emptiest seat keeps every seat at >= `floor(pure / seats)` either way.
  *
  * @returns task id → seat id (empty without seats or `@anyone` tasks).
  */
