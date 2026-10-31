@@ -27,6 +27,7 @@ export function buildStandings(state: GameState): Standing[] {
  * Reclaims are host-only; `seatId` null (a spectator) gets an empty view, no board and no reclaims.
  * Sections the game cannot yet supply (no game row) are omitted for `game`. The `game` section carries the
  * free-space option, `tasksPerBoard`, and per-seat `shortfalls` / `dealable` computed under that option.
+ * `shortfalls` / `dealable` are lobby-time readiness over the whole pool: after launch they ignore the late-join exclusion.
  */
 export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[]): Partial<StateMsg> {
   const out: Partial<StateMsg> = {};

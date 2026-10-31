@@ -162,7 +162,7 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
  * Host-only, lobby-only: sets the game's options (today only `freeSpace`).
  * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`, `invalid-argument` (non-boolean `freeSpace`).
  */
-export function setOptions(state: GameState, ctx: OpCtx, args: { freeSpace: boolean }): OpOut<Record<string, never>> {
+export function setOptions(state: GameState, ctx: OpCtx, args: { freeSpace?: unknown }): OpOut<Record<string, never>> {
   const game = requireGame(state);
   requireHost(state, game, ctx.uid);
   requireLobby(game);

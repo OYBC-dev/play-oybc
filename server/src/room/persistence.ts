@@ -34,8 +34,8 @@ export class MemoryPersistence implements Persistence {
   load(): Loaded {
     const c = <T>(v: T): T => structuredClone(v);
     return {
-      // A row written before `freeSpace` existed loads with it off, as `SqlPersistence` does.
-      game: this.game && { ...c(this.game), freeSpace: this.game.freeSpace ?? false }, seats: c([...this.seats.values()]), members: [...this.members], tasks: c([...this.tasks.values()]),
+      // A row written before `freeSpace` existed migrates as `SqlPersistence` does: off in the lobby, on once dealt.
+      game: this.game && { ...c(this.game), freeSpace: this.game.freeSpace ?? this.game.stage !== 'lobby' }, seats: c([...this.seats.values()]), members: [...this.members], tasks: c([...this.tasks.values()]),
       boards: c([...this.boards.values()]), bingos: c(this.bingos), reclaims: c([...this.reclaims.values()]),
     };
   }
@@ -77,9 +77,13 @@ export class SqlPersistence implements Persistence {
         status TEXT NOT NULL, createdAt INTEGER NOT NULL, resolvedAt INTEGER)`,
     ];
     for (const q of ddl) sql.exec(q);
-    // Rooms created before the free-space option have a `game` table without the column; add it (off).
+    // Rooms created before the free-space option have a `game` table without the column; add it. A lobby room
+    // starts off (the new default); a room already dealt was dealt with a free centre, so it keeps free space on.
     const cols = sql.exec<{ name: string }>('PRAGMA table_info(game)').toArray().map((c) => c.name);
-    if (!cols.includes('freeSpace')) sql.exec('ALTER TABLE game ADD COLUMN freeSpace INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('freeSpace')) {
+      sql.exec('ALTER TABLE game ADD COLUMN freeSpace INTEGER NOT NULL DEFAULT 0');
+      sql.exec("UPDATE game SET freeSpace = 1 WHERE stage != 'lobby'");
+    }
   }
 
   load(): Loaded {
