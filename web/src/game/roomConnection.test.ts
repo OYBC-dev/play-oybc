@@ -1,4 +1,4 @@
-import type { GameSnapshot } from './GameClient';
+import { dealableFor, freeSpaceOf, tasksPerBoardOf, type GameSnapshot } from './GameClient';
 import { FakeSocket } from '../test/fakeSocket';
 import { getRoom, RoomConnection, type RoomOptions } from './roomConnection';
 import { appErrorCode } from './errorMessages';
@@ -56,11 +56,41 @@ describe('RoomConnection', () => {
     expect(room.status).toBe('ready');
     expect(snaps).toHaveLength(0);
     sock.serverSend(FULL);
-    expect(snaps).toEqual([{ game: GAME, mySeatId: 's1', seats: SEATS, view: VIEW, board: null, bingos: [], reclaims: [] }]);
+    expect(snaps).toEqual([{ game: GAME, mySeatId: 's1', seats: SEATS, view: VIEW, board: null, bingos: [], standings: [], reclaims: [] }]);
     // A later frame replaces only the sections it carries.
     sock.serverSend({ t: 'state', rev: 4, view: [] });
     expect(snaps).toHaveLength(2);
     expect(snaps[1]).toMatchObject({ game: GAME, seats: SEATS, view: [] });
+  });
+
+  it('a frame without standings, refs, dealable, tasksPerBoard or freeSpace is a complete snapshot; standings default to []', async () => {
+    const room = makeRoom();
+    const snaps: GameSnapshot[] = [];
+    room.onSnapshot((s) => snaps.push(s));
+    await handshake(FakeSocket.last());
+    FakeSocket.last().serverSend(FULL);
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0].standings).toEqual([]);
+    expect(tasksPerBoardOf(snaps[0].game)).toBe(25);
+    expect(dealableFor(snaps[0].game, 's1')).toBe(0);
+    expect(freeSpaceOf(snaps[0].game)).toBe(false);
+  });
+
+  it('merges the standings section and the new game fields when the frame carries them', async () => {
+    const room = makeRoom();
+    const snaps: GameSnapshot[] = [];
+    room.onSnapshot((s) => snaps.push(s));
+    await handshake(FakeSocket.last());
+    const game = { ...GAME, freeSpace: true, tasksPerBoard: 24, dealable: { s1: 6 } };
+    const standings = [{ seatId: 's1', name: 'Me', bingos: 1, marked: 7, bestLine: 5, firstBingoSeq: 1 }];
+    FakeSocket.last().serverSend({ ...FULL, game, standings });
+    expect(snaps[0].standings).toEqual(standings);
+    expect(tasksPerBoardOf(snaps[0].game)).toBe(24);
+    expect(dealableFor(snaps[0].game, 's1')).toBe(6);
+    expect(freeSpaceOf(snaps[0].game)).toBe(true);
+    // A later frame without standings keeps the held copy.
+    FakeSocket.last().serverSend({ t: 'state', rev: 4, view: [] });
+    expect(snaps[1].standings).toEqual(standings);
   });
 
   it('act resolves with the ack result and rejects with details.code on a failed ack', async () => {

@@ -13,6 +13,10 @@ export const firebaseGameClient: GameClient = {
   addTask: async (gameId, text) => { await api.addTask({ gameId, text }); },
   deleteTask: async (gameId, taskId) => { await api.deleteTask({ gameId, taskId }); },
   launch: async (gameId) => { await api.launchGame({ gameId }); },
+  // The legacy backend has no game options (free space is always on).
+  setOptions: async () => {
+    throw Object.assign(new Error('unimplemented'), { details: { code: 'unimplemented' } });
+  },
   toggleMark: (gameId, cellIndex, marked) => api.toggleMark({ gameId, cellIndex, marked }),
   end: async (gameId) => { await api.endGame({ gameId }); },
   resolveReclaim: async (gameId, reclaimId, approve) => { await api.resolveReclaim({ gameId, reclaimId, approve }); },
@@ -33,7 +37,7 @@ export const firebaseGameClient: GameClient = {
     const emit = () => {
       const { game, seats, view, board, bingos } = state;
       if (closed || !game || !seats || !view || board === undefined || !bingos) return;
-      onChange({ game, mySeatId: seatId, seats, view, board, bingos, reclaims: state.reclaims });
+      onChange({ game, mySeatId: seatId, seats, view, board, bingos, standings: [], reclaims: state.reclaims });
     };
 
     const setReclaimListener = (isHost: boolean, db: ReturnType<typeof firebase>['db']) => {

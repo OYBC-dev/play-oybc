@@ -1,13 +1,15 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { GameSnapshot } from '../../game/GameClient';
+import type { GameSnapshot, SnapshotGame } from '../../game/GameClient';
 import { appError, FakeGameClient } from '../../game/fakeGameClient';
 import { LobbyScreen } from './LobbyScreen';
 import { nonsenseFor } from './nonsense';
 
 const noop = () => {};
 
-function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean } = {}): GameSnapshot {
+function snap(over: {
+  host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean; game?: Partial<SnapshotGame>;
+} = {}): GameSnapshot {
   const host = over.host ?? true;
   const view = over.empty ? [] : [
     { taskId: 't1', authorName: 'Pat', text: 'Someone carves the pumpkin', mine: false },
@@ -16,7 +18,7 @@ function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolS
   ];
   for (let i = 0; i < (over.poolSize ?? 0); i++) view.push({ taskId: `x${i}`, authorName: 'Pat', text: `extra ${i}`, mine: false });
   return {
-    game: { code: 'ABCDE', stage: 'lobby', hostSeatId: host ? 's1' : 's2', createdAt: 0, bingoCount: 0, shortfalls: over.shortfalls ?? {}, reviewGate: false },
+    game: { code: 'ABCDE', stage: 'lobby', hostSeatId: host ? 's1' : 's2', createdAt: 0, bingoCount: 0, shortfalls: over.shortfalls ?? {}, reviewGate: false, ...over.game },
     mySeatId: 's1',
     seats: [
       { seatId: 's1', name: 'Me', nameKey: 'me', joinedAt: 1 },
@@ -26,6 +28,7 @@ function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolS
     view,
     board: null,
     bingos: [],
+    standings: [],
     reclaims: [],
   };
 }
@@ -198,10 +201,60 @@ describe('LobbyScreen', () => {
     expect(input).toHaveValue('one two');
   });
 
-  it('header shows Pool and the count', () => {
-    setup(snap({ poolSize: 5 }));
+  it('header shows Pool, my dealable count over the board size, and the pool size', () => {
+    setup(snap({ poolSize: 27, game: { tasksPerBoard: 25, dealable: { s1: 6, s2: 30 }, freeSpace: false } }));
     expect(screen.getByRole('heading', { name: 'Pool' })).toBeInTheDocument();
-    expect(screen.getByTestId('pool-count')).toHaveTextContent('8 / 24');
+    expect(screen.getByTestId('pool-count')).toHaveTextContent(/^6 \/ 25$/);
+    expect(screen.getByText('30 in pool')).toBeInTheDocument();
+  });
+
+  it('a game frame without dealable or tasksPerBoard reads 0 / 25', () => {
+    setup(snap({ poolSize: 5 }));
+    expect(screen.getByTestId('pool-count')).toHaveTextContent(/^0 \/ 25$/);
+    expect(screen.getByText('8 in pool')).toBeInTheDocument();
+  });
+
+  it('pool rows render mentions in bold with no @', () => {
+    const s = snap();
+    s.view[0] = { taskId: 't1', authorName: 'Pat', text: 'Cody carves the pumpkin', refs: [[0, 4]], mine: false };
+    setup(s);
+    const bold = screen.getByText('Cody', { selector: 'b' });
+    const row = bold.closest('li')!;
+    expect(row.textContent).not.toContain('@');
+    expect(within(row).getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === 'Cody carves the pumpkin')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Delete task: Cody carves the pumpkin' })).toBeInTheDocument();
+  });
+
+  it('host sees the Free space switch; toggling sends setOptions, disabled while in flight, no optimistic flip', async () => {
+    const { client, rerender } = setup(snap({ game: { freeSpace: false, tasksPerBoard: 25 } }));
+    let resolve!: () => void;
+    const setOptions = vi.fn(() => new Promise<void>((r) => { resolve = r; }));
+    client.setOptions = setOptions;
+    const sw = within(screen.getByTestId('lobby-sheet')).getByRole('switch', { name: 'Free space' });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    expect(setOptions).toHaveBeenCalledWith('g1', { freeSpace: true });
+    expect(sw).toBeDisabled();
+    expect(sw).not.toBeChecked();
+    await act(async () => resolve());
+    expect(sw).toBeEnabled();
+    expect(sw).not.toBeChecked();
+    rerender(<LobbyScreen client={client} snapshot={snap({ game: { freeSpace: true, tasksPerBoard: 24 } })} gameId="g1" onLeave={noop} />);
+    expect(screen.getByRole('switch', { name: 'Free space' })).toBeChecked();
+  });
+
+  it('a failed Free space change shows its error and leaves the switch as the server has it', async () => {
+    const { client } = setup(snap({ game: { freeSpace: true } }));
+    client.setOptions = () => Promise.reject(appError('not-host'));
+    await userEvent.click(screen.getByRole('switch', { name: 'Free space' }));
+    expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Free space' })).toBeChecked();
+  });
+
+  it('guests get no Free space row', () => {
+    setup(snap({ host: false, game: { freeSpace: true } }));
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByText('Free space')).toBeNull();
   });
 
   it('composer has the pool placeholder and a neutral Add', () => {
@@ -245,7 +298,7 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Waiting for players');
     expect(screen.getByText('No tasks yet')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Pool' })).toBeNull();
-    expect(within(screen.getByTestId('lobby-sheet')).getByText('0 / 24')).toBeInTheDocument();
+    expect(within(screen.getByTestId('lobby-sheet')).getByText('0 / 25')).toBeInTheDocument();
   });
 
   it('no waiting pill once someone else has joined', () => {
@@ -254,7 +307,7 @@ describe('LobbyScreen', () => {
   });
 
   it('host sheet shows the code, a QR tile and Launch; tapping the tile expands it', async () => {
-    setup(snap());
+    setup(snap({ shortfalls: { s2: 1 } }));
     const sheet = within(screen.getByTestId('lobby-sheet'));
     expect(sheet.getByLabelText('Game code')).toHaveTextContent('ABCDE');
     expect(sheet.getByRole('button', { name: 'Launch' })).toHaveClass('primary', 'large');
@@ -345,13 +398,13 @@ describe('LobbyScreen', () => {
     expect(screen.getByTestId('lobby-sheet')).not.toHaveAttribute('data-ready');
   });
 
-  it('disables Launch below 24; at 24 with no shortfalls the sheet goes ready and Launch is dark', async () => {
-    const { client, unmount } = setup(snap({ poolSize: 5 }));
+  it('Launch waits on shortfalls only; with none the sheet goes ready, shows mine / needed, and Launch is dark', async () => {
+    const { client, unmount } = setup(snap({ shortfalls: { s1: 2 }, poolSize: 40 }));
     expect(screen.getByRole('button', { name: 'Launch' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Launch' })).toHaveClass('primary');
     unmount();
-    const ready = setup(snap({ poolSize: 21 }));
-    expect(screen.getByTestId('pool-count')).toHaveTextContent('24 / 24');
+    const ready = setup(snap({ poolSize: 2, game: { tasksPerBoard: 25, dealable: { s1: 25 } } }));
+    expect(within(screen.getByTestId('lobby-sheet')).getByText('25 / 25')).toBeInTheDocument();
     const sheet = screen.getByTestId('lobby-sheet');
     expect(sheet).toHaveAttribute('data-ready', 'true');
     expect(sheet).toHaveClass('ready');
@@ -364,7 +417,7 @@ describe('LobbyScreen', () => {
   });
 
   it('surfaces a failed launch', async () => {
-    const { client } = setup(snap({ poolSize: 21 }));
+    const { client } = setup(snap());
     client.launch = () => Promise.reject(appError('not-host'));
     await userEvent.click(screen.getByRole('button', { name: 'Launch' }));
     expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();

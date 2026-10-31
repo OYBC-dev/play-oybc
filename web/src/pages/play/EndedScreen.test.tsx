@@ -12,6 +12,7 @@ const snapshot = {
   view: [],
   board: { cells: [{ kind: 'free' }, { kind: 'task', taskId: 't', text: 'Read a book' }], marks: [true, false], completedLines: [] },
   bingos: [],
+  standings: [],
   reclaims: [],
 } as unknown as GameSnapshot;
 
@@ -31,6 +32,21 @@ describe('EndedScreen', () => {
     expect(screen.getByText('No bingos yet')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'New game' }));
     expect(screen.getByText('home')).toBeInTheDocument();
+  });
+
+  it('the final leaderboard lists the standings', () => {
+    const standings = [
+      { seatId: 's2', name: 'Cody', bingos: 2, marked: 14, bestLine: 5, firstBingoSeq: 1 },
+      { seatId: 's1', name: 'Ann', bingos: 0, marked: 6, bestLine: 3, firstBingoSeq: null },
+    ];
+    render(
+      <MemoryRouter>
+        <EndedScreen client={new FakeGameClient()} snapshot={{ ...snapshot, standings }} gameId="g1" />
+      </MemoryRouter>,
+    );
+    const rows = screen.getAllByTestId('standing');
+    expect(rows.map((r) => r.textContent)).toEqual(['1Cody14 squares2 bingos', '2Ann6 squares · 3 in a row']);
+    expect(screen.queryByText('No bingos yet')).toBeNull();
   });
 
   it('a game ended from the lobby (no board, no bingos) shows the empty leaderboard and no board section', () => {

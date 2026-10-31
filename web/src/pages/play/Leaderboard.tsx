@@ -1,16 +1,20 @@
-import type { BingoDoc } from 'game-core';
+import type { Standing } from 'game-core';
 import { RisoMiniBoardArt } from '../../components/riso/RisoMiniBoardArt';
 import styles from './Leaderboard.module.css';
 
-/** Local clock time as h:mm. */
-function clock(at: number): string {
-  const d = new Date(at);
-  return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
+/** "{n} bingo" / "{n} bingos". */
+export const bingoPill = (n: number): string => `${n} bingo${n === 1 ? '' : 's'}`;
 
-/** Announced bingos in the order they happened. */
-export function Leaderboard({ bingos }: { bingos: BingoDoc[] }) {
-  if (bingos.length === 0) {
+/** "{marked} squares", plus " · {bestLine} in a row" while the player has no bingo. */
+export const standingMeta = (s: Standing): string =>
+  s.bingos === 0 ? `${s.marked} squares · ${s.bestLine} in a row` : `${s.marked} squares`;
+
+/**
+ * The standings, one row per player in server order: rank, name, a gold bingo pill (hidden at 0) and a
+ * muted squares line. `tasksPerBoard` is accepted for callers that size by it; the rows do not show it.
+ */
+export function Leaderboard({ standings }: { standings: Standing[]; tasksPerBoard: number }) {
+  if (standings.length === 0) {
     return (
       <div className={styles.empty}>
         <RisoMiniBoardArt />
@@ -18,15 +22,16 @@ export function Leaderboard({ bingos }: { bingos: BingoDoc[] }) {
       </div>
     );
   }
-  const sorted = [...bingos].sort((a, b) => a.seq - b.seq);
   return (
     <ol className={styles.list}>
-      {sorted.map((b, i) => (
-        <li key={b.seq} className={styles.row}>
+      {standings.map((s, i) => (
+        <li key={s.seatId} className={styles.row} data-testid="standing">
           <span className={styles.rank}>{i + 1}</span>
-          <span className={styles.name}>{b.name}</span>
-          <span className={styles.num} data-repeat={String(b.playerBingoNumber >= 2)}>#{b.playerBingoNumber}</span>
-          <span className={styles.time}>{clock(b.at)}</span>
+          <span className={styles.who}>
+            <span className={styles.name}>{s.name}</span>
+            <span className={styles.meta}>{standingMeta(s)}</span>
+          </span>
+          {s.bingos > 0 && <span className={styles.num}>{bingoPill(s.bingos)}</span>}
         </li>
       ))}
     </ol>

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { RisoCard } from '../../components/riso/RisoCard';
 import { RisoSectionLabel } from '../../components/riso/RisoSectionLabel';
-import type { GameClient, GameSnapshot } from '../../game/GameClient';
+import { tasksPerBoardOf, type GameClient, type GameSnapshot } from '../../game/GameClient';
 import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { BoardGrid } from './BoardGrid';
 import { Leaderboard } from './Leaderboard';
@@ -21,7 +21,7 @@ export function EndedScreen({ client, snapshot, gameId }: { client: GameClient; 
         <h1 className={styles.title}>Final leaderboard</h1>
       </header>
       <RisoCard padded>
-        <Leaderboard bingos={snapshot.bingos} />
+        <Leaderboard standings={snapshot.standings} tasksPerBoard={tasksPerBoardOf(snapshot.game)} />
       </RisoCard>
       {snapshot.board && (
         <section className={styles.board}>

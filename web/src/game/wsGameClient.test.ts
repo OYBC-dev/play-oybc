@@ -86,6 +86,23 @@ describe('createWsGameClient', () => {
     stop();
   });
 
+  it('setOptions sends setOptions with freeSpace', async () => {
+    const c = client();
+    const code = nextCode();
+    sessionStorage.setItem('play.codeFor.g4', code);
+    const stop = c.subscribe('g4', 's1', () => {}, () => {});
+    const sock = FakeSocket.last();
+    sock.open();
+    await flush();
+    sock.serverSend({ t: 'welcome', uid: 'u1', gameId: 'g4', seatId: 's1', stage: 'lobby', rev: 1 });
+    const res = c.setOptions('g4', { freeSpace: true });
+    const act = sock.frames().find((f) => f.t === 'act') as { id: string; op: string; args: unknown };
+    expect(act).toMatchObject({ op: 'setOptions', args: { freeSpace: true } });
+    sock.serverSend({ t: 'ack', id: act.id, ok: true, result: null });
+    await expect(res).resolves.toBeUndefined();
+    stop();
+  });
+
   it('leave closes the room socket at once and the next use opens a fresh one', async () => {
     const c = client();
     const code = nextCode();

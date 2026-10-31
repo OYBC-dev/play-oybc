@@ -23,7 +23,27 @@
 .code { font-family: var(--riso-font-head); font-size: 34px; font-weight: 800; letter-spacing: 0.1em; line-height: 1; }
 .short { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-red-text); overflow-wrap: anywhere; }
 .count { font-size: 12.5px; font-weight: 700; line-height: 1.35; color: var(--riso-muted); }
+.ready .count { color: var(--riso-on-color); }
 .error { flex: none; font-size: 13px; }
+/* Free space: a native checkbox drawn as a Riso switch (2px ink border, paper-2 track, blue when on). */
+.option { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
+.optionLabel { font-family: var(--riso-font-head); font-size: 15px; font-weight: 800; }
+.switch {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; box-sizing: border-box;
+  width: 52px; height: 30px; margin: 0; cursor: pointer;
+  background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: var(--riso-r-pill);
+  box-shadow: 2px 2px 0 var(--riso-shadow-ink); transition: background-color 150ms ease;
+}
+.switch::before {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; box-sizing: border-box;
+  background: var(--riso-paper); border: 2px solid var(--riso-ink); border-radius: 50%;
+  transition: transform 150ms ease;
+}
+.switch:checked { background: var(--riso-blue); }
+.switch:checked::before { transform: translateX(22px); }
+.switch:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+.ready .switch:focus-visible { outline-color: var(--riso-on-color); }
+.switch:disabled { opacity: 0.55; cursor: default; }
 .ready .error { color: var(--riso-on-color); }
 /* QR tiles: static cream + ink so they scan in both themes. */
 .tile {
@@ -42,4 +62,5 @@
 .actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 @media (prefers-reduced-motion: reduce) {
   .sheet { transition: none; }
+  .switch, .switch::before { transition: none; }
 }

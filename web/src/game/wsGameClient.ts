@@ -101,6 +101,7 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
     },
     async deleteTask(gameId, taskId) { await act(gameId, 'deleteTask', { taskId }); },
     async launch(gameId) { await act(gameId, 'launch', {}); },
+    async setOptions(gameId, { freeSpace }) { await act(gameId, 'setOptions', { freeSpace }); },
     toggleMark: (gameId, cellIndex, marked) => act<ToggleMarkRes>(gameId, 'mark', { cellIndex, marked }),
     async end(gameId) { await act(gameId, 'end', {}); },
     async resolveReclaim(gameId, reclaimId, approve) { await act(gameId, 'resolveReclaim', { reclaimId, approve }); },
