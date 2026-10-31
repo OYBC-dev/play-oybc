@@ -45,7 +45,7 @@ describe('GameRoom', () => {
     const w = await a.hello(tokenFor('ua'), g.gameId);
     expect(w).toMatchObject({ t: 'welcome', uid: 'ua', gameId: g.gameId, seatId: g.seatId, stage: 'lobby' });
     const s = await a.waitFor<StateMsg>(isState);
-    expect(Object.keys(s).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 'standings', 't', 'view']);
+    expect(Object.keys(s).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'roster', 'seats', 'standings', 't', 'view']);
     expect(s.rev).toBe((w as { rev: number }).rev);
     expect(s.game).toMatchObject({ code: g.code, stage: 'lobby', hostSeatId: g.seatId });
     expect(s.seats).toEqual([expect.objectContaining({ seatId: g.seatId, name: 'Ann' })]);
@@ -86,7 +86,7 @@ describe('GameRoom', () => {
     const sa = await a.waitFor<StateMsg>(isState, fa);
     const sb = await b.waitFor<StateMsg>(isState, fb);
     const sc = await c.waitFor<StateMsg>(isState, fc);
-    for (const s of [sa, sb, sc]) expect(Object.keys(s).sort()).toEqual(['game', 'rev', 't', 'view']);
+    for (const s of [sa, sb, sc]) expect(Object.keys(s).sort()).toEqual(['game', 'rev', 'roster', 't', 'view']);
     expect(sa.view![0]).toMatchObject({ taskId: 'k1', text: 'Bob buys a round', refs: [[0, 3]] });
     expect(sb.view![0]).toMatchObject({ taskId: 'k1', text: null });
     expect(sc.view![0]).toMatchObject({ taskId: 'k1', text: 'Bob buys a round', refs: [[0, 3]] });
@@ -171,7 +171,7 @@ describe('GameRoom', () => {
     }
     expect(await d.waitFor((f) => f.t === 'reclaim', fd)).toEqual({ t: 'reclaim', id: reclaimId, status: 'approved' });
     const full = await d.waitFor<StateMsg>(isState, fd);
-    expect(Object.keys(full).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 'standings', 't', 'view']);
+    expect(Object.keys(full).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'roster', 'seats', 'standings', 't', 'view']);
     expect(full.view![0]).toMatchObject({ taskId: 'k1', text: 'from the phone' });
 
     // hello again on the same socket is whoAmI: it now names the reclaimed seat, and (seated) replays no reclaim

@@ -1,9 +1,9 @@
-import { buildPoolView, dealableCounts, mentionContext, shortfallsFromCounts, standings, tasksPerBoard, type MentionContext, type Standing } from 'game-core';
+import { buildPoolView, buildRoster, dealableCounts, mentionContext, shortfallsFromCounts, standings, tasksPerBoard, type MentionContext, type Standing } from 'game-core';
 import type { Section, StateMsg } from '../protocol';
 import type { GameState } from './state';
 
 /** Every snapshot section, in wire order. */
-export const ALL_SECTIONS: readonly Section[] = ['game', 'seats', 'view', 'board', 'bingos', 'standings', 'reclaims'];
+export const ALL_SECTIONS: readonly Section[] = ['game', 'seats', 'view', 'board', 'bingos', 'standings', 'reclaims', 'roster'];
 
 /**
  * The leaderboard over every dealt board (empty before launch): each seat's announced lines and its first
@@ -38,7 +38,7 @@ export interface SectionMemo { ctx?: MentionContext; game?: StateMsg['game'] }
  */
 export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[], memo: SectionMemo = {}): Partial<StateMsg> {
   const out: Partial<StateMsg> = {};
-  const ctx = (): MentionContext => (memo.ctx ??= mentionContext(state.poolTasks(), state.seatList()));
+  const ctx = (): MentionContext => (memo.ctx ??= mentionContext(state.poolTasks(), state.seatList(), state.nameBindings()));
   for (const section of sections) {
     switch (section) {
       case 'game': {
@@ -46,7 +46,7 @@ export function buildSections(state: GameState, seatId: string | null, sections:
         if (!g) break;
         if (!memo.game) {
           const { gameId: _gameId, rev: _rev, lastMutationAt: _last, ...rest } = g;
-          const opts = { freeSpace: g.freeSpace };
+          const opts = { freeSpace: g.freeSpace, bindings: state.nameBindings() };
           const tasks = state.poolTasks();
           const seats = state.seatList();
           const dealable = dealableCounts(tasks, seats, opts, ctx());
@@ -60,6 +60,9 @@ export function buildSections(state: GameState, seatId: string | null, sections:
       }
       case 'standings':
         out.standings = buildStandings(state);
+        break;
+      case 'roster':
+        out.roster = buildRoster(state.poolTasks(), state.seatList(), state.nameBindings());
         break;
       case 'seats':
         out.seats = [...state.seats.values()]

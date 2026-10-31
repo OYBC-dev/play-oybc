@@ -1,5 +1,5 @@
 import { tasksPerBoard } from './deal';
-import { PoolTask, Seat } from './types';
+import { NameBindings, PoolTask, Seat } from './types';
 import { MentionContext, canBeDealt, mentionContext, scanOf } from './visibility';
 
 /**
@@ -11,17 +11,16 @@ import { MentionContext, canBeDealt, mentionContext, scanOf } from './visibility
  * yet counts only for identified seats (see `mentionContext`). A seat at or
  * above `tasksPerBoard` therefore always deals.
  *
- * @param opts the game's options (accepted for symmetry with `shortfalls`; the count does not depend on them)
+ * @param opts the game's options; only `bindings` (the host's name bindings) affects the count
  * @param ctx a context built for these tasks and seats, to share with other derivations
  * @returns seatId → guaranteed dealable count.
  */
 export function dealableCounts(
   tasks: readonly PoolTask[],
   seats: readonly Seat[],
-  opts: { freeSpace: boolean },
-  ctx: MentionContext = mentionContext(tasks, seats),
+  opts: { freeSpace: boolean; bindings?: NameBindings },
+  ctx: MentionContext = mentionContext(tasks, seats, opts.bindings),
 ): Record<string, number> {
-  void opts;
   const pure = (t: PoolTask) => {
     if (!t.mentions.anyone) return false;
     const scan = scanOf(t, ctx);
@@ -59,8 +58,8 @@ export function shortfallsFromCounts(counts: Readonly<Record<string, number>>, n
 export function shortfalls(
   tasks: readonly PoolTask[],
   seats: readonly Seat[],
-  opts: { freeSpace: boolean } = { freeSpace: true },
-  ctx: MentionContext = mentionContext(tasks, seats),
+  opts: { freeSpace: boolean; bindings?: NameBindings } = { freeSpace: true },
+  ctx: MentionContext = mentionContext(tasks, seats, opts.bindings),
 ): Record<string, number> {
   return shortfallsFromCounts(dealableCounts(tasks, seats, opts, ctx), tasksPerBoard(opts.freeSpace));
 }

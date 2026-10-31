@@ -14,6 +14,7 @@ export * from './names';
 export * from './mentions';
 export * from './visibility';
 export * from './readiness';
+export * from './roster';
 export * from './deal';
 export * from './marks';
 export * from './gameCode';

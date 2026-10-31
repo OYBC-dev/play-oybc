@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, nameKey, nearMissMentions, normalizeName, parseMentions, shortfalls,
+  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, retireNameInText, rosterHas, shortfalls,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -67,7 +67,7 @@ export function claimGame(state: GameState, ctx: OpCtx, args: { gameId: string; 
   });
   state.putSeat({ seatId, name, nameKey: nameKey(name), joinedAt: ctx.now });
   state.putMember(ctx.uid, seatId);
-  return { result: { gameId: args.gameId, code: args.code, seatId }, push: { all: ['game', 'seats', 'view'] } };
+  return { result: { gameId: args.gameId, code: args.code, seatId }, push: { all: ['game', 'seats', 'view', 'roster'] } };
 }
 
 /** A fresh board's marks: all clear, except the centre when the game has free space. */
@@ -109,7 +109,7 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   if (state.seats.size >= MAX_SEATS) throw new AppError('resource-exhausted');
   const seatId = ctx.newId();
   const seat = { seatId, name, nameKey: key, joinedAt: ctx.now };
-  const push: Push = { all: ['game', 'seats', 'view'] };
+  const push: Push = { all: ['game', 'seats', 'view', 'roster'] };
   let board = null;
   if (game.stage === 'playing') {
     // An `@anyone` task already on some board stays on that one board; plain tasks are shared across boards.
@@ -120,7 +120,7 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
     let cells;
     try {
       cells = dealBoard(state.poolTasks(), [...state.seatList(), { seatId, name, joinedAt: ctx.now }], seatId, ctx.rng, {
-        freeSpace: game.freeSpace, excludeTaskIds,
+        freeSpace: game.freeSpace, excludeTaskIds, bindings: state.nameBindings(),
       });
     } catch {
       throw new AppError('not-ready');
@@ -157,12 +157,13 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
   if (!text || text.length > MAX_TASK_LENGTH) throw new AppError('invalid-text');
   if (state.tasks.size >= MAX_TASKS) throw new AppError('resource-exhausted');
   const seats = state.seatList();
-  const nearMiss = nearMissMentions(text, seats)[0];
+  const bindings = state.nameBindings();
+  const nearMiss = nearMissMentions(text, seats, bindings)[0];
   if (nearMiss !== undefined) throw new AppError('unknown-mention', { token: nearMiss });
-  const mentions = parseMentions(text, seats);
+  const mentions = parseMentions(text, seats, bindings);
   if (mentions.seatIds.includes(seatId)) throw new AppError('self-mention');
   state.putTask({ taskId, text, authorSeatId: seatId, mentions, createdAt: ctx.now });
-  return { result: { taskId }, push: { all: ['game', 'view'] } };
+  return { result: { taskId }, push: { all: ['game', 'view', 'roster'] } };
 }
 
 /**
@@ -191,7 +192,7 @@ export function deleteTask(state: GameState, ctx: OpCtx, args: { taskId: string 
   if (!target) throw new AppError('not-found');
   if (target.authorSeatId !== seatId && game.hostSeatId !== seatId) throw new AppError('permission-denied');
   state.deleteTask(taskId);
-  return { result: {}, push: { all: ['game', 'view'] } };
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
 }
 
 /** Throws `not-host` unless the caller holds the host seat; returns that seatId. */
@@ -213,12 +214,13 @@ export function launch(state: GameState, ctx: OpCtx, _args: Record<string, never
   const tasks = state.poolTasks();
   const seats = state.seatList();
   const { freeSpace } = game;
-  const short = shortfalls(tasks, seats, { freeSpace });
+  const bindings = state.nameBindings();
+  const short = shortfalls(tasks, seats, { freeSpace, bindings });
   if (Object.keys(short).length > 0) throw new AppError('not-ready', { shortfalls: short });
-  const anyoneAssignment = assignAnyone(tasks, seats, ctx.rng);
+  const anyoneAssignment = assignAnyone(tasks, seats, ctx.rng, bindings);
   const perSeat: Record<string, Section[]> = {};
   for (const seat of seats) {
-    const cells = dealBoard(tasks, seats, seat.seatId, ctx.rng, { freeSpace, anyoneAssignment });
+    const cells = dealBoard(tasks, seats, seat.seatId, ctx.rng, { freeSpace, anyoneAssignment, bindings });
     state.putBoard({ seatId: seat.seatId, cells, marks: freshMarks(freeSpace), completedLines: [], announcedLines: [] });
     perSeat[seat.seatId] = ['board'];
   }
@@ -358,6 +360,51 @@ export function adminSeats(state: GameState): Array<{ seatId: string; name: stri
 
 /** Every client-callable operation by its protocol name. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Host-only, any stage but ended: points a referenced name at a seat (`seatId`) or at nobody (`null`).
+ * The binding changes who a task is kept from and what it shows, so everyone's view, the counts and the roster go out.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `game-ended`, `invalid-argument`,
+ *   `name-not-found` (not a name the roster lists), `seat-not-found`.
+ */
+export function bindName(state: GameState, ctx: OpCtx, args: { key?: unknown; seatId?: unknown }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  if (game.stage === 'ended') throw new AppError('game-ended');
+  if (typeof args.key !== 'string' || (args.seatId !== null && typeof args.seatId !== 'string')) throw new AppError('invalid-argument');
+  const key = nameKey(args.key);
+  if (!rosterHas(buildRoster(state.poolTasks(), state.seatList(), state.nameBindings()), key)) throw new AppError('name-not-found');
+  if (args.seatId === null) state.deleteBinding(key);
+  else {
+    if (!state.seats.has(args.seatId)) throw new AppError('seat-not-found');
+    state.putBinding(key, args.seatId);
+  }
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
+}
+
+/**
+ * Host-only, any stage but ended: retires a referenced name. Its binding goes, and every task that mentions it
+ * loses the `@` on that token (`@Jess` → `Jess`), so the tasks read as plain text and the name leaves the roster.
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `game-ended`, `invalid-argument`, `name-not-found`.
+ */
+export function retireName(state: GameState, ctx: OpCtx, args: { key?: unknown }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  if (game.stage === 'ended') throw new AppError('game-ended');
+  if (typeof args.key !== 'string') throw new AppError('invalid-argument');
+  const key = nameKey(args.key);
+  const seats = state.seatList();
+  if (!rosterHas(buildRoster(state.poolTasks(), seats, state.nameBindings()), key)) throw new AppError('name-not-found');
+  if (state.bindings.has(key)) state.deleteBinding(key);
+  for (const t of [...state.tasks.values()]) {
+    const text = retireNameInText(t.text, key, seats);
+    if (text === t.text) continue;
+    const names = (t.mentions.names ?? []).filter((n) => n !== key);
+    const { names: _dropped, ...rest } = t.mentions;
+    state.putTask({ ...t, text, mentions: names.length ? { ...rest, names } : rest });
+  }
+  return { result: {}, push: { all: ['game', 'view', 'roster'] } };
+}
+
 export const OPS: Record<Op, (state: GameState, ctx: OpCtx, args: any) => OpOut<unknown>> = {
-  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions,
+  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions, bindName, retireName,
 };
