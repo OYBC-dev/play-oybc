@@ -4,6 +4,7 @@ import { AvatarStack } from '../../components/riso/AvatarStack';
 import { HostMenu } from '../host/HostMenu';
 import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { AddTaskForm } from './AddTaskForm';
+import { BindNameSheet } from './BindNameSheet';
 import { LobbySheet } from './LobbySheet';
 import { PlayerList } from './PlayerList';
 import { PoolList } from './PoolList';
@@ -21,12 +22,17 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
   const isHost = game.hostSeatId === mySeatId;
   const [playersOpen, setPlayersOpen] = useState(false);
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
+  const [bindingKey, setBindingKey] = useState<string | null>(null);
   const { rows, add, remove, deleteError } = usePoolEdits(client, gameId, snapshot.view);
   const playersId = useId();
   const onSheetHeight = useCallback((px: number) => setSheetHeight(px), []);
 
   const seats = [...snapshot.seats].sort((a, b) => a.joinedAt - b.joinedAt);
   const others = seats.filter((s) => s.seatId !== mySeatId).map((s) => s.name);
+  const myName = seats.find((s) => s.seatId === mySeatId)?.name;
+  const roster = snapshot.roster ?? [];
+  // Live row for the open sheet; a name that left the roster (retired, its tasks deleted) closes it.
+  const binding = isHost && bindingKey !== null ? roster.find((r) => r.key === bindingKey) ?? null : null;
   const padBottom = sheetHeight === null ? SHEET_FALLBACK_PX : Math.max(130, sheetHeight + 16);
 
   return (
@@ -43,14 +49,17 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
           <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} />
         </div>
       </header>
-      {playersOpen && <PlayerList snapshot={snapshot} id={playersId} />}
+      {playersOpen && <PlayerList snapshot={snapshot} id={playersId} isHost={isHost} onOpenName={setBindingKey} />}
+      {binding && (
+        <BindNameSheet client={client} gameId={gameId} name={binding} seats={seats} onClose={() => setBindingKey(null)} />
+      )}
       {seats.length <= 1 && (
         <div className={styles.waiting} role="status">
           Waiting for players
           <span className={styles.dots} aria-hidden="true"><i /><i /><i /></span>
         </div>
       )}
-      <AddTaskForm onAdd={add} seatNames={others} />
+      <AddTaskForm onAdd={add} seatNames={others} roster={roster} myName={myName} />
       {deleteError && <p className="error" role="alert">{deleteError}</p>}
       <PoolList entries={rows} isHost={isHost} onDelete={(id) => void remove(id)} />
       <LobbySheet

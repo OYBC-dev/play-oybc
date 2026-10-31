@@ -31,6 +31,7 @@ function snap(over: { host?: boolean; stage?: 'lobby' | 'playing' | 'ended'; rec
     bingos: [],
     standings: [],
     reclaims: over.reclaims ?? [],
+    roster: [],
   };
 }
 

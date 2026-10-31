@@ -1,0 +1,27 @@
+/* Radio list, matching the Make host dialog (22px ring, blue fill when selected). */
+.radios { display: flex; flex-direction: column; }
+.radio {
+  appearance: none; border: 0; border-top: 1px solid var(--riso-hair); background: transparent;
+  box-sizing: border-box; width: 100%; min-height: 48px; padding: 0 6px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 16px; color: var(--riso-ink);
+}
+.radio:disabled { cursor: progress; opacity: 0.6; }
+.radio:focus-visible, .retire:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
+.ring {
+  flex: none; box-sizing: border-box; width: 22px; height: 22px; border-radius: 999px;
+  border: 2px solid var(--riso-ink); display: grid; place-items: center; background: transparent;
+}
+.ring > span { width: 10px; height: 10px; border-radius: 999px; background: transparent; }
+.ring[data-checked='true'] { background: var(--riso-blue); }
+.ring[data-checked='true'] > span { background: var(--riso-on-color); }
+.radioName { min-width: 0; overflow-wrap: anywhere; }
+.nobody { color: var(--riso-muted); }
+.actions { display: flex; gap: 8px; margin-top: 4px; }
+.actions > * { flex: 1 1 0; min-width: 0; }
+.retire {
+  appearance: none; align-self: center; min-height: 44px; padding: 0 16px; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--riso-font-head); font-weight: 700; font-size: 15px; color: var(--riso-red-text); border-radius: var(--riso-r-card);
+}
+.retire:disabled { opacity: 0.45; cursor: not-allowed; }
+.who { margin: 0; font-family: var(--riso-font-head); font-weight: 800; font-size: 19px; letter-spacing: -0.01em; line-height: 1.15; overflow-wrap: anywhere; }

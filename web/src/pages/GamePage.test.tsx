@@ -15,6 +15,7 @@ const snapshot: GameSnapshot = {
   bingos: [],
   standings: [],
   reclaims: [],
+  roster: [],
 };
 const denied = () => Object.assign(new Error('denied'), { code: 'permission-denied' });
 

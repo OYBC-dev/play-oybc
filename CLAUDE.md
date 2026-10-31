@@ -64,7 +64,7 @@ pnpm --filter scripts forceHost <CODE> [<seatId>]   # needs PLAY_ADMIN_TOKEN or 
 pnpm --filter scripts forceHostLegacy <CODE> [<seatId>]   # legacy Firestore backend until cutover; needs gcloud application-default login
 pnpm --filter functions test        # legacy; needs emulators: firebase emulators:exec --only firestore,auth,functions "pnpm --filter functions test"
 pnpm --filter web dev              # web dev server
-pnpm --filter web e2e              # full-game Playwright test (Auth emulator + wrangler dev; needs Java; locally also export PLAYWRIGHT_BROWSERS_PATH=/Volumes/Stephen/ms-playwright, never the internal disk)
+pnpm --filter web e2e              # Playwright e2e (Auth emulator + wrangler dev; needs Java). Browsers stay on the INTERNAL disk (default ~/Library/Caches/ms-playwright): with PLAYWRIGHT_BROWSERS_PATH on /Volumes/Stephen Chromium's GPU process crash-loops ("GPU process isn't usable"), verified 2026-10-24 and again 2026-10-31
 # iOS (from ios/, after `xcodegen generate` — ALWAYS first: PlayOYBC.xcodeproj/project.pbxproj is NOT
 # tracked since 2026-10-28 (oybc#688); it is generated locally, in CI and in Xcode Cloud's ci_post_clone.sh.
 # Seed GoogleService-Info.plist before generating. The PlayOYBCCI scheme runs both test targets in one build —

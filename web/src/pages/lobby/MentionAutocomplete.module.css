@@ -8,3 +8,7 @@
 }
 .option:hover, .active { background: var(--riso-paper); }
 .at { color: var(--riso-blue); }
+.at, .plus { flex: none; display: inline-grid; place-items: center; box-sizing: border-box; width: 24px; height: 24px; }
+.unbound { border: 2px dashed var(--riso-muted); border-radius: 999px; font-size: 13px; }
+.plus { color: var(--riso-blue); font-size: 20px; font-weight: 800; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

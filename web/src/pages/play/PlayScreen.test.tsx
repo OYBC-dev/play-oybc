@@ -22,6 +22,7 @@ function snap(over: { host?: boolean; stage?: 'playing' | 'ended'; bingos?: Bing
     bingos: over.bingos ?? [],
     standings: over.standings ?? [],
     reclaims: [],
+    roster: [],
   };
 }
 const bingo = (seq: number, name: string): BingoDoc => ({ seq, seatId: 's2', name, line: 'row_0', playerBingoNumber: seq, at: Date.now(), status: 'announced' });

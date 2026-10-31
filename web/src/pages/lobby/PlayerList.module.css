@@ -2,7 +2,23 @@
 .list { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; list-style: none; margin: 0; padding: 0; }
 .player {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%; box-sizing: border-box; height: 38px; padding: 0 12px;
-  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700;
+  font-family: var(--riso-font-head); font-size: 14px; font-weight: 700; color: var(--riso-ink);
   background: var(--riso-paper-2); border: 2px solid var(--riso-ink); border-radius: 999px;
 }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot { display: flex; max-width: 100%; }
+/* A roster name nobody has yet: same pill, dashed keyline on paper. */
+.dashed { border-style: dashed; background: var(--riso-paper); }
+.tag {
+  position: relative; flex: none; display: inline-flex; align-items: center; max-width: 120px;
+  font-family: var(--riso-font-head); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--riso-muted);
+}
+.tagText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tagButton, .pillButton { appearance: none; cursor: pointer; position: relative; }
+.tagButton { border: 0; background: transparent; padding: 0 2px; height: 34px; }
+/* Both are drawn inside a 38px pill: stretch the hit area to 44px. */
+.tagButton::after, .pillButton::after { content: ''; position: absolute; inset: -5px -4px; }
+.pillButton::after { inset: -5px 0; }
+.tagButton:hover { color: var(--riso-ink); }
+.tagButton:focus-visible, .pillButton:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }

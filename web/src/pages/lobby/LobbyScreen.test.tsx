@@ -10,7 +10,7 @@ import { nonsenseFor } from './nonsense';
 const noop = () => {};
 
 function snap(over: {
-  host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean; game?: Partial<SnapshotGame>;
+  host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean; game?: Partial<SnapshotGame>; roster?: GameSnapshot['roster'];
 } = {}): GameSnapshot {
   const host = over.host ?? true;
   const view = over.empty ? [] : [
@@ -32,6 +32,7 @@ function snap(over: {
     bingos: [],
     standings: [],
     reclaims: [],
+    roster: over.roster ?? [],
   };
 }
 

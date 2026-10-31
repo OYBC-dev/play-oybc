@@ -15,6 +15,7 @@ const snapshot: GameSnapshot = {
   bingos: [],
   standings: [],
   reclaims: [],
+  roster: [],
 };
 
 function setup(client: FakeGameClient) {

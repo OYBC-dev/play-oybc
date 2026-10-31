@@ -13,6 +13,8 @@ export class FakeGameClient implements GameClient {
   joinResult: JoinGameRes | Error = { status: 'joined', gameId: 'g1', seatId: 's2' };
   whoAmIResult: WhoAmIRes | Error = null;
   snapshot: GameSnapshot | null = null;
+  bindResult: void | Error = undefined;
+  retireResult: void | Error = undefined;
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
   private snapshotErrorListeners = new Set<(e: Error) => void>();
   private reclaimListeners = new Set<(s: ReclaimDoc['status']) => void>();
@@ -59,6 +61,8 @@ export class FakeGameClient implements GameClient {
   deleteTask(gameId: string, taskId: string) { return this.result('deleteTask', [gameId, taskId], undefined); }
   launch(gameId: string) { return this.result('launch', [gameId], undefined); }
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void> { return this.result('setOptions', [gameId, options], undefined); }
+  bindName(gameId: string, key: string, seatId: string | null): Promise<void> { return this.result('bindName', [gameId, key, seatId], this.bindResult); }
+  retireName(gameId: string, key: string): Promise<void> { return this.result('retireName', [gameId, key], this.retireResult); }
   end(gameId: string) { return this.result('end', [gameId], undefined); }
   toggleMark(gameId: string, cellIndex: number, marked: boolean) {
     return this.result<ToggleMarkRes>('toggleMark', [gameId, cellIndex, marked], { marks: [], completedLines: [], newBingoSeqs: [] });

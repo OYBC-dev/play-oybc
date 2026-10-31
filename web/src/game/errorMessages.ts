@@ -12,6 +12,8 @@ const MESSAGES: Record<string, string> = {
   'unknown-seat': 'That player is not in this game',
   'invalid-text': 'Task text is empty or too long',
   'reclaim-cooldown': 'Wait a minute before asking again',
+  'name-not-found': 'That name is gone',
+  'seat-not-found': 'That player left',
 };
 
 const FALLBACK = 'Something went wrong';

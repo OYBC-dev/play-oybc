@@ -6,6 +6,7 @@ import type {
   JoinGameRes,
   PoolViewEntry,
   ReclaimDoc,
+  RosterName,
   SeatDoc,
   Standing,
   ToggleMarkRes,
@@ -47,6 +48,8 @@ export interface GameSnapshot {
   standings: Standing[];
   /** Pending reclaims; only populated while this seat is the host. */
   reclaims: Array<ReclaimDoc & { id: string }>;
+  /** Names tasks refer to that no seat owns, in order of first mention, with the host's binding; `[]` when the frame does not carry it. */
+  roster: RosterName[];
 }
 
 /** The only door between UI and backend: callables for writes, listeners for reads. */
@@ -66,6 +69,10 @@ export interface GameClient {
   launch(gameId: string): Promise<void>;
   /** Host, lobby only: sets the game's options. */
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void>;
+  /** Host: binds the roster name `key` to a joined seat, or unbinds it (`seatId` null). */
+  bindName(gameId: string, key: string, seatId: string | null): Promise<void>;
+  /** Host: drops the roster name `key` from every task (its `@` goes, the word stays). */
+  retireName(gameId: string, key: string): Promise<void>;
   /** Sets the square to `marked` (idempotent on retry). */
   toggleMark(gameId: string, cellIndex: number, marked: boolean): Promise<ToggleMarkRes>;
   end(gameId: string): Promise<void>;

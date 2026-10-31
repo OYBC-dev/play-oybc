@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import type { RosterName } from 'game-core';
 import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { MAX_TASK_LENGTH } from './constants';
@@ -10,11 +11,17 @@ import styles from './AddTaskForm.module.css';
 export function AddTaskForm({
   onAdd,
   seatNames,
+  roster = [],
+  myName,
 }: {
   /** Adds the trimmed text to the pool; rejects with the server error. */
   onAdd: (text: string) => Promise<void>;
   /** Names of the other players (not you), in display order. */
   seatNames: string[];
+  /** The snapshot's roster: names tasks use that no player owns. */
+  roster?: RosterName[];
+  /** Your own name (never offered as a new name). */
+  myName?: string;
 }) {
   const [text, setText] = useState('');
   const [caret, setCaret] = useState(0);
@@ -28,7 +35,7 @@ export function AddTaskForm({
   latest.current = text;
 
   const mention = dismissed ? null : activeMention(text, caret);
-  const options = mention ? mentionOptions(mention.partial, seatNames) : [];
+  const options = mention ? mentionOptions(mention.partial, seatNames, roster, myName === undefined ? seatNames : [...seatNames, myName]) : [];
   const active = Math.min(index, Math.max(options.length - 1, 0));
 
   useLayoutEffect(() => {
@@ -71,7 +78,7 @@ export function AddTaskForm({
     if (options.length === 0) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setIndex((active + 1) % options.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIndex((active - 1 + options.length) % options.length); }
-    else if (e.key === 'Enter') { e.preventDefault(); pick(options[active]); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(options[active].name); }
     else if (e.key === 'Escape') { e.preventDefault(); setDismissed(true); }
   };
 
