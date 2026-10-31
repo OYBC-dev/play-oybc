@@ -22,7 +22,7 @@ All rules live in `packages/game-core/src` and are pure. New or changed exports:
 - `DealOptions = { freeSpace: boolean; anyoneAssignment?: Readonly<Record<string, string>>; excludeTaskIds?: ReadonlySet<string> }`.
   - `freeSpace` → `centerType` is `FREE` when true, `NONE` when false; tasks needed = `fillableCellCount(GRID_SIZE, centerType)` (24 or 25).
   - `anyoneAssignment` maps an `@anyone` task id to the one seat it may be dealt to. An `@anyone` task that is in the map but assigned elsewhere is not eligible for this seat; one not in the map is eligible for everyone (legacy behaviour).
-  - `excludeTaskIds` removes tasks already dealt to any board (late join).
+  - `excludeTaskIds` removes tasks a late joiner must not receive: only the `@anyone` tasks (pure or mixed) already dealt to any board. Plain tasks are shared across boards by design, so a late joiner never needs new tasks beyond the pool that was ready at launch.
 - `dealBoard(tasks, seats, seatId, rng = Math.random, opts: DealOptions = { freeSpace: true })` — the default keeps the legacy backend compiling and unchanged. Throws `insufficient-pool` when eligible < needed.
 - `assignAnyone(tasks, seats, rng): Record<string, string>` — shuffles the `@anyone` tasks and the seats, then deals the tasks round-robin over the seats. Every seat receives `floor(n / seats)` or `ceil(n / seats)` of them.
 - `dealableCounts(tasks, seats, opts: { freeSpace: boolean }): Record<string, number>` — per seat: the tasks dealable to that seat that are not `@anyone`, plus `floor(anyoneCount / seats.length)`. This is the guaranteed minimum under `assignAnyone`, so a lobby that is ready always launches.
@@ -44,7 +44,7 @@ All rules live in `packages/game-core/src` and are pure. New or changed exports:
 - `GameRow`/`GameDoc` gain `freeSpace: boolean` (stored; default `false` at claim) and the `game` section adds `tasksPerBoard` (24 when `freeSpace`, else 25) and `dealable: Record<seatId, number>` next to `shortfalls`. Persistence: the `game` table gains `freeSpace INTEGER NOT NULL DEFAULT 0`; `SqlPersistence` adds the column when `PRAGMA table_info(game)` lacks it (rooms created before this deploy load as `freeSpace: false`).
 - New op `setOptions { freeSpace: boolean }`: host only, `lobby` only (`wrong-stage` otherwise), `invalid-argument` unless a boolean; push `all: ['game']`. Added to `Op` in `protocol.ts` and to `OPS`.
 - `launch`: computes `assignment = assignAnyone(tasks, seats, rng)` once, then `dealBoard(..., { freeSpace, anyoneAssignment: assignment })` per seat; seeds `marks[CENTER_INDEX] = true` only when `freeSpace`. The assignment is not stored: after launch, uniqueness is enforced by `excludeTaskIds`.
-- `join` while playing: `dealBoard(..., { freeSpace, excludeTaskIds: every taskId on every existing board })`.
+- `join` while playing: `dealBoard(..., { freeSpace, excludeTaskIds: the `@anyone` taskIds present on any existing board })` — never plain tasks.
 - `mark`: `applyMark(..., { freeSpace })`; pushes its existing `board` to the caller **and** `standings` to all.
 - New section `standings: Standing[]` in `Section`, `StateMsg`, `ALL_SECTIONS` and `buildSections` (from `state.boards` + the announced bingo rows' lowest `seq` per seat; empty before launch). Pushed with `all` on `launch`, a playing-stage `join`, `mark`, and `end`.
 - `view` entries carry `refs` and display text via `resolveMentionRefs(text, seats, 'Someone')` inside `buildPoolView`.
@@ -79,4 +79,4 @@ All rules live in `packages/game-core/src` and are pure. New or changed exports:
 | `@someone` unchanged (every eligible board, a random other name) | Claude |
 | Pool rows resolve `@someone` to "Someone" for the author | Claude |
 | Leaderboard drops the clock time | Claude |
-| Late joiners exclude tasks already on any board (no stored assignment) | Claude |
+| Late joiners exclude only the `@anyone` tasks already on any board (no stored assignment); plain tasks stay shared | Claude |
