@@ -16,15 +16,26 @@ struct AddTaskView: View {
     let seats: [Seat]
     /// This seat's id (a roster name bound to it is not offered).
     let selfSeatId: String?
+    /// Opens "How tasks work" from the (i) bubble after Add; nil = no bubble.
+    let onInfo: (() -> Void)?
+    /// Each change focuses the task field (after the first-lobby explainer closes).
+    let focusRequest: Int
+    /// Each change moves VoiceOver focus back to the (i) bubble.
+    let infoFocusRequest: Int
 
     @State var text = ""
     @State var error: String?
     @State var busy = false
     @State var dismissed = false
     @FocusState private var focused: Bool
+    @AccessibilityFocusState private var infoFocused: Bool
 
     init(service: GameService, gameId: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil,
-         seats: [Seat] = [], selfSeatId: String? = nil) {
+         seats: [Seat] = [], selfSeatId: String? = nil, onInfo: (() -> Void)? = nil, focusRequest: Int = 0,
+         infoFocusRequest: Int = 0) {
+        self.onInfo = onInfo
+        self.focusRequest = focusRequest
+        self.infoFocusRequest = infoFocusRequest
         self.service = service
         self.gameId = gameId
         self.seatNames = seatNames
@@ -52,6 +63,7 @@ struct AddTaskView: View {
                 field
                 RisoButton(title: "Add") { submit() }
                     .risoDisabled(!canSubmit)
+                if let onInfo { infoBubble(onInfo) }
             }
             .overlay(alignment: .topLeading) {
                 if !options.isEmpty { autocomplete.offset(y: 56) }
@@ -60,6 +72,31 @@ struct AddTaskView: View {
             // The mention card floats where the error sits; the error shows again once it closes.
             if let error, options.isEmpty { ErrorText(error) }
         }
+        .onChange(of: focusRequest) { _, _ in focused = true }
+        .onChange(of: infoFocusRequest) { _, _ in
+            // After the dialog leaves the tree, or VoiceOver drops the request.
+            DispatchQueue.main.async { infoFocused = true }
+        }
+    }
+
+    /// A 44pt target holding a 24pt circle outlined 2pt in muted with an `i` (Bricolage 800 13pt). The
+    /// negative margins keep its visual gap to Add and to the edge as drawn.
+    private func infoBubble(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("i")
+                .font(.risoHead(13, .extraBold))
+                .foregroundStyle(Color.risoMuted)
+                .frame(width: 24, height: 24)
+                .overlay(Circle().strokeBorder(Color.risoMuted, lineWidth: Riso.Keyline.container))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, -4)
+        .padding(.trailing, -8)
+        .accessibilityLabel("How tasks work")
+        .accessibilityFocused($infoFocused)
+        .accessibilityIdentifier("howto-info")
     }
 
     private var field: some View {

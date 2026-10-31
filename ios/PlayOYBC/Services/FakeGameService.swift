@@ -69,7 +69,39 @@ final class FakeGameService: GameService, @unchecked Sendable {
         if let callError { throw callError }
     }
 
-    func createGame(name: String) async throws -> CreateGameRes { calls.append("createGame:\(name)"); return try createResult.get() }
+    /// The options of every `createGame` call, in order.
+    private(set) var creates: [CreateGameReq] = []
+    /// When set, createGame suspends until `releaseCreate()`.
+    var gateCreate = false
+    private var createGate: CheckedContinuation<Void, Never>?
+    /// `releaseCreate()` ran before the create reached its gate.
+    private var createReleased = false
+    func releaseCreate() {
+        let c: CheckedContinuation<Void, Never>? = lock.withLock {
+            if let c = createGate { createGate = nil; return c }
+            createReleased = true
+            return nil
+        }
+        c?.resume()
+    }
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
+        let gated = lock.withLock {
+            calls.append("createGame:\(name)")
+            creates.append(CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace))
+            return gateCreate
+        }
+        if gated {
+            await withCheckedContinuation { c in
+                let pass: Bool = lock.withLock {
+                    if createReleased { createReleased = false; return true }
+                    createGate = c
+                    return false
+                }
+                if pass { c.resume() }
+            }
+        }
+        return try createResult.get()
+    }
     func joinGame(code: String, name: String) async throws -> JoinGameRes { joins.append((code, name)); return try joinResult.get() }
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         whoAmICodes.append(code)

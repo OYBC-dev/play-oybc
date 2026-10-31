@@ -2,50 +2,17 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UIKit
 
-/// The host's share sheet (web `LobbySheet` expanded QR), presented as a `.medium` detent
-/// from the lobby sheet's QR tile: the game code, a 160pt QR on the static cream tile,
-/// Copy link and Done.
-struct ShareSheetView: View {
-    let code: String
-    let onDone: () -> Void
-
-    private var link: String { GameConstants.joinLink(code: code) }
-
-    var body: some View {
-        ZStack {
-            Color.risoPaper2.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    SectionLabel("Game code")
-                    GameCodeText(code: code)
-                }
-                HStack(alignment: .center, spacing: 16) {
-                    QRTile(link: link, side: 160, radius: Riso.cardRadius, shadow: Riso.Shadow.button)
-                        .accessibilityLabel("QR code")
-                    VStack(spacing: 10) {
-                        CopyLinkButton(link: link, fullWidth: true)
-                        RisoButton(title: "Done", kind: .ghost, fullWidth: true, action: onDone)
-                    }
-                }
-            }
-            .padding(.horizontal, Riso.gutter)
-            .padding(.top, 28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
-}
-
-/// The game code as the lobby shows it: Bricolage 800 34pt, +.1em, read letter by letter.
+/// The game code as the lobby shows it: Bricolage 800 34pt (38 in the expanded sheet), +.1em, read
+/// letter by letter.
 struct GameCodeText: View {
     let code: String
     var color: Color = .risoInk
+    var size: CGFloat = 34
 
     var body: some View {
         Text(code)
-            .font(.risoHead(34, .extraBold))
-            .tracking(3.4)
+            .font(.risoHead(size, .extraBold))
+            .tracking(size / 10)
             .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -88,6 +55,8 @@ struct CopyLinkButton: View {
     let link: String
     var fullWidth = false
     var small = false
+    var minHeight: CGFloat? = nil
+    var horizontalPadding: CGFloat? = nil
     @State var copied = false
     @State private var reset: _Concurrency.Task<Void, Never>?
 
@@ -95,8 +64,8 @@ struct CopyLinkButton: View {
     static let copiedSeconds: Double = 2
 
     var body: some View {
-        RisoButton(title: copied ? "Copied" : "Copy link", systemImage: "square.and.arrow.up",
-                   fullWidth: fullWidth, small: small) { copy() }
+        RisoButton(title: copied ? "Copied" : "Copy link", systemImage: "doc.on.doc",
+                   fullWidth: fullWidth, small: small, minHeight: minHeight, horizontalPadding: horizontalPadding) { copy() }
             .onDisappear { reset?.cancel() }
     }
 

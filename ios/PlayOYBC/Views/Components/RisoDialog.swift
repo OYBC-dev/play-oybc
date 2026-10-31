@@ -5,13 +5,20 @@ import SwiftUI
 /// VoiceOver focus moves to the title on open; the caller hands it back to the trigger on close.
 struct RisoDialog<Content: View>: View {
     let title: String
+    /// A red kicker over the title (the task explainer's "Welcome, {name}"); nil = none.
+    var kicker: String? = nil
+    /// Title size: 24 by default, 26 for the task explainer.
+    var titleSize: CGFloat = 24
     let onClose: () -> Void
     let content: Content
 
     @AccessibilityFocusState private var titleFocused: Bool
 
-    init(title: String, onClose: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+    init(title: String, kicker: String? = nil, titleSize: CGFloat = 24, onClose: @escaping () -> Void,
+         @ViewBuilder content: () -> Content) {
         self.title = title
+        self.kicker = kicker
+        self.titleSize = titleSize
         self.onClose = onClose
         self.content = content()
     }
@@ -44,16 +51,21 @@ struct RisoDialog<Content: View>: View {
 
     private var stack: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.risoHead(24, .extraBold))
-                .tracking(-0.48)
-                .foregroundStyle(Color.risoInk)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($titleFocused)
+            VStack(alignment: .leading, spacing: 4) {
+                if let kicker { Text(kicker).risoKicker() }
+                Text(title)
+                    .font(.risoHead(titleSize, .extraBold))
+                    .tracking(-0.02 * titleSize)
+                    .foregroundStyle(Color.risoInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($titleFocused)
+            }
             content
         }
-        .padding(16)
+        // The kicker's dialog takes the explainer's 18pt top.
+        .padding(.top, kicker == nil ? 16 : 18)
+        .padding([.horizontal, .bottom], 16)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

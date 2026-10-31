@@ -19,15 +19,17 @@ struct GameDoc: Codable, Equatable {
     var tasksPerBoard: Int = 25
     /// seatId → tasks guaranteed dealable to that seat. Absent on old frames: empty.
     var dealable: [String: Int] = [:]
+    /// The host's optional game name, set at create (≤ 40 chars, trimmed). Absent on old frames: nil.
+    var gameName: String?
 
     private enum Keys: String, CodingKey {
         case code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, shortfalls, reviewGate
-        case freeSpace, tasksPerBoard, dealable
+        case freeSpace, tasksPerBoard, dealable, gameName
     }
 
     init(code: String, stage: Stage, hostSeatId: String, createdAt: Double, launchedAt: Double?, endedAt: Double?,
          bingoCount: Int, shortfalls: [String: Int], reviewGate: Bool,
-         freeSpace: Bool = false, tasksPerBoard: Int = 25, dealable: [String: Int] = [:]) {
+         freeSpace: Bool = false, tasksPerBoard: Int = 25, dealable: [String: Int] = [:], gameName: String? = nil) {
         self.code = code
         self.stage = stage
         self.hostSeatId = hostSeatId
@@ -40,6 +42,7 @@ struct GameDoc: Codable, Equatable {
         self.freeSpace = freeSpace
         self.tasksPerBoard = tasksPerBoard
         self.dealable = dealable
+        self.gameName = gameName
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +59,7 @@ struct GameDoc: Codable, Equatable {
         freeSpace = try c.decodeIfPresent(Bool.self, forKey: .freeSpace) ?? false
         tasksPerBoard = try c.decodeIfPresent(Int.self, forKey: .tasksPerBoard) ?? 25
         dealable = try c.decodeIfPresent([String: Int].self, forKey: .dealable) ?? [:]
+        gameName = try c.decodeIfPresent(String.self, forKey: .gameName)
     }
 }
 
@@ -226,7 +230,12 @@ struct Reclaim: Equatable, Identifiable {
     var doc: ReclaimDoc
 }
 
-struct CreateGameReq: Codable, Equatable { var name: String }
+/// `POST /api/createGame` body. `gameName` is omitted when nil; `freeSpace` defaults to false.
+struct CreateGameReq: Codable, Equatable {
+    var name: String
+    var gameName: String? = nil
+    var freeSpace: Bool = false
+}
 struct CreateGameRes: Codable, Equatable { var gameId: String; var code: String; var seatId: String }
 struct JoinGameReq: Codable, Equatable { var code: String; var name: String }
 

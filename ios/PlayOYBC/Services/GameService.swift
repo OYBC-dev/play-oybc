@@ -18,14 +18,17 @@ struct GameSnapshot: Equatable {
 
 /// The only door between UI and backend: callables for writes, listeners for reads.
 protocol GameService {
-    func createGame(name: String) async throws -> CreateGameRes
+    /// Creates a game with the host seated as `name`. `gameName` (trimmed, ≤ 40, nil = none) and
+    /// `freeSpace` are fixed at create; the server answers `invalid-argument` on a long name.
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes
     func joinGame(code: String, name: String) async throws -> JoinGameRes
     func whoAmI(code: String) async throws -> WhoAmIRes?
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error>
     func addTask(gameId: String, text: String) async throws
     func deleteTask(gameId: String, taskId: String) async throws
     func launch(gameId: String) async throws
-    /// Host, lobby only: sets the game's options. The state frame carries the change.
+    /// Host, lobby only: sets the game's options. The state frame carries the change. No UI calls it since
+    /// the options moved to Game settings (`createGame`); kept while the server still accepts it.
     func setOptions(gameId: String, freeSpace: Bool) async throws
     /// Host, any stage but ended: binds roster name `key` to a seat, or unbinds it when `seatId` is nil.
     /// - Throws: `name-not-found`, `seat-not-found`, `not-host`, `game-ended`, `invalid-argument`.
@@ -39,4 +42,11 @@ protocol GameService {
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws
     func transferHost(gameId: String, toSeatId: String) async throws
     func watchReclaim(gameId: String, reclaimId: String) -> AsyncThrowingStream<ReclaimStatus, Error>
+}
+
+extension GameService {
+    /// A game with no name and no free space.
+    func createGame(name: String) async throws -> CreateGameRes {
+        try await createGame(name: name, gameName: nil, freeSpace: false)
+    }
 }

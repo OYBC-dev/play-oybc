@@ -122,14 +122,14 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
 
     // MARK: GameService
 
-    func createGame(name: String) async throws -> CreateGameRes {
+    func createGame(name: String, gameName: String?, freeSpace: Bool) async throws -> CreateGameRes {
         let token: String
         do { token = try await session.idToken() } catch { throw AppError.from(error) }
         var req = URLRequest(url: Self.httpURL(baseURL).appendingPathComponent("api/createGame"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONEncoder().encode(CreateGameReq(name: name))
+        req.httpBody = try JSONEncoder().encode(CreateGameReq(name: name, gameName: gameName, freeSpace: freeSpace))
         let data: Data, response: URLResponse
         do { (data, response) = try await http.data(for: req) } catch { throw AppError(code: "offline", token: nil, underlying: error) }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0

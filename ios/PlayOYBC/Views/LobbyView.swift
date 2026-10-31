@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The pre-game lobby, pool first (web `LobbyScreen`): "Pool" title + count and the avatar
 /// stack (toggles the player chips), the composer, the live pool, and the bottom sheet with
-/// the code, shortfalls, share and Launch.
+/// the code, shortfalls, share and Launch (expandable to the readiness summary, players and QR).
+/// "How tasks work" opens on this device's first lobby and from the composer's (i) bubble.
 ///
 /// The sheet ignores the keyboard, so with the keyboard up it stays behind it and the
 /// composer keeps the visible area.
@@ -24,8 +25,18 @@ struct LobbyView: View {
     /// Host: the roster key whose bind sheet is open.
     @State var bindingKey: String?
     @AccessibilityFocusState private var dotsFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Launch, and its "Launch?" confirm while unbound roster names remain.
     @StateObject private var launchModel = LaunchModel()
+    /// The bottom sheet's resting height (snapshots start it expanded).
+    @State var sheetExpanded = false
+    /// The task explainer, while open.
+    @State var howTo: HowTasksWork.Entry?
+    /// Where `oybc.howto.seen` lives (the explainer's first-lobby gate).
+    var howToDefaults: UserDefaults = .standard
+    /// Bumped to focus the composer (after the first-lobby explainer) or VoiceOver-focus its (i) bubble.
+    @State private var composerFocus = 0
+    @State private var infoFocus = 0
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
     private var seats: [Seat] { LobbyLogic.seatsByJoin(snapshot.seats) }
@@ -37,11 +48,34 @@ struct LobbyView: View {
             ScrollView { content }.scrollDismissesKeyboard(.interactively)
         }
         .overlay { sheet }
+        .overlay { howToDialog }
         .overlay { launchConfirm }
         .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused,
                   onLeave: onLeave, onRoster: { playersOpen = true })
         .accessibilityIdentifier("stage-lobby")
         .sheet(isPresented: bindSheetShown) { bindSheet }
+        .onAppear(perform: autoOpenHowTo)
+    }
+
+    /// Opens the explainer on this device's first lobby, unless this seat already wrote tasks.
+    private func autoOpenHowTo() {
+        guard howTo == nil, HowTasksWork.shouldAutoOpen(seen: HowTasksWork.hasSeen(howToDefaults), stage: snapshot.game.stage,
+                                                        entries: snapshot.view) else { return }
+        howTo = .firstJoin(name: seats.first { $0.seatId == snapshot.mySeatId }?.name ?? "")
+    }
+
+    @ViewBuilder
+    private var howToDialog: some View {
+        if let entry = howTo {
+            HowTasksWorkView(entry: entry) { closeHowTo(entry) }
+        }
+    }
+
+    /// Marks the explainer seen; focus goes to the composer after the first-lobby one, else back to the bubble.
+    private func closeHowTo(_ entry: HowTasksWork.Entry) {
+        HowTasksWork.markSeen(howToDefaults)
+        howTo = nil
+        if case .firstJoin = entry { composerFocus += 1 } else { infoFocus += 1 }
     }
 
     /// The roster name the bind sheet is for, while the host has one open and it is still listed.
@@ -74,7 +108,8 @@ struct LobbyView: View {
                         seatNames: seats.filter { $0.seatId != snapshot.mySeatId }.map(\.name),
                         roster: snapshot.roster,
                         selfName: seats.first { $0.seatId == snapshot.mySeatId }?.name,
-                        seats: seats, selfSeatId: snapshot.mySeatId)
+                        seats: seats, selfSeatId: snapshot.mySeatId,
+                        onInfo: { howTo = .info }, focusRequest: composerFocus, infoFocusRequest: infoFocus)
                 .zIndex(1)
             if let deleteError { ErrorText(deleteError) }
             PoolListView(entries: snapshot.view, isHost: isHost, deleting: deleting) { remove($0) }
@@ -88,24 +123,41 @@ struct LobbyView: View {
 
     private var header: some View {
         LobbyHeaderView(count: LobbyLogic.poolCount(game: snapshot.game, mySeatId: snapshot.mySeatId),
+                        gameName: snapshot.game.gameName,
                         poolSize: snapshot.view.count, seats: seats, playersOpen: playersOpen,
                         showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu, menuFocus: $dotsFocused,
                         onTogglePlayers: { playersOpen.toggle() },
                         onMenu: { hostMenu = hostMenu == .menu ? nil : .menu })
     }
 
-    /// The bottom sheet, pinned to the screen's bottom edge and clear of the keyboard.
+    /// The bottom sheet, pinned to the screen's bottom edge and clear of the keyboard; expanded, it
+    /// sits over a scrim that collapses it on tap.
     private var sheet: some View {
         GeometryReader { geo in
             let inset = geo.safeAreaInsets.bottom
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                LobbySheetView(snapshot: snapshot, isHost: isHost, bottomInset: inset,
-                               onSetFreeSpace: { try await service.setOptions(gameId: gameId, freeSpace: $0) },
-                               onLaunch: requestLaunch, launchBusy: launchModel.busy, launchError: launchModel.error)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = max(0, $0 - inset) }
+            let screen = geo.size.height + geo.safeAreaInsets.top + inset
+            ZStack(alignment: .bottom) {
+                if sheetExpanded {
+                    Color.risoScrim
+                        .contentShape(Rectangle())
+                        .onTapGesture { sheetExpanded = false }
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LobbySheetView(snapshot: snapshot, isHost: isHost, bottomInset: inset, expanded: $sheetExpanded,
+                                   maxHeight: min(screen * 0.66, 620),
+                                   onLaunch: requestLaunch, launchBusy: launchModel.busy, launchError: launchModel.error,
+                                   animateWaiting: animateWaiting)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        // The pool pads for the collapsed sheet; the expanded one floats over the scrim.
+                        if !sheetExpanded { sheetHeight = max(0, $0 - inset) }
+                    }
+                }
             }
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea(edges: [.top, .bottom])
+            .animation(reduceMotion ? nil : LobbySheetView.spring, value: sheetExpanded)
         }
         .ignoresSafeArea(.keyboard)
     }
@@ -155,6 +207,8 @@ struct LobbyView: View {
 struct LobbyHeaderView: View {
     /// "{dealable to me} / {tasks per board}" (`LobbyLogic.poolCount`).
     let count: String
+    /// The host's game name, shown under the title when set.
+    var gameName: String? = nil
     /// Every task in the pool.
     let poolSize: Int
     /// Seats in join order.
@@ -167,18 +221,28 @@ struct LobbyHeaderView: View {
     let onMenu: () -> Void
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 10) {
-                title
-                Spacer(minLength: 0)
-                actions
+        VStack(alignment: .leading, spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 10) {
+                    title
+                    Spacer(minLength: 0)
+                    actions
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    title
+                    actions
+                }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                title
-                actions
+            .frame(minHeight: 44)
+            // Under "Pool", outside the fit test so a long name never pushes the avatars to a second line.
+            if let gameName, !gameName.isEmpty {
+                Text(gameName)
+                    .font(.risoBody(13, .semibold))
+                    .foregroundStyle(Color.risoMuted)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("game-name")
             }
         }
-        .frame(minHeight: 44)
     }
 
     private var title: some View {
