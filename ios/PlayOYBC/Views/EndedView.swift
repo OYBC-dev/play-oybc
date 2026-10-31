@@ -6,7 +6,6 @@ import SwiftUI
 struct EndedView: View {
     let snapshot: GameSnapshot
     var onHome: () -> Void = {}
-    var timeZone: TimeZone = .current
 
     var body: some View {
         RisoPage(gutter: Riso.gutter, top: 10) {
@@ -17,7 +16,7 @@ struct EndedView: View {
                     .foregroundStyle(Color.risoInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            LeaderboardView(bingos: snapshot.bingos, timeZone: timeZone)
+            LeaderboardView(standings: snapshot.standings)
                 .padding(Riso.cardPadding)
                 .risoCard()
                 .risoHardShadow(Riso.Shadow.card)

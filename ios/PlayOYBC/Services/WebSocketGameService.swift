@@ -191,6 +191,9 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
 
     func deleteTask(gameId: String, taskId: String) async throws { try await actVoid(gameId, "deleteTask", ["taskId": taskId]) }
     func launch(gameId: String) async throws { try await actVoid(gameId, "launch", [:]) }
+    func setOptions(gameId: String, freeSpace: Bool) async throws {
+        try await actVoid(gameId, "setOptions", ["freeSpace": freeSpace])
+    }
 
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         try await act(gameId, "mark", ["cellIndex": cellIndex, "marked": marked])

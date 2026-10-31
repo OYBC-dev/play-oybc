@@ -7,18 +7,44 @@ import type {
   PoolViewEntry,
   ReclaimDoc,
   SeatDoc,
+  Standing,
   ToggleMarkRes,
   WhoAmIRes,
 } from 'game-core';
 
+/** Tasks per board when a frame does not say (free space off). */
+export const DEFAULT_TASKS_PER_BOARD = 25;
+
+/**
+ * The `game` section as clients see it: game-core's `GameDoc` plus the room's options and per-seat pool
+ * counts. The extra fields are optional (older frames and the legacy backend omit them); read them through
+ * `freeSpaceOf` / `tasksPerBoardOf` / `dealableFor`.
+ */
+export type SnapshotGame = GameDoc & {
+  freeSpace?: boolean;
+  /** Tasks each board needs: 24 with free space, else 25. */
+  tasksPerBoard?: number;
+  /** seatId → tasks guaranteed dealable to that seat. */
+  dealable?: Record<string, number>;
+};
+
+/** Whether the board centre is free (false when the frame does not say). */
+export const freeSpaceOf = (game: SnapshotGame): boolean => game.freeSpace ?? false;
+/** Tasks each board needs (`DEFAULT_TASKS_PER_BOARD` when the frame does not say). */
+export const tasksPerBoardOf = (game: SnapshotGame): number => game.tasksPerBoard ?? DEFAULT_TASKS_PER_BOARD;
+/** Tasks dealable to `seatId` (0 when the frame does not say). */
+export const dealableFor = (game: SnapshotGame, seatId: string): number => game.dealable?.[seatId] ?? 0;
+
 /** Everything one seat can see of a game, merged from the server's listeners. */
 export interface GameSnapshot {
-  game: GameDoc;
+  game: SnapshotGame;
   mySeatId: string;
   seats: Array<SeatDoc & { seatId: string }>;
   view: PoolViewEntry[];
   board: BoardDoc | null;
   bingos: BingoDoc[];
+  /** The leaderboard in server order; empty before launch or when the frame does not carry it. */
+  standings: Standing[];
   /** Pending reclaims; only populated while this seat is the host. */
   reclaims: Array<ReclaimDoc & { id: string }>;
 }
@@ -38,6 +64,8 @@ export interface GameClient {
   addTask(gameId: string, text: string, taskId?: string): Promise<void>;
   deleteTask(gameId: string, taskId: string): Promise<void>;
   launch(gameId: string): Promise<void>;
+  /** Host, lobby only: sets the game's options. */
+  setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void>;
   /** Sets the square to `marked` (idempotent on retry). */
   toggleMark(gameId: string, cellIndex: number, marked: boolean): Promise<ToggleMarkRes>;
   end(gameId: string): Promise<void>;

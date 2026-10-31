@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BoardDoc, ToggleMarkRes } from 'game-core';
@@ -16,6 +18,71 @@ const user = () => userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimer
 
 beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
 afterEach(() => vi.useRealTimers());
+
+/** The declarations of the rule whose selector is exactly `selector` in BoardGrid.module.css. */
+function rule(selector: string): string {
+  const css = readFileSync(`${process.cwd()}/src/pages/play/BoardGrid.module.css`, 'utf8');
+  const start = css.indexOf(`${selector} {`);
+  if (start < 0) throw new Error(`no rule ${selector}`);
+  return css.slice(start, css.indexOf('}', start));
+}
+
+describe('BoardGrid colours and mentions', () => {
+  const mention = { kind: 'task', taskId: 'm', text: 'Cody does a cartwheel', refs: [[0, 4]] as Array<[number, number]> } as const;
+
+  it('a cell with refs carries data-ref, renders the name in <b> and keeps a plain label', () => {
+    const b = board();
+    b.cells[3] = mention;
+    render(<BoardGrid board={b} onToggle={async () => ok} />);
+    const cell = screen.getByRole('button', { name: 'Cody does a cartwheel' });
+    expect(cell).toHaveAttribute('data-ref', 'true');
+    expect(cell.querySelector('b')).toHaveTextContent(/^Cody$/);
+    expect(cell.textContent).toBe('Cody does a cartwheel');
+    expect(screen.getByRole('button', { name: 'Task 4' })).not.toHaveAttribute('data-ref');
+  });
+
+  it('empty refs are a plain task', () => {
+    const b = board();
+    b.cells[3] = { kind: 'task', taskId: 'p', text: 'Plain', refs: [] };
+    render(<BoardGrid board={b} onToggle={async () => ok} />);
+    const cell = screen.getByRole('button', { name: 'Plain' });
+    expect(cell).not.toHaveAttribute('data-ref');
+    expect(cell.querySelector('b')).toBeNull();
+  });
+
+  it('marked = red + on-colour; marked with refs = gold + ink-static; a completed line = green + on-colour + halftone', () => {
+    expect(rule(".cell[data-marked='true']")).toContain('background: var(--riso-red)');
+    expect(rule(".cell[data-marked='true']")).toContain('color: var(--riso-on-color)');
+    expect(rule(".cell[data-marked='true'][data-ref='true']")).toContain('background: var(--riso-gold)');
+    expect(rule(".cell[data-marked='true'][data-ref='true']")).toContain('color: var(--riso-ink-static)');
+    // Declared after the ref rule with the same specificity, so a completed line wins over both.
+    expect(rule(".cell[data-marked='true'][data-highlight='true']")).toContain('background: var(--riso-green)');
+    expect(rule(".cell[data-marked='true'][data-highlight='true']")).toContain('color: var(--riso-on-color)');
+    const css = readFileSync(`${process.cwd()}/src/pages/play/BoardGrid.module.css`, 'utf8');
+    expect(css.indexOf("[data-highlight='true'] {")).toBeGreaterThan(css.indexOf("[data-ref='true'] {"));
+
+    const b = board({ marks: Array.from({ length: 25 }, (_, i) => i === 12 || i < 5 || i === 7), completedLines: ['row_0'] });
+    b.cells[0] = mention;
+    b.cells[7] = { ...mention, taskId: 'n', text: 'Cody sings' };
+    render(<BoardGrid board={b} onToggle={async () => ok} />);
+    const inLine = screen.getByRole('button', { name: 'Cody does a cartwheel' });
+    expect(inLine).toHaveAttribute('data-highlight', 'true');
+    expect(inLine).toHaveClass('riso-halftone');
+    const gold = screen.getByRole('button', { name: 'Cody sings' });
+    expect(gold).toHaveAttribute('data-marked', 'true');
+    expect(gold).toHaveAttribute('data-ref', 'true');
+    expect(gold).toHaveAttribute('data-highlight', 'false');
+  });
+
+  it('with free space off the centre is an ordinary task: tapping it marks it', async () => {
+    const cells = Array.from({ length: 25 }, (_, i) => ({ kind: 'task', taskId: `t${i}`, text: `Task ${i}` } as const));
+    const onToggle = vi.fn(async () => ok);
+    render(<BoardGrid board={{ cells, marks: Array(25).fill(false), completedLines: [], announcedLines: [] }} onToggle={onToggle} />);
+    expect(screen.queryByText('Free')).toBeNull();
+    await user().click(screen.getByRole('button', { name: 'Task 12' }));
+    expect(onToggle).toHaveBeenCalledWith(12, true);
+  });
+});
 
 describe('BoardGrid', () => {
   it('renders 25 cells with a Free center; marked and highlighted styling', () => {

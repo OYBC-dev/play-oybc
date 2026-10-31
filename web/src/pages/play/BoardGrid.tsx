@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BoardDoc, ToggleMarkRes } from 'game-core';
 import { errorMessage } from '../../game/errorMessages';
 import { cellsInLines } from './cellsInLines';
+import { MentionText } from './MentionText';
 import { Sheet } from './Sheet';
 import styles from './BoardGrid.module.css';
 
@@ -17,7 +18,8 @@ export interface BoardGridProps {
 }
 
 /**
- * The 5x5 board. Taps flip optimistically; the server's marks (next snapshot) win,
+ * The 5x5 board; mentions render bold. Marked squares are red, marked squares naming a player
+ * (`data-ref`) gold, squares in a completed line green. Taps flip optimistically; the server's marks (next snapshot) win,
  * a rejected call rolls back and shows its error. A cell in flight is disabled and
  * carries `data-pending`; its CSS only dims it once the call has taken longer
  * than 250 ms (a transition delay, so quick calls never flash).
@@ -88,6 +90,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
           const free = cell.kind === 'free';
           const marked = free || (overrides.get(i) ?? board.marks[i]);
           const label = cell.kind === 'free' ? 'Free' : cell.text;
+          const ref = cell.kind === 'task' && (cell.refs?.length ?? 0) > 0;
           const inLine = !free && marked && highlighted.has(i);
           return (
             <button
@@ -98,6 +101,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
               aria-pressed={free ? undefined : marked}
               data-marked={String(marked)}
               data-highlight={String(inLine)}
+              data-ref={ref ? 'true' : undefined}
               data-pending={String(!readOnly && inFlight.has(i))}
               data-free={String(free)}
               aria-disabled={readOnly && !free ? true : undefined}
@@ -113,7 +117,7 @@ export function BoardGrid({ board, onToggle, readOnly = false }: BoardGridProps)
                 if (!readOnly) void tap(i);
               }}
             >
-              <span className={styles.text}>{label}</span>
+              <span className={styles.text}>{cell.kind === 'free' ? label : <MentionText text={cell.text} refs={cell.refs} />}</span>
             </button>
           );
         })}

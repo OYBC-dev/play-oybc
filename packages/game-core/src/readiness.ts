@@ -1,17 +1,49 @@
-import { TASKS_PER_BOARD } from './constants';
+import { tasksPerBoard } from './deal';
 import { PoolTask, Seat } from './types';
 import { canBeDealt } from './visibility';
 
 /**
- * Launch readiness: for each seat with fewer than 24 dealable tasks, how many more it needs.
+ * Tasks each seat is guaranteed at launch: the non-`@anyone` tasks dealable to
+ * it, plus `floor(pureAnyone / seats.length)` where `pureAnyone` counts only
+ * `@anyone` tasks that name no seat — the minimum `assignAnyone` hands every
+ * seat. A mixed `@anyone` + `@Name` task counts toward no seat (neither the
+ * share nor the per-seat count). A seat at or above `tasksPerBoard` therefore always deals.
  *
- * @returns Map of seatId to shortfall; seats that are ready are omitted.
+ * @param opts the game's options (accepted for symmetry with `shortfalls`; the count does not depend on them)
+ * @returns seatId → guaranteed dealable count.
  */
-export function shortfalls(tasks: readonly PoolTask[], seats: readonly Seat[]): Record<string, number> {
+export function dealableCounts(
+  tasks: readonly PoolTask[],
+  seats: readonly Seat[],
+  opts: { freeSpace: boolean },
+): Record<string, number> {
+  void opts;
+  const anyoneCount = tasks.filter((t) => t.mentions.anyone && t.mentions.seatIds.length === 0).length;
+  const anyoneShare = seats.length ? Math.floor(anyoneCount / seats.length) : 0;
   const out: Record<string, number> = {};
   for (const seat of seats) {
-    const eligible = tasks.filter((t) => canBeDealt(t, seat.seatId)).length;
-    if (eligible < TASKS_PER_BOARD) out[seat.seatId] = TASKS_PER_BOARD - eligible;
+    out[seat.seatId] = tasks.filter((t) => !t.mentions.anyone && canBeDealt(t, seat.seatId)).length + anyoneShare;
+  }
+  return out;
+}
+
+/**
+ * Launch readiness: for each seat whose guaranteed dealable count (see
+ * {@link dealableCounts}) is below `tasksPerBoard(opts.freeSpace)`, how many more it needs.
+ *
+ * @param opts defaults to free space on (24 per board)
+ * @returns Map of seatId to shortfall; seats that are ready are omitted.
+ */
+export function shortfalls(
+  tasks: readonly PoolTask[],
+  seats: readonly Seat[],
+  opts: { freeSpace: boolean } = { freeSpace: true },
+): Record<string, number> {
+  const needed = tasksPerBoard(opts.freeSpace);
+  const counts = dealableCounts(tasks, seats, opts);
+  const out: Record<string, number> = {};
+  for (const seat of seats) {
+    if (counts[seat.seatId] < needed) out[seat.seatId] = needed - counts[seat.seatId];
   }
   return out;
 }

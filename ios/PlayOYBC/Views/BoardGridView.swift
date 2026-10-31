@@ -19,7 +19,8 @@ struct BoardGridView: View {
 
     static let longPressSeconds = 0.45
 
-    /// Whether a tap flips the square: never on a final board, the Free square, or a square in flight.
+    /// Whether a tap flips the square: never on a final board, the Free square (`kind == free`, not
+    /// index 12), or a square in flight.
     static func acceptsTap(readOnly: Bool, free: Bool, pending: Bool) -> Bool { !readOnly && !free && !pending }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -56,10 +57,11 @@ struct BoardGridView: View {
     @ViewBuilder private func cell(_ i: Int, highlighted: Bool, lineLimit: Int) -> some View {
         let cell = board.cells[i]
         let free = cell == .free
-        // Task text arrives mention-resolved from the server; shown as is.
-        let text: String = { if case let .task(_, t) = cell { return t }; return "Free" }()
+        // Display text arrives mention-resolved from the server; `refs` mark the names to bold.
+        let text = cell.text ?? "Free"
         let marked = free || (board.marks.indices.contains(i) && board.marks[i])
-        let style = CellStyle(free: free, marked: marked, highlighted: highlighted, pending: !readOnly && slow.contains(i))
+        let style = CellStyle(free: free, marked: marked, highlighted: highlighted, ref: !cell.refs.isEmpty,
+                              pending: !readOnly && slow.contains(i))
         let shape = RoundedRectangle(cornerRadius: Riso.cellRadius)
         ZStack(alignment: free ? .center : .topLeading) {
             if style.halftone {
@@ -67,7 +69,7 @@ struct BoardGridView: View {
             } else {
                 shape.fill(style.fill)
             }
-            label(text, free: free, lineLimit: lineLimit)
+            label(text, refs: cell.refs, free: free, lineLimit: lineLimit)
                 .foregroundStyle(style.foreground)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -93,13 +95,12 @@ struct BoardGridView: View {
         .accessibilityAction(named: "Details") { if !free { detail = text } }
     }
 
-    /// Free: Bricolage 800 16 centred. Tasks: Archivo 600 10, top-left, clamped.
-    @ViewBuilder private func label(_ text: String, free: Bool, lineLimit: Int) -> some View {
+    /// Free: Bricolage 800 16 centred. Tasks: Archivo 600 10 (mentions 800), top-left, clamped.
+    @ViewBuilder private func label(_ text: String, refs: [[Int]], free: Bool, lineLimit: Int) -> some View {
         if free {
             Text(text).font(.risoHead(16, .extraBold))
         } else {
-            Text(text)
-                .font(.risoBody(10, .semibold))
+            Text(MentionText.attributed(text, refs: refs, font: .risoBody(10, .semibold), boldFont: .risoBody(10, .extraBold)))
                 .tracking(-0.1)
                 .lineSpacing(0.5)
                 .multilineTextAlignment(.leading)
@@ -111,13 +112,16 @@ struct BoardGridView: View {
     }
 }
 
-/// One square's look (README §5): free = ink with paper "Free"; in a completed line = gold,
-/// ink-static text, halftone overprint; marked = red with on-color text; unmarked = paper-2.
+/// One square's look (PARTY_FEATURES §4): free = ink with paper "Free"; in a completed line =
+/// green, on-color text, halftone overprint; marked with a mention (`ref`) = gold, ink-static
+/// text; marked = red with on-color text; unmarked = paper-2. A completed line wins over marked.
 /// A square in flight past 250 ms (`pending`) dims to 55% and drops its shadow.
 struct CellStyle: Equatable {
     var free: Bool
     var marked: Bool
     var highlighted: Bool
+    /// The task mentions a player (`refs` non-empty).
+    var ref: Bool = false
     var pending: Bool = false
 
     /// In a completed line (the free square keeps its ink look).
@@ -125,16 +129,18 @@ struct CellStyle: Equatable {
 
     var fill: Color {
         if free { return .risoInk }
-        if inLine { return .risoGold }
-        return marked ? .risoRed : .risoPaper2
+        if inLine { return .risoGreen }
+        if marked { return ref ? .risoGold : .risoRed }
+        return .risoPaper2
     }
 
     var foreground: Color {
         // Paper on ink: both adaptive, so "Free" reads in either mode (on-color would vanish
         // on the cream dark-mode ink).
         if free { return .risoPaper }
-        if inLine { return .risoInkStatic }
-        return marked ? .risoOnColor : .risoInk
+        if inLine { return .risoOnColor }
+        if marked { return ref ? .risoInkStatic : .risoOnColor }
+        return .risoInk
     }
 
     /// Halftone overprint on completed-line squares.

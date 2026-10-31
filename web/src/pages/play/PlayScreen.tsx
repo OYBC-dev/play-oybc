@@ -37,7 +37,7 @@ export function PlayScreen({ client, snapshot, gameId, onLeave }: {
       )}
       {leaderboard && (
         <Sheet title="Leaderboard" onClose={() => setLeaderboard(false)}>
-          <Leaderboard bingos={bingos} />
+          <Leaderboard standings={snapshot.standings} />
         </Sheet>
       )}
     </div>

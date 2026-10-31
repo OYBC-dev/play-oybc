@@ -58,6 +58,7 @@ export class FakeGameClient implements GameClient {
   }
   deleteTask(gameId: string, taskId: string) { return this.result('deleteTask', [gameId, taskId], undefined); }
   launch(gameId: string) { return this.result('launch', [gameId], undefined); }
+  setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void> { return this.result('setOptions', [gameId, options], undefined); }
   end(gameId: string) { return this.result('end', [gameId], undefined); }
   toggleMark(gameId: string, cellIndex: number, marked: boolean) {
     return this.result<ToggleMarkRes>('toggleMark', [gameId, cellIndex, marked], { marks: [], completedLines: [], newBingoSeqs: [] });

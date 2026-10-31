@@ -1,4 +1,4 @@
-import type { BingoDoc, BoardDoc, GameDoc, PoolViewEntry, ReclaimDoc, Stage } from 'game-core';
+import type { BingoDoc, BoardDoc, PoolViewEntry, ReclaimDoc, Stage, Standing } from 'game-core';
 import type { GameSnapshot } from './GameClient';
 
 /*
@@ -7,14 +7,14 @@ import type { GameSnapshot } from './GameClient';
  */
 
 /** Operations a seat can run over `act`. */
-export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost';
+export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions';
 
 /** The server's answer to `hello`. `seatId` is null when this uid holds no seat yet. */
 export interface Welcome { uid: string; gameId: string; seatId: string | null; stage: Stage; rev: number }
 
 interface StateMsg {
-  t: 'state'; rev: number; game?: GameDoc; seats?: GameSnapshot['seats']; view?: PoolViewEntry[];
-  board?: BoardDoc | null; bingos?: BingoDoc[]; reclaims?: GameSnapshot['reclaims'];
+  t: 'state'; rev: number; game?: GameSnapshot['game']; seats?: GameSnapshot['seats']; view?: PoolViewEntry[];
+  board?: BoardDoc | null; bingos?: BingoDoc[]; standings?: Standing[]; reclaims?: GameSnapshot['reclaims'];
 }
 type ServerMsg =
   | ({ t: 'welcome' } & Welcome)
@@ -82,7 +82,7 @@ interface Pending<T> { resolve: (v: T) => void; reject: (e: Error) => void; dead
 interface QueuedAct extends Pending<unknown> { id: string; op: Op; args: Record<string, unknown> }
 type Sections = Partial<Omit<GameSnapshot, 'mySeatId'>>;
 /** The sections a `state` frame may carry; each present one replaces the held copy wholesale. */
-const SECTION_KEYS = ['game', 'seats', 'view', 'board', 'bingos', 'reclaims'] as const;
+const SECTION_KEYS = ['game', 'seats', 'view', 'board', 'bingos', 'standings', 'reclaims'] as const;
 
 /** Every live room by code: one socket per code per tab, however many components ask (StrictMode included). */
 const rooms = new Map<string, RoomConnection>();
@@ -486,11 +486,16 @@ export class RoomConnection {
     if (snap) this.snapshotListeners.forEach((l) => l(snap));
   }
 
-  /** The merged snapshot once game, seats, view and bingos are known and this uid holds a seat. */
+  /**
+   * The merged snapshot once game, seats, view and bingos are known and this uid holds a seat;
+   * `standings` is not waited for (absent = `[]`).
+   */
   private snapshot(): GameSnapshot | null {
-    const { game, seats, view, board, bingos, reclaims } = this.sections;
+    const { game, seats, view, board, bingos, standings, reclaims } = this.sections;
     if (!this.seatId || !game || !seats || !view || !bingos) return null;
-    return { game, mySeatId: this.seatId, seats, view, board: board ?? null, bingos, reclaims: reclaims ?? [] };
+    return {
+      game, mySeatId: this.seatId, seats, view, board: board ?? null, bingos, standings: standings ?? [], reclaims: reclaims ?? [],
+    };
   }
 
   private failHello(e: Error): void {

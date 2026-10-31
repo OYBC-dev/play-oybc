@@ -1,6 +1,7 @@
 import { RisoCard } from '../../components/riso/RisoCard';
 import { RisoIcon } from '../../components/riso/RisoIcon';
 import { RisoMiniBoardArt } from '../../components/riso/RisoMiniBoardArt';
+import { MentionText } from '../play/MentionText';
 import { nonsenseFor } from './nonsense';
 import type { PoolRow } from './usePoolEdits';
 import styles from './PoolList.module.css';
@@ -20,7 +21,7 @@ function BlurredText({ taskId }: { taskId: string }) {
 }
 
 /**
- * The shared pool in one card. Rows that mention you arrive without text and render blurred; a row the
+ * The shared pool in one card, mentions in bold. Rows that mention you arrive without text and render blurred; a row the
  * server has not confirmed yet carries `data-pending` (dimmed after 250 ms, like a board cell in flight).
  */
 export function PoolList({
@@ -46,7 +47,7 @@ export function PoolList({
         {entries.map((e) => (
           <li key={e.taskId} className={styles.entry} data-blurred={e.text === null || undefined} data-pending={e.pending || undefined}>
             <div className={styles.body}>
-              {e.text === null ? <BlurredText taskId={e.taskId} /> : <span className={styles.text}>{e.text}</span>}
+              {e.text === null ? <BlurredText taskId={e.taskId} /> : <span className={styles.text}><MentionText text={e.text} refs={e.refs} /></span>}
               <span className={styles.author}>{e.mine ? 'You' : e.authorName}</span>
             </div>
             {(e.mine || isHost) && (

@@ -1,10 +1,13 @@
 import type { BingoDoc, BoardCell, PoolTask, ReclaimDoc, Seat, Stage, TaskMentions } from 'game-core';
 import type { Persistence } from './persistence';
 
-/** The single game row. `rev` is the change counter clients use to drop stale pushes. */
+/**
+ * The single game row. `rev` is the change counter clients use to drop stale pushes; `freeSpace` is the host's
+ * free-centre option (false for rooms stored before the option existed).
+ */
 export interface GameRow {
   gameId: string; code: string; stage: Stage; hostSeatId: string; createdAt: number;
-  launchedAt?: number; endedAt?: number; bingoCount: number; reviewGate: boolean; rev: number; lastMutationAt: number;
+  launchedAt?: number; endedAt?: number; bingoCount: number; reviewGate: boolean; freeSpace: boolean; rev: number; lastMutationAt: number;
 }
 export interface SeatRow { seatId: string; name: string; nameKey: string; joinedAt: number }
 export interface TaskRow { taskId: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number }

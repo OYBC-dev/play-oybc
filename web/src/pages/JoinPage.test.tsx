@@ -13,6 +13,7 @@ const snapshot: GameSnapshot = {
   view: [],
   board: null,
   bingos: [],
+  standings: [],
   reclaims: [],
 };
 

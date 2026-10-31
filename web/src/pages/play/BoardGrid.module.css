@@ -24,7 +24,9 @@
 .cell:disabled { cursor: default; }
 .cell:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: 2px; }
 .cell[data-marked='true'] { background: var(--riso-red); color: var(--riso-on-color); animation: pop var(--riso-anim-cell-pop); }
-.cell[data-highlight='true'] { background: var(--riso-gold); color: var(--riso-ink-static); }
+.cell[data-marked='true'][data-ref='true'] { background: var(--riso-gold); color: var(--riso-ink-static); }
+/* A completed line wins over both marked colours. */
+.cell[data-marked='true'][data-highlight='true'] { background: var(--riso-green); color: var(--riso-on-color); }
 .cell[data-free='true'] {
   align-items: center; justify-content: center; text-align: center; animation: none;
   background: var(--riso-ink); color: var(--riso-paper);

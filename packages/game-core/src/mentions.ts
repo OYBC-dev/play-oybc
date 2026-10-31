@@ -104,21 +104,30 @@ export function parseMentions(text: string, seats: readonly Seat[]): ParseMentio
   return { ok: true, mentions: { seatIds, someone, anyone } };
 }
 
-/** Rewrites each token for which `render` returns a string; other text is untouched. */
+/**
+ * Rewrites each token for which `render` returns a string; other text is
+ * untouched. The single scan-and-splice routine behind every mention rewrite.
+ *
+ * @returns the rewritten text and one `[start, end)` ref (UTF-16, in the
+ *   rewritten text) per rewritten token.
+ */
 function rewriteMentions(
   text: string,
   seats: readonly Seat[],
   render: (t: MentionToken) => string | null,
-): string {
+): { text: string; refs: Array<[number, number]> } {
+  const refs: Array<[number, number]> = [];
   let out = '';
   let last = 0;
   for (const t of scanMentions(text, seats)) {
     const value = render(t);
     if (value === null) continue;
-    out += text.slice(last, t.start) + value;
+    out += text.slice(last, t.start);
+    refs.push([out.length, out.length + value.length]);
+    out += value;
     last = t.end;
   }
-  return out + text.slice(last);
+  return { text: out + text.slice(last), refs };
 }
 
 /**
@@ -126,19 +135,40 @@ function rewriteMentions(
  * with `replacement`. Other text, `@anyone` and seat mentions are untouched.
  */
 export function replaceSomeone(text: string, replacement: string): string {
-  return rewriteMentions(text, [], (t) => (t.kind === 'someone' ? replacement : null));
+  return rewriteMentions(text, [], (t) => (t.kind === 'someone' ? replacement : null)).text;
 }
 
 /**
  * Board display text: `@Name` becomes the seat's name as the seat wrote it
  * (longest seat-name match), `@anyone` becomes "Anyone", and `@someone`
  * becomes `someoneName` (left verbatim when null). Unknown `@word`s are kept.
+ * Same as `resolveMentionRefs(...).text`.
  */
 export function resolveMentionDisplay(
   text: string,
   seats: readonly Seat[],
   someoneName: string | null,
 ): string {
+  return resolveMentionRefs(text, seats, someoneName).text;
+}
+
+/**
+ * Display text plus where each resolved mention sits in it. Resolution is
+ * {@link resolveMentionDisplay}'s: `@Name` → the seat's name, `@someone` →
+ * `someoneName`, `@anyone` → "Anyone". Each resolved mention yields one
+ * `[start, end)` ref in UTF-16 code units of the RESOLVED text. Unknown
+ * `@word`s, and `@someone` when `someoneName` is null, stay verbatim with no ref.
+ *
+ * @param text raw task text
+ * @param seats seats whose names `@Name` may match
+ * @param someoneName the name `@someone` resolves to, or null to keep it
+ * @returns `{ text, refs }`, refs in ascending order
+ */
+export function resolveMentionRefs(
+  text: string,
+  seats: readonly Seat[],
+  someoneName: string | null,
+): { text: string; refs: Array<[number, number]> } {
   return rewriteMentions(text, seats, (t) => {
     if (t.kind === 'seat') return t.seat.name;
     if (t.kind === 'anyone') return 'Anyone';

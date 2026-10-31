@@ -70,4 +70,25 @@ describe('applyMark', () => {
     expect(() => applyMark({ marks: base(), announcedLines: [] }, -1)).toThrow();
     expect(() => applyMark({ marks: base(), announcedLines: [] }, 1.5)).toThrow();
   });
+  describe('freeSpace:false', () => {
+    const empty = () => new Array(25).fill(false);
+    it('tapping 12 toggles it and the centre is not forced', () => {
+      const on = applyMark({ marks: empty(), announcedLines: [] }, 12, undefined, { freeSpace: false });
+      expect(on.marks[12]).toBe(true);
+      expect(on.changed).toBe(true);
+      const off = applyMark({ marks: on.marks, announcedLines: [] }, 12, undefined, { freeSpace: false });
+      expect(off.marks[12]).toBe(false);
+      const other = applyMark({ marks: empty(), announcedLines: [] }, 3, undefined, { freeSpace: false });
+      expect(other.marks[12]).toBe(false);
+    });
+    it('the centre counts toward lines', () => {
+      const m = empty(); [10, 11, 13, 14].forEach((i) => (m[i] = true));
+      const r = applyMark({ marks: m, announcedLines: [] }, 12, true, { freeSpace: false });
+      expect(r.newLines).toEqual(['row_2']);
+    });
+    it('default keeps the forced centre', () => {
+      const r = applyMark({ marks: empty(), announcedLines: [] }, 3);
+      expect(r.marks[12]).toBe(true);
+    });
+  });
 });

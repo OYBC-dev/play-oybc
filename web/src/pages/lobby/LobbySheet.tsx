@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import type { GameSnapshot } from '../../game/GameClient';
+import { dealableFor, freeSpaceOf, tasksPerBoardOf, type GameSnapshot } from '../../game/GameClient';
 import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
 import { RisoIcon } from '../../components/riso/RisoIcon';
 import { RisoSectionLabel } from '../../components/riso/RisoSectionLabel';
-import { MIN_POOL_SIZE } from './constants';
 import styles from './LobbySheet.module.css';
 
 /** QR tile colours are static (never themed) so the code always scans. */
@@ -52,23 +51,63 @@ function CopyLinkButton({ link, size, fullWidth }: { link: string; size?: 'small
 }
 
 /**
- * The lobby's fixed bottom sheet: game code, and for the host the shortfall lines,
- * a QR tile that expands to a large QR with Copy link / Done, and Launch. Players get
- * the code and Copy link. Reports its rendered height so the page can pad under it.
+ * The host's Free space switch: bound to `game.freeSpace`, never flipped ahead of the server;
+ * disabled while the change is in flight.
+ */
+function FreeSpaceRow({ on, onChange }: { on: boolean; onChange: (freeSpace: boolean) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const change = async (next: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onChange(next);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <label className={styles.option}>
+        <span className={styles.optionLabel}>Free space</span>
+        <input
+          type="checkbox"
+          role="switch"
+          className={styles.switch}
+          checked={on}
+          disabled={busy}
+          onChange={(e) => void change(e.currentTarget.checked)}
+        />
+      </label>
+      {error && <p className={`error ${styles.error}`} role="alert">{error}</p>}
+    </>
+  );
+}
+
+/**
+ * The lobby's fixed bottom sheet: game code with your `dealable / needed` count, and for the host the
+ * shortfall lines, a QR tile that expands to a large QR with Copy link / Done, the Free space switch,
+ * and Launch. Players get the code and Copy link. Reports its rendered height so the page can pad under it.
  */
 export function LobbySheet({
   snapshot,
   isHost,
   onLaunch,
+  onFreeSpace,
   onHeight,
 }: {
   snapshot: GameSnapshot;
   isHost: boolean;
   onLaunch: () => Promise<void>;
+  /** Host only: asks the server to turn free space on or off. */
+  onFreeSpace?: (freeSpace: boolean) => Promise<void>;
   /** Called with the sheet's height in px whenever it changes. */
   onHeight?: (px: number) => void;
 }) {
-  const { code } = snapshot.game;
+  const { game, mySeatId } = snapshot;
+  const { code } = game;
   const link = `${window.location.origin}/g/${code}`;
   const [qrOpen, setQrOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,8 +115,7 @@ export function LobbySheet({
   const ref = useRef<HTMLDivElement>(null);
 
   const lines = isHost ? shortfallLines(snapshot) : [];
-  const pool = snapshot.view.length;
-  const ready = isHost && lines.length === 0 && pool >= MIN_POOL_SIZE;
+  const ready = isHost && game.stage === 'lobby' && lines.length === 0;
 
   useEffect(() => {
     const el = ref.current;
@@ -104,6 +142,7 @@ export function LobbySheet({
   return (
     <div ref={ref} className={ready ? `${styles.sheet} ${styles.ready}` : styles.sheet} data-testid="lobby-sheet" data-ready={ready || undefined}>
       <div className={styles.handle} aria-hidden="true" />
+      {isHost && onFreeSpace && <FreeSpaceRow on={freeSpaceOf(game)} onChange={onFreeSpace} />}
       <div className={styles.row}>
         <div className={styles.info}>
           <RisoSectionLabel>Game code</RisoSectionLabel>
@@ -113,7 +152,7 @@ export function LobbySheet({
               {lines.map((l) => <div key={l} className={styles.short}>{l}</div>)}
             </div>
           )}
-          {isHost && !ready && lines.length === 0 && <div className={styles.count}>{pool} / {MIN_POOL_SIZE}</div>}
+          {lines.length === 0 && <div className={styles.count}>{dealableFor(game, mySeatId)} / {tasksPerBoardOf(game)}</div>}
         </div>
         {isHost ? (
           <>

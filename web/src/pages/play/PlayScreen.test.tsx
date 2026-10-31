@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import type { BingoDoc } from 'game-core';
+import type { BingoDoc, Standing } from 'game-core';
 import type { GameSnapshot } from '../../game/GameClient';
 import { FakeGameClient } from '../../game/fakeGameClient';
 import { EndedScreen } from './EndedScreen';
@@ -9,7 +9,7 @@ import { PlayScreen } from './PlayScreen';
 
 const noop = () => {};
 
-function snap(over: { host?: boolean; stage?: 'playing' | 'ended'; bingos?: BingoDoc[] } = {}): GameSnapshot {
+function snap(over: { host?: boolean; stage?: 'playing' | 'ended'; bingos?: BingoDoc[]; standings?: Standing[] } = {}): GameSnapshot {
   const cells = Array.from({ length: 25 }, (_, i) =>
     i === 12 ? ({ kind: 'free' } as const) : ({ kind: 'task', taskId: `t${i}`, text: `Task ${i}` } as const),
   );
@@ -20,10 +20,12 @@ function snap(over: { host?: boolean; stage?: 'playing' | 'ended'; bingos?: Bing
     view: [],
     board: { cells, marks: cells.map((_, i) => i === 12), completedLines: [], announcedLines: [] },
     bingos: over.bingos ?? [],
+    standings: over.standings ?? [],
     reclaims: [],
   };
 }
 const bingo = (seq: number, name: string): BingoDoc => ({ seq, seatId: 's2', name, line: 'row_0', playerBingoNumber: seq, at: Date.now(), status: 'announced' });
+const standing = (name: string, bingos: number): Standing => ({ seatId: 's2', name, bingos, marked: 6, bestLine: 5, firstBingoSeq: bingos ? 1 : null });
 
 describe('PlayScreen', () => {
   it('tapping a cell calls toggleMark with its index', async () => {
@@ -43,12 +45,14 @@ describe('PlayScreen', () => {
     await waitFor(() => expect(screen.queryByTestId('bingo-banner')).not.toBeInTheDocument());
   });
 
-  it('opens the leaderboard as a dialog; Escape closes', async () => {
+  it('opens the standings leaderboard as a dialog; Escape closes', async () => {
     const client = new FakeGameClient();
-    render(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" onLeave={noop} />);
+    render(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')], standings: [standing('Cody', 1)] })} gameId="g1" onLeave={noop} />);
     await userEvent.click(screen.getByRole('button', { name: 'Leaderboard' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Cody')).toBeInTheDocument();
+    expect(within(dialog).getByText('1 bingo')).toBeInTheDocument();
+    expect(within(dialog).getByText('6 squares')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -81,7 +85,7 @@ describe('PlayScreen', () => {
 
 describe('EndedScreen', () => {
   it('shows the leaderboard and a read-only final board', () => {
-    render(<MemoryRouter><EndedScreen client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')] })} /></MemoryRouter>);
+    render(<MemoryRouter><EndedScreen client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'ended', bingos: [bingo(1, 'Cody')], standings: [standing('Cody', 1)] })} /></MemoryRouter>);
     expect(screen.getByText('Cody')).toBeInTheDocument();
     const cells = screen.getAllByRole('button', { name: /Task|Free/ });
     expect(cells).toHaveLength(25);

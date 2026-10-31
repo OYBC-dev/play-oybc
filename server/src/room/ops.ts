@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, dealBoard, nameKey, normalizeName, parseMentions, shortfalls,
+  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, nameKey, normalizeName, parseMentions, shortfalls,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -63,11 +63,18 @@ export function claimGame(state: GameState, ctx: OpCtx, args: { gameId: string; 
   const seatId = ctx.newId();
   state.putGame({
     gameId: args.gameId, code: args.code, stage: 'lobby', hostSeatId: seatId, createdAt: ctx.now,
-    bingoCount: 0, reviewGate: false, rev: 0, lastMutationAt: ctx.now,
+    bingoCount: 0, reviewGate: false, freeSpace: false, rev: 0, lastMutationAt: ctx.now,
   });
   state.putSeat({ seatId, name, nameKey: nameKey(name), joinedAt: ctx.now });
   state.putMember(ctx.uid, seatId);
   return { result: { gameId: args.gameId, code: args.code, seatId }, push: { all: ['game', 'seats', 'view'] } };
+}
+
+/** A fresh board's marks: all clear, except the centre when the game has free space. */
+function freshMarks(freeSpace: boolean): boolean[] {
+  const marks = Array<boolean>(25).fill(false);
+  if (freeSpace) marks[CENTER_INDEX] = true;
+  return marks;
 }
 
 /**
@@ -105,15 +112,21 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   const push: Push = { all: ['game', 'seats', 'view'] };
   let board = null;
   if (game.stage === 'playing') {
+    // An `@anyone` task already on some board stays on that one board; plain tasks are shared across boards.
+    const excludeTaskIds = new Set<string>();
+    for (const b of state.boards.values()) {
+      for (const c of b.cells) if (c.kind === 'task' && state.tasks.get(c.taskId)?.mentions.anyone) excludeTaskIds.add(c.taskId);
+    }
     let cells;
     try {
-      cells = dealBoard(state.poolTasks(), [...state.seatList(), { seatId, name, joinedAt: ctx.now }], seatId, ctx.rng);
+      cells = dealBoard(state.poolTasks(), [...state.seatList(), { seatId, name, joinedAt: ctx.now }], seatId, ctx.rng, {
+        freeSpace: game.freeSpace, excludeTaskIds,
+      });
     } catch {
       throw new AppError('not-ready');
     }
-    const marks = Array<boolean>(25).fill(false);
-    marks[CENTER_INDEX] = true;
-    board = { seatId, cells, marks, completedLines: [], announcedLines: [] };
+    board = { seatId, cells, marks: freshMarks(game.freeSpace), completedLines: [], announcedLines: [] };
+    push.all.push('standings');
     push.perSeat = { [seatId]: ['board'] };
   }
   state.putSeat(seat);
@@ -148,6 +161,19 @@ export function addTask(state: GameState, ctx: OpCtx, args: { taskId: string; te
 }
 
 /**
+ * Host-only, lobby-only: sets the game's options (today only `freeSpace`).
+ * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`, `invalid-argument` (non-boolean `freeSpace`).
+ */
+export function setOptions(state: GameState, ctx: OpCtx, args: { freeSpace?: unknown }): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  requireHost(state, game, ctx.uid);
+  requireLobby(game);
+  if (typeof args.freeSpace !== 'boolean') throw new AppError('invalid-argument');
+  state.putGame({ ...game, freeSpace: args.freeSpace });
+  return { result: {}, push: { all: ['game'] } };
+}
+
+/**
  * Deletes a pool task in the lobby (author or host).
  * @throws AppError `permission-denied`, `wrong-stage`, `invalid-argument` (bad `taskId`), `not-found`.
  */
@@ -171,7 +197,8 @@ function requireHost(state: GameState, game: GameRow, uid: string): string {
 }
 
 /**
- * Host-only: deals every seat a board and moves the lobby to `playing`.
+ * Host-only: deals every seat a board and moves the lobby to `playing`. Each `@anyone` task is assigned to
+ * exactly one seat first (`assignAnyone`), so it lands on one board.
  * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`, `not-ready` (details.shortfalls).
  */
 export function launch(state: GameState, ctx: OpCtx, _args: Record<string, never>): OpOut<Record<string, never>> {
@@ -180,22 +207,24 @@ export function launch(state: GameState, ctx: OpCtx, _args: Record<string, never
   requireLobby(game);
   const tasks = state.poolTasks();
   const seats = state.seatList();
-  const short = shortfalls(tasks, seats);
+  const { freeSpace } = game;
+  const short = shortfalls(tasks, seats, { freeSpace });
   if (Object.keys(short).length > 0) throw new AppError('not-ready', { shortfalls: short });
+  const anyoneAssignment = assignAnyone(tasks, seats, ctx.rng);
   const perSeat: Record<string, Section[]> = {};
   for (const seat of seats) {
-    const marks = Array<boolean>(25).fill(false);
-    marks[CENTER_INDEX] = true;
-    state.putBoard({ seatId: seat.seatId, cells: dealBoard(tasks, seats, seat.seatId, ctx.rng), marks, completedLines: [], announcedLines: [] });
+    const cells = dealBoard(tasks, seats, seat.seatId, ctx.rng, { freeSpace, anyoneAssignment });
+    state.putBoard({ seatId: seat.seatId, cells, marks: freshMarks(freeSpace), completedLines: [], announcedLines: [] });
     perSeat[seat.seatId] = ['board'];
   }
   state.putGame({ ...game, stage: 'playing', launchedAt: ctx.now });
-  return { result: {}, push: { all: ['game'], perSeat } };
+  return { result: {}, push: { all: ['game', 'standings'], perSeat } };
 }
 
 /**
  * Sets (`marked` given) or flips (omitted) one square; each newly completed line appends an announced bingo.
- * A set to the value already held changes nothing and pushes nothing.
+ * Pushes the caller's board and everyone's standings. A set to the value already held changes nothing and pushes nothing.
+ * Without free space the centre is an ordinary square.
  * @throws AppError `invalid-cell`, `game-not-found`, `permission-denied`, `wrong-stage`.
  */
 export function mark(state: GameState, ctx: OpCtx, args: { cellIndex: number; marked?: boolean }): OpOut<ToggleMarkRes> {
@@ -206,7 +235,7 @@ export function mark(state: GameState, ctx: OpCtx, args: { cellIndex: number; ma
   const seatId = requireMember(state, ctx.uid);
   const board = state.boards.get(seatId);
   if (game.stage !== 'playing' || !board) throw new AppError('wrong-stage');
-  const applied = applyMark(board, cellIndex, marked);
+  const applied = applyMark(board, cellIndex, marked, { freeSpace: game.freeSpace });
   if (!applied.changed && marked !== undefined) {
     return { result: { marks: board.marks, completedLines: board.completedLines, newBingoSeqs: [] }, push: { all: [] } };
   }
@@ -223,10 +252,10 @@ export function mark(state: GameState, ctx: OpCtx, args: { cellIndex: number; ma
     newBingoSeqs.push(seq);
   }
   state.putBoard({ ...board, marks: applied.marks, completedLines: applied.completedLines, announcedLines });
-  const push: Push = { all: [], perSeat: { [seatId]: ['board'] } };
+  const push: Push = { all: ['standings'], perSeat: { [seatId]: ['board'] } };
   if (newBingoSeqs.length) {
     state.putGame({ ...game, bingoCount });
-    push.all = ['bingos', 'game'];
+    push.all = ['bingos', 'game', 'standings'];
   }
   return { result: { marks: applied.marks, completedLines: applied.completedLines, newBingoSeqs }, push };
 }
@@ -240,7 +269,7 @@ export function end(state: GameState, ctx: OpCtx, _args: Record<string, never>):
   requireHost(state, game, ctx.uid);
   if (game.stage === 'ended') throw new AppError('wrong-stage');
   state.putGame({ ...game, stage: 'ended', endedAt: ctx.now });
-  return { result: {}, push: { all: ['game'] } };
+  return { result: {}, push: { all: ['game', 'standings'] } };
 }
 
 /**
@@ -325,5 +354,5 @@ export function adminSeats(state: GameState): Array<{ seatId: string; name: stri
 /** Every client-callable operation by its protocol name. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const OPS: Record<Op, (state: GameState, ctx: OpCtx, args: any) => OpOut<unknown>> = {
-  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost,
+  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions,
 };

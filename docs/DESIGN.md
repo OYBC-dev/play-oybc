@@ -115,8 +115,9 @@ cleanup PR removes the dev-dependency/esbuild bundling only if nothing else uses
 6. **Late join.** A player joining after Launch gets a board dealt from the locked pool
    under the same rules, and plays normally.
 7. **End.** Host taps End. Marking stops. Everyone sees the final leaderboard.
-- **Leaderboard** (bingos in the order they happened: name, time, which bingo number for
-  that player) is viewable at any time during play and after End.
+- **Leaderboard** is viewable at any time during play and after End. Since 2026-10-30 it ranks
+  players (bingo count, squares marked, best line) — see `docs/PARTY_FEATURES.md` §4; the
+  per-bingo list described in the original design is retired.
 
 ### 4.3 @mention tasks
 Three forms, typed inline in task text:
@@ -125,7 +126,7 @@ Three forms, typed inline in task text:
 | --- | --- | --- | --- | --- |
 | `@Name` | "@Cody says his catchphrase" | everyone except Cody | everyone except Cody | as written |
 | `@someone` | "@someone takes a shot" | **only the author** | everyone | resolved at deal time to a random player other than the board's owner ("Seth takes a shot") |
-| `@anyone` | "@anyone goes to the bathroom" | **only the author** | everyone | counts if any player other than the board's owner does it |
+| `@anyone` | "@anyone goes to the bathroom" | **only the author** | exactly one board (assigned at launch; `docs/PARTY_FEATURES.md` §2) | counts if any player other than the board's owner does it |
 
 - Blurred entries show that a task exists (and its author) but carry **no text** in what
   the server sends that player.
@@ -138,12 +139,12 @@ Three forms, typed inline in task text:
   Launch) can't be `@Name`d, because the pool is locked by then.
 
 ### 4.4 Boards & dealing
-- **5×5 with a FREE center** (fixed for MVP; no host setting). 24 tasks per board.
+- **5×5; the FREE center is a host option, off by default** (`docs/PARTY_FEATURES.md` §3). 25 tasks per board without it, 24 with it. Mentions render as bold names without the `@`; marked squares are red (plain), gold (reference) or green (in a completed line).
 - **Launch is enabled** only when **every** player's eligible pool (pool minus tasks that
-  `@Name` them) has ≥ 24 tasks. Until then the lobby shows who is short and by how
+  `@Name` them) has ≥ the board's task count (25, or 24 with free space on). Until then the lobby shows who is short and by how
   many ("Cody needs 3 more tasks"). *(Owner decision.)* Late joiners can't be `@Name`d
   (they weren't present when tasks were written), so their eligible pool is the whole
-  locked pool minus nothing — always ≥ 24.
+  pool minus the `@anyone` tasks already on a board (since 2026-10-30; `docs/PARTY_FEATURES.md` §3) — normally ≥ the board's task count.
 - Dealing is a per-player random draw from that player's eligible pool, with
   `@someone` resolved per board. Dealt boards are stored and never re-dealt.
 - Marks: tap toggles. Unmarking a square that was part of an already-announced bingo

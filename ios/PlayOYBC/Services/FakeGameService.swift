@@ -12,7 +12,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
     var whoAmIError: Error?
     var createResult: Result<CreateGameRes, Error> = .success(CreateGameRes(gameId: "g1", code: "ABCDE", seatId: "s1"))
     var joinResult: Result<JoinGameRes, Error> = .success(.joined(gameId: "g1", seatId: "s2"))
-    /// Thrown by every void call (addTask, deleteTask, launch, end, resolveReclaim, transferHost).
+    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, end, resolveReclaim, transferHost).
     var callError: Error?
     private(set) var toggledCells: [Int] = []
     /// The `marked` value sent with each toggle, parallel to `toggledCells`.
@@ -26,6 +26,8 @@ final class FakeGameService: GameService, @unchecked Sendable {
     private var continuation: AsyncThrowingStream<GameSnapshot, Error>.Continuation?
     private var reclaimContinuation: AsyncThrowingStream<ReclaimStatus, Error>.Continuation?
     private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
+    /// Cells released before their toggle reached the gate; the next gated toggle for that cell passes straight through.
+    private var released: Set<Int> = []
 
     /// toggleMark runs off the main actor and concurrently with itself; guards its shared state.
     private let lock = NSLock()
@@ -34,7 +36,14 @@ final class FakeGameService: GameService, @unchecked Sendable {
 
     func emit(_ s: GameSnapshot) { continuation?.yield(s) }
     func fail(_ e: Error) { continuation?.finish(throwing: e) }
-    func releaseToggle(cell: Int) { lock.withLock { gates.removeValue(forKey: cell) }?.resume() }
+    func releaseToggle(cell: Int) {
+        let waiting: CheckedContinuation<Void, Never>? = lock.withLock {
+            if let c = gates.removeValue(forKey: cell) { return c }
+            released.insert(cell)
+            return nil
+        }
+        waiting?.resume()
+    }
     func emitReclaim(_ s: ReclaimStatus) { reclaimContinuation?.yield(s) }
     func failReclaim(_ e: Error) { reclaimContinuation?.finish(throwing: e) }
 
@@ -61,9 +70,19 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func addTask(gameId: String, text: String) async throws { try void("addTask:\(text)") }
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
     func launch(gameId: String) async throws { try void("launch") }
+    func setOptions(gameId: String, freeSpace: Bool) async throws { try void("setOptions:\(freeSpace)") }
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         let gated = lock.withLock { toggledCells.append(cellIndex); toggledValues.append(marked); return gateToggle }
-        if gated { await withCheckedContinuation { c in lock.withLock { gates[cellIndex] = c } } }
+        if gated {
+            await withCheckedContinuation { c in
+                let passThrough: Bool = lock.withLock {
+                    if released.remove(cellIndex) != nil { return true }
+                    gates[cellIndex] = c
+                    return false
+                }
+                if passThrough { c.resume() }
+            }
+        }
         return try lock.withLock { toggleResultByCell[cellIndex] ?? toggleResult }.get()
     }
     func end(gameId: String) async throws { try void("end") }

@@ -59,7 +59,8 @@ struct LobbyView: View {
     }
 
     private var header: some View {
-        LobbyHeaderView(poolCount: snapshot.view.count, seats: seats, playersOpen: playersOpen,
+        LobbyHeaderView(count: LobbyLogic.poolCount(game: snapshot.game, mySeatId: snapshot.mySeatId),
+                        poolSize: snapshot.view.count, seats: seats, playersOpen: playersOpen,
                         showsMenu: menuModel.showsButton, menuOpen: hostMenu == .menu, menuFocus: $dotsFocused,
                         onTogglePlayers: { playersOpen.toggle() },
                         onMenu: { hostMenu = hostMenu == .menu ? nil : .menu })
@@ -71,7 +72,8 @@ struct LobbyView: View {
             let inset = geo.safeAreaInsets.bottom
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                LobbySheetView(snapshot: snapshot, isHost: isHost, bottomInset: inset) {
+                LobbySheetView(snapshot: snapshot, isHost: isHost, bottomInset: inset,
+                               onSetFreeSpace: { try await service.setOptions(gameId: gameId, freeSpace: $0) }) {
                     try await service.launch(gameId: gameId)
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = max(0, $0 - inset) }
@@ -92,11 +94,15 @@ struct LobbyView: View {
     }
 }
 
-/// The lobby header (README §3): large "Pool" title with the "{n} / 24" count; the avatar stack
+/// The lobby header (README §3): large "Pool" title with the "{mine} / {needed}" count and the
+/// "{n} in pool" total; the avatar stack
 /// and the game dots menu on the right. At large text
 /// sizes the avatars and menu wrap under the title.
 struct LobbyHeaderView: View {
-    let poolCount: Int
+    /// "{dealable to me} / {tasks per board}" (`LobbyLogic.poolCount`).
+    let count: String
+    /// Every task in the pool.
+    let poolSize: Int
     /// Seats in join order.
     let seats: [Seat]
     let playersOpen: Bool
@@ -129,8 +135,13 @@ struct LobbyHeaderView: View {
                 .foregroundStyle(Color.risoInk)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
-            Text("\(poolCount) / \(GameConstants.minPoolSize)")
+            Text(count)
                 .font(.risoHead(17, .extraBold))
+                .foregroundStyle(Color.risoMuted)
+                .lineLimit(1)
+                .accessibilityIdentifier("pool-count")
+            Text("\(poolSize) in pool")
+                .font(.risoBody(13, .bold))
                 .foregroundStyle(Color.risoMuted)
                 .lineLimit(1)
         }

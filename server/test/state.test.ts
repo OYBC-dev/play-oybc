@@ -2,9 +2,10 @@ import { env, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { GameState, type BoardRow, type GameRow, type TaskRow } from '../src/room/state';
 import { MemoryPersistence, SqlPersistence } from '../src/room/persistence';
+import { join, mark, type OpCtx } from '../src/room/ops';
 
 const game = (over: Partial<GameRow> = {}): GameRow => ({
-  gameId: 'g1', code: 'ABCD', stage: 'lobby', hostSeatId: 'A', createdAt: 1, bingoCount: 0, reviewGate: false, rev: 0, lastMutationAt: 0, ...over,
+  gameId: 'g1', code: 'ABCD', stage: 'lobby', hostSeatId: 'A', createdAt: 1, bingoCount: 0, reviewGate: false, freeSpace: false, rev: 0, lastMutationAt: 0, ...over,
 });
 const task = (over: Partial<TaskRow> = {}): TaskRow => ({
   taskId: 't1', text: 'hello', authorSeatId: 'A', mentions: { seatIds: ['B'], someone: false, anyone: false }, createdAt: 5, ...over,
@@ -12,6 +13,16 @@ const task = (over: Partial<TaskRow> = {}): TaskRow => ({
 const board = (): BoardRow => ({
   seatId: 'A', cells: [{ taskId: 't1', text: 'x' } as never], marks: [true, false], completedLines: ['r0'], announcedLines: [],
 });
+
+/** Replaces the room's `game` table with the pre-feature DDL (verbatim) holding one row at `stage`. */
+function createOldGameTable(sql: SqlStorage, stage: string): void {
+  sql.exec('DROP TABLE IF EXISTS game');
+  sql.exec(`CREATE TABLE game (id INTEGER PRIMARY KEY CHECK (id = 1), gameId TEXT NOT NULL, code TEXT NOT NULL, stage TEXT NOT NULL,
+    hostSeatId TEXT NOT NULL, createdAt INTEGER NOT NULL, launchedAt INTEGER, endedAt INTEGER, bingoCount INTEGER NOT NULL,
+    reviewGate INTEGER NOT NULL, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`);
+  sql.exec(`INSERT INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, rev, lastMutationAt)
+    VALUES (1, 'old', 'OLDGM', ?, 'A', 1, 2, NULL, 0, 0, 7, 3)`, stage);
+}
 
 describe('GameState', () => {
   it('putTask then reload returns the task with parsed mentions', () => {
@@ -118,6 +129,66 @@ describe('GameState', () => {
       expect('launchedAt' in plain).toBe(false);
       expect('endedAt' in plain).toBe(false);
       expect(plain.reviewGate).toBe(false);
+      expect(plain.freeSpace).toBe(false);
+      s.putGame(game({ freeSpace: true }));
+      expect(new GameState(new SqlPersistence(state.storage.sql)).game!.freeSpace).toBe(true);
     });
+  });
+
+  it('SqlPersistence migrates a mid-game room to free space on and keeps the free centre', async () => {
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName('T2c'));
+    await runInDurableObject(stub, (_i, state) => {
+      const sql = state.storage.sql;
+      // Seats, members, tasks and boards are unchanged by the feature: seed them through the current layer.
+      const seed = new SqlPersistence(sql);
+      seed.putSeat({ seatId: 'A', name: 'Ann', nameKey: 'ann', joinedAt: 1 });
+      seed.putMember('ua', 'A');
+      for (let i = 0; i < 50; i++) seed.putTask(task({ taskId: `t${i}`, text: `plain ${i}`, mentions: { seatIds: [], someone: false, anyone: false }, createdAt: i }));
+      const cells: BoardRow['cells'] = Array.from({ length: 24 }, (_, i) => ({ kind: 'task' as const, taskId: `t${i}`, text: `plain ${i}` }));
+      cells.splice(12, 0, { kind: 'free' });
+      const marks = Array<boolean>(25).fill(false);
+      marks[12] = true;
+      seed.putBoard({ seatId: 'A', cells, marks, completedLines: [], announcedLines: [] });
+      createOldGameTable(sql, 'playing');
+
+      const p = new SqlPersistence(sql);
+      expect(p.load().game).toMatchObject({ gameId: 'old', stage: 'playing', rev: 7, freeSpace: true });
+      const s = new GameState(p);
+      const ctx = (uid: string): OpCtx => ({ uid, now: 10, rng: () => 0.5, newId: () => `n${uid}` });
+      const tap = mark(s, ctx('ua'), { cellIndex: 12 });
+      expect(tap.result.marks[12]).toBe(true);
+      expect(s.boards.get('A')!.marks[12]).toBe(true);
+      const joined = join(s, ctx('ub'), { name: 'Bob' }).result as { seatId: string };
+      const late = s.boards.get(joined.seatId)!;
+      expect(late.cells[12]).toEqual({ kind: 'free' });
+      expect(late.marks[12]).toBe(true);
+      expect(late.cells.filter((c) => c.kind === 'task')).toHaveLength(24);
+    });
+  });
+
+  it('SqlPersistence migrates a lobby room to free space off, once', async () => {
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName('T2d'));
+    await runInDurableObject(stub, (_i, state) => {
+      const sql = state.storage.sql;
+      createOldGameTable(sql, 'lobby');
+      const p = new SqlPersistence(sql);
+      const loaded = p.load().game!;
+      expect(loaded).toMatchObject({ gameId: 'old', stage: 'lobby', freeSpace: false });
+      // A later stage with the option off must survive a second construction (the UPDATE runs only with the ALTER).
+      p.putGame({ ...loaded, stage: 'playing' });
+      expect(new SqlPersistence(sql).load().game).toMatchObject({ stage: 'playing', freeSpace: false });
+      p.putGame({ ...loaded, freeSpace: true });
+      expect(new SqlPersistence(sql).load().game!.freeSpace).toBe(true);
+    });
+  });
+
+  it('MemoryPersistence migrates a game row without freeSpace like SqlPersistence', () => {
+    const p = new MemoryPersistence();
+    const { freeSpace: _f, ...legacy } = game();
+    p.putGame(legacy as GameRow);
+    expect(p.load().game!.freeSpace).toBe(false);
+    expect(new GameState(p).game!.freeSpace).toBe(false);
+    p.putGame({ ...legacy, stage: 'playing' } as GameRow);
+    expect(p.load().game!.freeSpace).toBe(true);
   });
 });

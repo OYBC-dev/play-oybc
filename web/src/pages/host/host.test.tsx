@@ -29,6 +29,7 @@ function snap(over: { host?: boolean; stage?: 'lobby' | 'playing' | 'ended'; rec
     view: [],
     board: stage === 'lobby' ? null : { cells, marks: cells.map((_, i) => i === 12), completedLines: [], announcedLines: [] },
     bingos: [],
+    standings: [],
     reclaims: over.reclaims ?? [],
   };
 }

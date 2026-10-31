@@ -21,7 +21,7 @@ export function EndedScreen({ client, snapshot, gameId }: { client: GameClient; 
         <h1 className={styles.title}>Final leaderboard</h1>
       </header>
       <RisoCard padded>
-        <Leaderboard bingos={snapshot.bingos} />
+        <Leaderboard standings={snapshot.standings} />
       </RisoCard>
       {snapshot.board && (
         <section className={styles.board}>

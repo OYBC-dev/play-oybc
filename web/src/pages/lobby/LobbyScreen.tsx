@@ -1,10 +1,9 @@
 import { useCallback, useId, useState } from 'react';
-import type { GameClient, GameSnapshot } from '../../game/GameClient';
+import { dealableFor, tasksPerBoardOf, type GameClient, type GameSnapshot } from '../../game/GameClient';
 import { AvatarStack } from '../../components/riso/AvatarStack';
 import { HostMenu } from '../host/HostMenu';
 import { ReclaimPrompt } from '../host/ReclaimPrompt';
 import { AddTaskForm } from './AddTaskForm';
-import { MIN_POOL_SIZE } from './constants';
 import { LobbySheet } from './LobbySheet';
 import { PlayerList } from './PlayerList';
 import { PoolList } from './PoolList';
@@ -36,7 +35,8 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
       <header className={styles.header}>
         <div className={styles.title}>
           <h1 className={styles.pool}>Pool</h1>
-          <span className={styles.count} data-testid="pool-count">{snapshot.view.length} / {MIN_POOL_SIZE}</span>
+          <span className={styles.count} data-testid="pool-count">{dealableFor(game, mySeatId)} / {tasksPerBoardOf(game)}</span>
+          <span className={styles.inPool}>{snapshot.view.length} in pool</span>
         </div>
         <div className={styles.headerActions}>
           <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
@@ -53,7 +53,13 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
       <AddTaskForm onAdd={add} seatNames={others} />
       {deleteError && <p className="error" role="alert">{deleteError}</p>}
       <PoolList entries={rows} isHost={isHost} onDelete={(id) => void remove(id)} />
-      <LobbySheet snapshot={snapshot} isHost={isHost} onLaunch={() => client.launch(gameId)} onHeight={onSheetHeight} />
+      <LobbySheet
+        snapshot={snapshot}
+        isHost={isHost}
+        onLaunch={() => client.launch(gameId)}
+        onFreeSpace={(freeSpace) => client.setOptions(gameId, { freeSpace })}
+        onHeight={onSheetHeight}
+      />
     </div>
   );
 }
