@@ -79,9 +79,10 @@ describe('a retired name', () => {
     expect(canSeeText(t, 's3', ctx)).toBe(true);
     expect(canBeDealt(t, 's3', ctx)).toBe(true);
     expect(buildPoolView([t], seats, 's3', ctx)[0]).toMatchObject({ text: 'Jess sings', refs: [[0, 4]] });
-    // Jessie (s2) nearly carries the name, but the host said Jess is not coming: she reads it too.
-    expect(canSeeText(t, 's2', ctx)).toBe(true);
-    expect(dealableCounts([t], seats, { freeSpace: true, names: retired })).toEqual({ s1: 1, s2: 1, s3: 1 });
+    // Jessie (s2) nearly carries the name, so she is still kept from it (she may be Jess).
+    expect(canSeeText(t, 's2', ctx)).toBe(false);
+    expect(canBeDealt(t, 's2', ctx)).toBe(false);
+    expect(dealableCounts([t], seats, { freeSpace: true, names: retired })).toEqual({ s1: 1, s2: 0, s3: 1 });
   });
   it('still protects the person once they join under that name', () => {
     const joined = [...seats, seat('s4', 'Jess')];

@@ -22,7 +22,7 @@ export function PlayScreen({ client, snapshot, gameId, onLeave }: {
   return (
     <div className={`page ${styles.play}`} data-testid="stage-playing" data-focus-fallback tabIndex={-1}>
       <BingoBanner queue={banner.queue} onDismiss={banner.dismiss} />
-      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
+      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} seats={snapshot.seats} />}
       <header className={styles.header}>
         <span className={styles.code} data-testid="game-code">{game.code}</span>
         <div className={styles.actions}>

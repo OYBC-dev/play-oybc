@@ -67,8 +67,8 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
       return out;
     },
 
-    async joinGame(code, name) {
-      const res = await room(code).act<JoinGameRes>('join', { name });
+    async joinGame(code, name, options) {
+      const res = await room(code).act<JoinGameRes>('join', options?.reclaim ? { name, reclaim: true } : { name });
       remember(res.gameId, code);
       return res;
     },

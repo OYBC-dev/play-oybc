@@ -77,7 +77,7 @@ export function GameSettingsPage() {
             maxLength={MAX_GAME_NAME_LENGTH}
             autoComplete="off"
           />
-          <p id="game-name-help" className={styles.help}>Shown in the lobby and on the join page. Optional.</p>
+          <p id="game-name-help" className={styles.help}>Shown in the lobby. Optional.</p>
         </RisoCard>
         <RisoCard padded className={styles.card}>
           <RisoSectionLabel>Board</RisoSectionLabel>

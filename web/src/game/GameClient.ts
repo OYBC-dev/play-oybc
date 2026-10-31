@@ -65,7 +65,8 @@ export interface GameClient {
    * `gameName` (optional, ≤ 40 chars, the server trims it) and `freeSpace` (default off).
    */
   createGame(name: string, options?: CreateGameOptions): Promise<CreateGameRes>;
-  joinGame(code: string, name: string): Promise<JoinGameRes>;
+  /** `reclaim` asks for the seat already held under `name` (lost phone); without it a taken name rejects with `name-taken`. */
+  joinGame(code: string, name: string, options?: { reclaim?: boolean }): Promise<JoinGameRes>;
   whoAmI(code: string): Promise<WhoAmIRes>;
   subscribe(
     gameId: string,

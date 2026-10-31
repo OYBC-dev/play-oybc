@@ -63,7 +63,8 @@ export const MAX_GAME_NAME_LENGTH = 40;
 export interface CreateGameRes { gameId: string; code: string; seatId: string }
 /** A requester whose reclaim of a seat was denied must wait this long before asking for it again. */
 export const RECLAIM_RETRY_COOLDOWN_MS = 60_000;
-export interface JoinGameReq { code: string; name: string }
+/** `reclaim` asks for the seat already held under `name` (the lost-phone case); without it a taken name is `name-taken`. */
+export interface JoinGameReq { code: string; name: string; reclaim?: boolean }
 export type JoinGameRes =
   | { status: 'joined' | 'resumed'; gameId: string; seatId: string }
   | { status: 'reclaim-pending'; gameId: string; reclaimId: string };

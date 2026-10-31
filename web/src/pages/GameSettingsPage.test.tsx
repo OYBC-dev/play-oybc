@@ -42,7 +42,7 @@ describe('GameSettingsPage', () => {
     expect(screen.getByText('Host', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('ghost');
     expect(screen.getByLabelText('Game name')).toHaveAttribute('maxLength', '40');
-    expect(screen.getByText('Shown in the lobby and on the join page. Optional.')).toBeInTheDocument();
+    expect(screen.getByText('Shown in the lobby. Optional.')).toBeInTheDocument();
     expect(screen.getByText('The centre square starts marked. Boards need 24 tasks instead of 25.')).toBeInTheDocument();
     const sw = screen.getByRole('switch', { name: 'Free space' });
     expect(sw).not.toBeChecked();

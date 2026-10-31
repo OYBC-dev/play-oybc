@@ -33,7 +33,8 @@ export interface TaskScan {
  * written, every `@Name` that matches a seat now (a name written before its
  * person joined resolves the moment they do), and every seat an unbound name
  * nearly names ("@Cody" keeps the task from "Cody B"). A name the host retired
- * ("not coming") holds nobody back: the task reads as ordinary.
+ * ("not coming", or released at launch) holds nobody else back: the task reads
+ * as ordinary to everyone it does not refer to.
  */
 export function scanTask(task: PoolTask, seats: readonly Seat[], names?: NameStates): TaskScan {
   const named = new Set(task.mentions.seatIds);
@@ -43,9 +44,9 @@ export function scanTask(task: PoolTask, seats: readonly Seat[], names?: NameSta
     if (t.kind === 'seat') { named.add(t.seat.seatId); referenced.add(t.seat.seatId); }
     else if (t.kind === 'unknown') {
       const key = nameKey(t.token.slice(1));
-      // The host said this person is not coming: the name holds nobody back, not even a near match.
-      if (names?.get(key)?.retired) continue;
-      unbound = true;
+      // A retired name (not coming, or released at launch) holds nobody back, but a seat that nearly
+      // carries it may still be that person: they stay kept from the task.
+      if (!names?.get(key)?.retired) unbound = true;
       for (const s of seats) if (isNearName(key, nameKey(s.name))) referenced.add(s.seatId);
     }
   }

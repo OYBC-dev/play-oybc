@@ -1,5 +1,6 @@
 const MESSAGES: Record<string, string> = {
   'invalid-name': 'Use 1–20 letters, numbers or spaces',
+  'name-taken': 'That name is taken',
   'game-not-found': 'No game with that code',
   'game-ended': 'That game has ended',
   'reclaim-not-found': 'That request is gone',

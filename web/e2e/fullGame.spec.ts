@@ -141,7 +141,11 @@ test('three phones play a full game', async ({ browser }) => {
   // 7. E joins as "cody": waits; A allows; E gets Cody's board and marks.
   const E = await phone(browser);
   extra.push(E.ctx);
-  await join(E.page, code, 'cody');
+  await E.page.goto(`/g/${code}`);
+  await E.page.getByLabel('Your name').fill('cody');
+  await E.page.getByRole('button', { name: 'Join' }).click();
+  await expect(E.page.getByRole('alert')).toHaveText('That name is taken');
+  await E.page.getByRole('button', { name: "That's me" }).click();
   await expect(E.page.getByText('Waiting for the host')).toBeVisible();
   await expect(A.page.getByText("Someone wants to take Cody's seat")).toBeVisible();
   await A.page.getByRole('button', { name: 'Allow' }).click();

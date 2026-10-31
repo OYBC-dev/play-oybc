@@ -159,7 +159,7 @@ describe('GameRoom', () => {
 
     const d = await wsClient(code, 'ud', gameId);
     expect(d.welcome.seatId).toBeNull();
-    const filed = await d.act('join', { name: 'bob' });
+    const filed = await d.act('join', { name: 'bob', reclaim: true });
     expect(filed).toMatchObject({ ok: true, result: { status: 'reclaim-pending' } });
     const reclaimId = (filed as { result: { reclaimId: string } }).result.reclaimId;
     const fd = d.frames.length;
@@ -215,7 +215,7 @@ describe('GameRoom', () => {
     const { a, code, gameId, bobSeat } = await threeSeats();
     const d = await wsClient(code, 'ud', gameId);
     const fa = a.frames.length;
-    const filed = await d.act('join', { name: 'Bob' });
+    const filed = await d.act('join', { name: 'Bob', reclaim: true });
     const reclaimId = (filed as { result: { reclaimId: string } }).result.reclaimId;
     const hostView = await a.waitFor<StateMsg>(isState, fa);
     expect(Object.keys(hostView).sort()).toEqual(['reclaims', 'rev', 't']);
@@ -229,9 +229,9 @@ describe('GameRoom', () => {
 
     // a conflict denial commits and pushes before the failed ack (AppError.push)
     const e = await wsClient(code, 'ue', gameId);
-    const second = await e.act('join', { name: 'Cat' });
+    const second = await e.act('join', { name: 'Cat', reclaim: true });
     const secondId = (second as { result: { reclaimId: string } }).result.reclaimId;
-    expect(await e.act('join', { name: 'Eve' })).toMatchObject({ ok: true, result: { status: 'joined' } });
+    expect(await e.act('join', { name: 'Eve', reclaim: true })).toMatchObject({ ok: true, result: { status: 'joined' } });
     const fe = e.frames.length;
     const fa3 = a.frames.length;
     const failed = await a.act('resolveReclaim', { reclaimId: secondId, approve: true });
@@ -246,7 +246,7 @@ describe('GameRoom', () => {
   it('a requester offline when the host resolves learns the outcome on its next hello', async () => {
     const { a, code, gameId } = await threeSeats();
     const d = await wsClient(code, 'ud', gameId);
-    const filed = await d.act('join', { name: 'Bob' });
+    const filed = await d.act('join', { name: 'Bob', reclaim: true });
     const reclaimId = (filed as { result: { reclaimId: string } }).result.reclaimId;
 
     // a reconnect while still pending replays the pending notice
@@ -272,7 +272,7 @@ describe('GameRoom', () => {
   it('reclaims section follows hostSeatId after transferHost', async () => {
     const { a, c, code, gameId, catSeat } = await threeSeats();
     const d = await wsClient(code, 'ud', gameId);
-    const filed = await d.act('join', { name: 'Bob' });
+    const filed = await d.act('join', { name: 'Bob', reclaim: true });
     const reclaimId = (filed as { result: { reclaimId: string } }).result.reclaimId;
     await a.sync();
     const [fa, fc] = [a.frames.length, c.frames.length];

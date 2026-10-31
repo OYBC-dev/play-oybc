@@ -77,14 +77,27 @@ describe('join', () => {
     expect(state.seats.size).toBe(2);
     expect(state.seatOf('u2')).toBe((j as { seatId: string }).seatId);
   });
+  it('a taken name is name-taken with the held name, so the newcomer picks another; reclaim is explicit', () => {
+    const state = fresh();
+    claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' });
+    join(state, ctxFor('u2'), { name: 'Josh' });
+    let err: AppError | undefined;
+    try { join(state, ctxFor('u3'), { name: ' josh ' }); } catch (e) { err = e as AppError; }
+    expect(err?.code).toBe('name-taken');
+    expect(err?.details?.name).toBe('Josh');
+    expect(state.seats.size).toBe(2);
+    expect(state.reclaims.size).toBe(0);
+    expect(join(state, ctxFor('u3'), { name: 'Josh B' }).result.status).toBe('joined');
+    expect(join(state, ctxFor('u4'), { name: 'Josh', reclaim: true }).result.status).toBe('reclaim-pending');
+  });
   it('creates a reclaim request on a name clash', () => {
     const state = fresh();
     claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' });
     const cody = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
     for (const [i, variant] of ['CODY', 'Cody'].entries()) {
-      expect(join(state, ctxFor(`v${i}`), { name: variant }).result.status).toBe('reclaim-pending');
+      expect(join(state, ctxFor(`v${i}`), { name: variant, reclaim: true }).result.status).toBe('reclaim-pending');
     }
-    const out = join(state, ctxFor('u3'), { name: ' cody ' });
+    const out = join(state, ctxFor('u3'), { name: ' cody ', reclaim: true });
     expect(out.result.status).toBe('reclaim-pending');
     const rid = (out.result as { reclaimId: string }).reclaimId;
     expect(state.reclaims.get(rid)).toMatchObject({ requesterUid: 'u3', seatId: cody.seatId, status: 'pending' });
@@ -95,8 +108,8 @@ describe('join', () => {
     const state = fresh();
     claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' });
     join(state, ctxFor('u2'), { name: 'Cody' });
-    const a = join(state, ctxFor('u3'), { name: 'Cody' }).result as { reclaimId: string };
-    const b = join(state, ctxFor('u3'), { name: 'cody' }).result as { reclaimId: string };
+    const a = join(state, ctxFor('u3'), { name: 'Cody', reclaim: true }).result as { reclaimId: string };
+    const b = join(state, ctxFor('u3'), { name: 'cody', reclaim: true }).result as { reclaimId: string };
     expect(b.reclaimId).toBe(a.reclaimId);
     expect(state.reclaims.size).toBe(1);
   });
@@ -104,10 +117,10 @@ describe('join', () => {
     const state = fresh();
     claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' });
     join(state, ctxFor('u2'), { name: 'Cody' });
-    const a = join(state, ctxFor('u3'), { name: 'Cody' }).result as { reclaimId: string };
+    const a = join(state, ctxFor('u3'), { name: 'Cody', reclaim: true }).result as { reclaimId: string };
     state.putReclaim({ ...state.reclaims.get(a.reclaimId)!, status: 'denied', resolvedAt: NOW });
-    expect(codeOf(() => join(state, ctxFor('u3', NOW + 30_000), { name: 'Cody' }))).toBe('reclaim-cooldown');
-    expect(join(state, ctxFor('u3', NOW + 60_000), { name: 'Cody' }).result.status).toBe('reclaim-pending');
+    expect(codeOf(() => join(state, ctxFor('u3', NOW + 30_000), { name: 'Cody', reclaim: true }))).toBe('reclaim-cooldown');
+    expect(join(state, ctxFor('u3', NOW + 60_000), { name: 'Cody', reclaim: true }).result.status).toBe('reclaim-pending');
   });
   it('member of an ended game resumes', () => {
     const { state, s1 } = setup();
@@ -289,7 +302,8 @@ describe('addTask', () => {
       const { state, s2 } = setup();
       add(state, 'u1', '@Jess sings');
       bindName(state, ctxFor('u1'), { key: 'jess', seatId: s2 });
-      const out = join(state, ctxFor('u4'), { name: 'Jess' }).result;
+      expect(codeOf(() => join(state, ctxFor('u4'), { name: 'Jess' }))).toBe('name-taken');
+      const out = join(state, ctxFor('u4'), { name: 'Jess', reclaim: true }).result;
       expect(out.status).toBe('reclaim-pending');
       expect([...state.reclaims.values()][0]).toMatchObject({ seatId: s2, name: 'Jess' });
       expect(state.seats.size).toBe(3);

@@ -85,10 +85,12 @@ function freshMarks(freeSpace: boolean): boolean[] {
 }
 
 /**
- * Joins: resumes a member, files a reclaim on a name clash, else seats the caller (dealing a board when playing).
- * @throws AppError `game-not-found`, `game-ended`, `invalid-name`, `reclaim-cooldown`, `resource-exhausted`, `not-ready`.
+ * Joins: resumes a member, else seats the caller (dealing a board when playing). A name someone here already
+ * holds (or the host bound to someone) is `name-taken`, so the newcomer picks another; with `reclaim: true`
+ * it files a reclaim on that seat instead (the lost-phone case, approved by the host).
+ * @throws AppError `game-not-found`, `game-ended`, `invalid-name`, `name-taken`, `reclaim-cooldown`, `resource-exhausted`, `not-ready`.
  */
-export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOut<JoinGameRes> {
+export function join(state: GameState, ctx: OpCtx, args: { name: string; reclaim?: unknown }): OpOut<JoinGameRes> {
   const game = requireGame(state);
   const existing = state.seatOf(ctx.uid);
   if (existing) return { result: { status: 'resumed', gameId: game.gameId, seatId: existing }, push: { all: [] } };
@@ -101,6 +103,7 @@ export function join(state: GameState, ctx: OpCtx, args: { name: string }): OpOu
   const boundSeatId = state.names.get(key)?.seatId ?? null;
   const taken = [...state.seats.values()].find((s) => s.nameKey === key) ?? (boundSeatId === null ? undefined : state.seats.get(boundSeatId));
   if (taken) {
+    if (args.reclaim !== true) throw new AppError('name-taken', { name: taken.name });
     const mine = [...state.reclaims.values()].filter((r) => r.requesterUid === ctx.uid && r.seatId === taken.seatId);
     const pending = mine.find((r) => r.status === 'pending');
     if (pending) return { result: { status: 'reclaim-pending', gameId: game.gameId, reclaimId: pending.id }, push: { all: [] } };

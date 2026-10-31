@@ -78,12 +78,13 @@ test('the host binds a name someone joined under differently, unbinds it, then r
   await sheet.getByRole('button', { name: 'Not coming' }).click();
   await A.page.getByRole('dialog', { name: 'Jess isn’t coming?' }).getByRole('button', { name: 'Not coming' }).click();
   await expect(A.page.getByRole('dialog')).toHaveCount(0);
-  // Retired: the name holds nobody back, Jessie included, and the mention stays bold.
-  for (const p of [A.page, B.page, C.page]) {
+  // Retired: the mention stays bold and the hold is gone for everyone the task does not refer to;
+  // Jessie nearly carries the name, so she is still kept from it.
+  for (const p of [A.page, C.page]) {
     await expect(row(p, 'Jess sings')).toBeVisible();
     await expect(row(p, 'Jess sings').locator('b', { hasText: /^Jess$/ })).toBeVisible();
   }
-  await expect(B.page.getByTestId('redacted')).toHaveCount(0);
+  await expect(B.page.getByTestId('redacted')).toHaveCount(1);
   await expect(players.getByRole('button', { name: /^Jess,/ })).toHaveCount(0);
   await expect(players.getByText('Jess', { exact: true })).toHaveCount(0);
 

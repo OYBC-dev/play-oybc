@@ -36,6 +36,12 @@ function snap(over: { host?: boolean; stage?: 'lobby' | 'playing' | 'ended'; rec
 }
 
 describe('ReclaimPrompt', () => {
+  it('names the seat being taken, and the typed name when it differs (a bound nickname)', () => {
+    const client = new FakeGameClient();
+    const seats = [{ seatId: reclaim.seatId, name: 'C-Dog', nameKey: 'c-dog', joinedAt: 0 }];
+    render(<ReclaimPrompt client={client} gameId="g1" reclaims={[reclaim]} seats={seats} />);
+    expect(screen.getByText("Someone as Cody wants to take C-Dog's seat")).toBeInTheDocument();
+  });
   it('shows who wants back in; Allow and Deny resolve the reclaim', async () => {
     const client = new FakeGameClient();
     render(<ReclaimPrompt client={client} gameId="g1" reclaims={[reclaim]} />);

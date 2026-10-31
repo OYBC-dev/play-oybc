@@ -15,7 +15,7 @@ export function EndedScreen({ client, snapshot, gameId }: { client: GameClient; 
   const navigate = useNavigate();
   return (
     <div className="page" data-testid="stage-ended">
-      {snapshot.game.hostSeatId === snapshot.mySeatId && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
+      {snapshot.game.hostSeatId === snapshot.mySeatId && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} seats={snapshot.seats} />}
       <header className={styles.head}>
         <RisoSectionLabel variant="kicker">Ended · {snapshot.game.code}</RisoSectionLabel>
         <h1 className={styles.title}>Final leaderboard</h1>

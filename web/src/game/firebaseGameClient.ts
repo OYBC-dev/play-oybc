@@ -8,7 +8,7 @@ import type { GameClient, GameSnapshot } from './GameClient';
 /** Real GameClient: callables for writes, Firestore listeners for reads. */
 export const firebaseGameClient: GameClient = {
   createGame: (name, options = {}) => api.createGame({ name, ...options }),
-  joinGame: (code, name) => api.joinGame({ code, name }),
+  joinGame: (code, name, options) => api.joinGame(options?.reclaim ? { code, name, reclaim: true } : { code, name }),
   whoAmI: (code) => api.whoAmI({ code }),
   addTask: async (gameId, text) => { await api.addTask({ gameId, text }); },
   deleteTask: async (gameId, taskId) => { await api.deleteTask({ gameId, taskId }); },

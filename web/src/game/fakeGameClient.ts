@@ -29,7 +29,7 @@ export class FakeGameClient implements GameClient {
   createGame(name: string, options?: CreateGameOptions) {
     return this.result('createGame', options === undefined ? [name] : [name, options], this.createResult);
   }
-  joinGame(code: string, name: string) { return this.result('joinGame', [code, name], this.joinResult); }
+  joinGame(code: string, name: string, options?: { reclaim?: boolean }) { return this.result('joinGame', options?.reclaim ? [code, name, 'reclaim'] : [code, name], this.joinResult); }
   whoAmI(code: string) { return this.result('whoAmI', [code], this.whoAmIResult); }
 
   subscribe(gameId: string, seatId: string, onChange: (s: GameSnapshot) => void, onError?: (e: Error) => void): () => void {

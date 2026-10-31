@@ -57,7 +57,7 @@ export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
 
   return (
     <div className={`page ${styles.lobby}`} style={{ paddingBottom: padBottom }} data-testid="stage-lobby" data-focus-fallback tabIndex={-1}>
-      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} />}
+      {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} seats={snapshot.seats} />}
       <header className={styles.header}>
         <div className={styles.title}>
           <div className={styles.titleRow}>
