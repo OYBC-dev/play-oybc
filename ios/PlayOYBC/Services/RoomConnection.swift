@@ -23,9 +23,10 @@ struct StateFrame: Decodable, Equatable {
     var view: [PoolViewEntry]?
     var board: BoardDoc??
     var bingos: [BingoDoc]?
+    var standings: [Standing]?
     var reclaims: [Reclaim]?
 
-    private enum Keys: String, CodingKey { case rev, game, seats, view, board, bingos, reclaims }
+    private enum Keys: String, CodingKey { case rev, game, seats, view, board, bingos, standings, reclaims }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -39,6 +40,7 @@ struct StateFrame: Decodable, Equatable {
             board = .none
         }
         bingos = try c.decodeIfPresent([BingoDoc].self, forKey: .bingos)
+        standings = try c.decodeIfPresent([Standing].self, forKey: .standings)
         reclaims = try c.decodeIfPresent([WireReclaim].self, forKey: .reclaims)?.map(\.reclaim)
     }
 }
@@ -224,6 +226,7 @@ actor RoomConnection {
         var view: [PoolViewEntry]?
         var board: BoardDoc??
         var bingos: [BingoDoc]?
+        var standings: [Standing]?
         var reclaims: [Reclaim]?
     }
 
@@ -660,6 +663,7 @@ actor RoomConnection {
         if let v = s.view { sections.view = v }
         if let v = s.board { sections.board = .some(v) }
         if let v = s.bingos { sections.bingos = v }
+        if let v = s.standings { sections.standings = v }
         if let v = s.reclaims { sections.reclaims = v }
         guard let snap = snapshot() else { return }
         for cont in snapshotListeners.values { cont.yield(snap) }
@@ -670,7 +674,7 @@ actor RoomConnection {
         guard let seatId, let game = sections.game, let seats = sections.seats, let view = sections.view,
               let bingos = sections.bingos else { return nil }
         return GameSnapshot(game: game, mySeatId: seatId, seats: seats, view: view, board: sections.board ?? nil,
-                            bingos: bingos, reclaims: sections.reclaims ?? [])
+                            bingos: bingos, reclaims: sections.reclaims ?? [], standings: sections.standings ?? [])
     }
 
     // MARK: heartbeat

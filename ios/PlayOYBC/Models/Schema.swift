@@ -13,6 +13,70 @@ struct GameDoc: Codable, Equatable {
     var bingoCount: Int
     var shortfalls: [String: Int]
     var reviewGate: Bool
+    /// Whether boards get a FREE centre (host option, lobby only). Absent on old frames: false.
+    var freeSpace: Bool = false
+    /// Tasks each board needs: 24 with free space, else 25. Absent on old frames: 25.
+    var tasksPerBoard: Int = 25
+    /// seatId → tasks guaranteed dealable to that seat. Absent on old frames: empty.
+    var dealable: [String: Int] = [:]
+
+    private enum Keys: String, CodingKey {
+        case code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, shortfalls, reviewGate
+        case freeSpace, tasksPerBoard, dealable
+    }
+
+    init(code: String, stage: Stage, hostSeatId: String, createdAt: Double, launchedAt: Double?, endedAt: Double?,
+         bingoCount: Int, shortfalls: [String: Int], reviewGate: Bool,
+         freeSpace: Bool = false, tasksPerBoard: Int = 25, dealable: [String: Int] = [:]) {
+        self.code = code
+        self.stage = stage
+        self.hostSeatId = hostSeatId
+        self.createdAt = createdAt
+        self.launchedAt = launchedAt
+        self.endedAt = endedAt
+        self.bingoCount = bingoCount
+        self.shortfalls = shortfalls
+        self.reviewGate = reviewGate
+        self.freeSpace = freeSpace
+        self.tasksPerBoard = tasksPerBoard
+        self.dealable = dealable
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        code = try c.decode(String.self, forKey: .code)
+        stage = try c.decode(Stage.self, forKey: .stage)
+        hostSeatId = try c.decode(String.self, forKey: .hostSeatId)
+        createdAt = try c.decode(Double.self, forKey: .createdAt)
+        launchedAt = try c.decodeIfPresent(Double.self, forKey: .launchedAt)
+        endedAt = try c.decodeIfPresent(Double.self, forKey: .endedAt)
+        bingoCount = try c.decode(Int.self, forKey: .bingoCount)
+        shortfalls = try c.decode([String: Int].self, forKey: .shortfalls)
+        reviewGate = try c.decode(Bool.self, forKey: .reviewGate)
+        freeSpace = try c.decodeIfPresent(Bool.self, forKey: .freeSpace) ?? false
+        tasksPerBoard = try c.decodeIfPresent(Int.self, forKey: .tasksPerBoard) ?? 25
+        dealable = try c.decodeIfPresent([String: Int].self, forKey: .dealable) ?? [:]
+    }
+}
+
+/// One leaderboard row as the server ranks it (game-core `Standing`).
+struct Standing: Codable, Equatable {
+    var seatId: String
+    var name: String
+    var bingos: Int
+    var marked: Int
+    /// Most marked squares in any line not yet complete.
+    var bestLine: Int
+    var firstBingoSeq: Int?
+}
+
+/// Mention references: UTF-16 `[start, end)` pairs into a display text. Decodes `[[Int]]` and
+/// keeps only well-formed pairs; absent → empty.
+enum MentionRefs {
+    static func decode<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) throws -> [[Int]] {
+        let raw = try c.decodeIfPresent([[Int]].self, forKey: key) ?? []
+        return raw.filter { $0.count == 2 && $0[0] >= 0 && $0[0] < $0[1] }
+    }
 }
 
 struct SeatDoc: Codable, Equatable {
@@ -32,9 +96,39 @@ struct Seat: Equatable, Identifiable {
 struct PoolViewEntry: Codable, Equatable {
     var taskId: String
     var authorName: String
-    /// nil when the task text is hidden from this viewer.
+    /// Display text (mentions resolved); nil when the task text is hidden from this viewer.
     var text: String?
     var mine: Bool
+    /// UTF-16 `[start, end)` ranges of mentioned names in `text`; empty = plain task.
+    var refs: [[Int]] = []
+
+    private enum Keys: String, CodingKey { case taskId, authorName, text, mine, refs }
+
+    init(taskId: String, authorName: String, text: String?, mine: Bool, refs: [[Int]] = []) {
+        self.taskId = taskId
+        self.authorName = authorName
+        self.text = text
+        self.mine = mine
+        self.refs = refs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        taskId = try c.decode(String.self, forKey: .taskId)
+        authorName = try c.decode(String.self, forKey: .authorName)
+        text = try c.decodeIfPresent(String.self, forKey: .text)
+        mine = try c.decode(Bool.self, forKey: .mine)
+        refs = try MentionRefs.decode(c, .refs)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(taskId, forKey: .taskId)
+        try c.encode(authorName, forKey: .authorName)
+        try c.encodeIfPresent(text, forKey: .text)
+        try c.encode(mine, forKey: .mine)
+        if !refs.isEmpty { try c.encode(refs, forKey: .refs) }
+    }
 }
 
 struct ViewDoc: Codable, Equatable {
@@ -44,16 +138,24 @@ struct ViewDoc: Codable, Equatable {
 
 /// One square of a dealt board; decodes the `kind` discriminator.
 enum BoardCell: Codable, Equatable {
-    case task(taskId: String, text: String)
+    /// `refs`: UTF-16 `[start, end)` ranges of mentioned names in `text`; empty = plain task.
+    case task(taskId: String, text: String, refs: [[Int]] = [])
     case free
 
-    private enum Keys: String, CodingKey { case kind, taskId, text }
+    private enum Keys: String, CodingKey { case kind, taskId, text, refs }
+
+    /// The task's display text, nil for the free square.
+    var text: String? { if case let .task(_, t, _) = self { return t }; return nil }
+    /// Mention ranges; empty for plain tasks and the free square.
+    var refs: [[Int]] { if case let .task(_, _, r) = self { return r }; return [] }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         switch try c.decode(String.self, forKey: .kind) {
         case "free": self = .free
-        case "task": self = .task(taskId: try c.decode(String.self, forKey: .taskId), text: try c.decode(String.self, forKey: .text))
+        case "task":
+            self = .task(taskId: try c.decode(String.self, forKey: .taskId), text: try c.decode(String.self, forKey: .text),
+                         refs: try MentionRefs.decode(c, .refs))
         case let other:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "unknown cell kind \(other)")
         }
@@ -63,10 +165,11 @@ enum BoardCell: Codable, Equatable {
         var c = encoder.container(keyedBy: Keys.self)
         switch self {
         case .free: try c.encode("free", forKey: .kind)
-        case let .task(id, text):
+        case let .task(id, text, refs):
             try c.encode("task", forKey: .kind)
             try c.encode(id, forKey: .taskId)
             try c.encode(text, forKey: .text)
+            if !refs.isEmpty { try c.encode(refs, forKey: .refs) }
         }
     }
 }

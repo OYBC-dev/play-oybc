@@ -15,6 +15,39 @@ final class SchemaDecodingTests: XCTestCase {
         XCTAssertNil(g.endedAt)
         XCTAssertEqual(g.shortfalls["s2"], 3)
         XCTAssertFalse(g.reviewGate)
+        // Old fixture: no party fields → defaults.
+        XCTAssertFalse(g.freeSpace)
+        XCTAssertEqual(g.tasksPerBoard, 25)
+        XCTAssertEqual(g.dealable, [:])
+    }
+
+    func testGameDocPartyFields() throws {
+        let json = #"{"code":"ABCDE","stage":"lobby","hostSeatId":"s1","createdAt":1,"bingoCount":0,"shortfalls":{"s2":1},"reviewGate":false,"freeSpace":true,"tasksPerBoard":24,"dealable":{"s1":18,"s2":23}}"#
+        let g = try JSONDecoder().decode(GameDoc.self, from: Data(json.utf8))
+        XCTAssertTrue(g.freeSpace)
+        XCTAssertEqual(g.tasksPerBoard, 24)
+        XCTAssertEqual(g.dealable, ["s1": 18, "s2": 23])
+    }
+
+    func testPoolEntryRefs() throws {
+        let with = try JSONDecoder().decode(PoolViewEntry.self, from: Data(#"{"taskId":"t1","authorName":"Ann","text":"Cody does X","mine":false,"refs":[[0,4]]}"#.utf8))
+        XCTAssertEqual(with.refs, [[0, 4]])
+        let without = try JSONDecoder().decode(PoolViewEntry.self, from: Data(#"{"taskId":"t1","authorName":"Ann","text":"Sing","mine":false}"#.utf8))
+        XCTAssertEqual(without.refs, [])
+        let malformed = try JSONDecoder().decode(PoolViewEntry.self, from: Data(#"{"taskId":"t1","authorName":"Ann","text":"Hi","mine":false,"refs":[[1],[3,2],[0,2,5],[0,2]]}"#.utf8))
+        XCTAssertEqual(malformed.refs, [[0, 2]])
+    }
+
+    func testBoardCellRefs() throws {
+        let with = try JSONDecoder().decode(BoardCell.self, from: Data(#"{"kind":"task","taskId":"t1","text":"Cody does X","refs":[[0,4]]}"#.utf8))
+        XCTAssertEqual(with, .task(taskId: "t1", text: "Cody does X", refs: [[0, 4]]))
+        XCTAssertEqual(with.refs, [[0, 4]])
+        let without = try JSONDecoder().decode(BoardCell.self, from: Data(#"{"kind":"task","taskId":"t1","text":"Sing"}"#.utf8))
+        XCTAssertEqual(without, .task(taskId: "t1", text: "Sing"))
+        XCTAssertEqual(without.refs, [])
+        XCTAssertEqual(BoardCell.free.refs, [])
+        XCTAssertNil(BoardCell.free.text)
+        XCTAssertEqual(try JSONDecoder().decode(BoardCell.self, from: JSONEncoder().encode(with)), with)
     }
 
     func testLobbyGameHasNoLaunchedAt() throws {

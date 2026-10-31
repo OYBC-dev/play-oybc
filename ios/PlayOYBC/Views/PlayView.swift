@@ -16,7 +16,6 @@ struct PlayView: View {
     var onDismissBanner: () -> Void = {}
     /// "Leave game" from the menu: forget the game on this device and go Home.
     var onLeave: () -> Void = {}
-    var timeZone: TimeZone = .current
 
     @State var leaderboard = false
     /// What the host menu has open (snapshots start it open).
@@ -48,7 +47,7 @@ struct PlayView: View {
         .accessibilityIdentifier("stage-playing")
         .sheet(isPresented: $leaderboard) {
             RisoSheet(title: "Leaderboard", onClose: { leaderboard = false }) {
-                LeaderboardView(bingos: snapshot.bingos, timeZone: timeZone)
+                LeaderboardView(standings: snapshot.standings)
             }
         }
     }

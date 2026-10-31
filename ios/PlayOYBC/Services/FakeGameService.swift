@@ -12,7 +12,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
     var whoAmIError: Error?
     var createResult: Result<CreateGameRes, Error> = .success(CreateGameRes(gameId: "g1", code: "ABCDE", seatId: "s1"))
     var joinResult: Result<JoinGameRes, Error> = .success(.joined(gameId: "g1", seatId: "s2"))
-    /// Thrown by every void call (addTask, deleteTask, launch, end, resolveReclaim, transferHost).
+    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, end, resolveReclaim, transferHost).
     var callError: Error?
     private(set) var toggledCells: [Int] = []
     /// The `marked` value sent with each toggle, parallel to `toggledCells`.
@@ -61,6 +61,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
     func addTask(gameId: String, text: String) async throws { try void("addTask:\(text)") }
     func deleteTask(gameId: String, taskId: String) async throws { try void("deleteTask:\(taskId)") }
     func launch(gameId: String) async throws { try void("launch") }
+    func setOptions(gameId: String, freeSpace: Bool) async throws { try void("setOptions:\(freeSpace)") }
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         let gated = lock.withLock { toggledCells.append(cellIndex); toggledValues.append(marked); return gateToggle }
         if gated { await withCheckedContinuation { c in lock.withLock { gates[cellIndex] = c } } }

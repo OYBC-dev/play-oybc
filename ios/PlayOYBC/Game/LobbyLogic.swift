@@ -10,20 +10,24 @@ enum LobbyLogic {
             .sorted()
     }
 
-    /// Whether Launch is enabled: nobody short and the pool is big enough.
-    static func canLaunch(game: GameDoc, seats: [Seat], poolSize: Int) -> Bool {
-        shortfallLines(game: game, seats: seats).isEmpty && poolSize >= GameConstants.minPoolSize
+    /// Whether Launch is enabled: the host, in the lobby, with nobody short.
+    static func canLaunch(game: GameDoc, seats: [Seat], isHost: Bool) -> Bool {
+        isHost && game.stage == .lobby && shortfallLines(game: game, seats: seats).isEmpty
+    }
+
+    /// The lobby count, "{dealable to me} / {tasks per board}", e.g. "18 / 25".
+    static func poolCount(game: GameDoc, mySeatId: String) -> String {
+        "\(game.dealable[mySeatId] ?? 0) / \(game.tasksPerBoard)"
     }
 
     /// Seats in join order.
     static func seatsByJoin(_ seats: [Seat]) -> [Seat] { seats.sorted { $0.doc.joinedAt < $1.doc.joinedAt } }
 
-    /// Leaderboard clock: local time as h:mm (web `Leaderboard.clock`).
-    static func clock(_ at: Double, timeZone: TimeZone = .current) -> String {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = timeZone
-        let c = cal.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: at / 1000))
-        let h = (c.hour ?? 0) % 12
-        return "\(h == 0 ? 12 : h):\(String(format: "%02d", c.minute ?? 0))"
+    /// Leaderboard pill, "1 bingo" / "3 bingos"; nil at 0 (no pill).
+    static func bingoPill(_ n: Int) -> String? { n > 0 ? "\(n) bingo\(n == 1 ? "" : "s")" : nil }
+
+    /// Leaderboard meta line: "{marked} squares", plus " · {bestLine} in a row" before a first bingo.
+    static func standingMeta(_ s: Standing) -> String {
+        "\(s.marked) squares" + (s.bingos == 0 ? " · \(s.bestLine) in a row" : "")
     }
 }

@@ -14,9 +14,11 @@ enum SnapshotFixtures {
         Seat(seatId: "s4", doc: SeatDoc(name: "Mary Jane", nameKey: "mary jane", joinedAt: fixedNow + 3000)),
     ]
 
-    static func game(stage: Stage, shortfalls: [String: Int] = [:]) -> GameDoc {
+    static func game(stage: Stage, shortfalls: [String: Int] = [:], freeSpace: Bool = false,
+                     dealable: [String: Int] = [:]) -> GameDoc {
         GameDoc(code: "HX7KQ", stage: stage, hostSeatId: "s1", createdAt: fixedNow, launchedAt: stage == .lobby ? nil : fixedNow + 60_000,
-                endedAt: stage == .ended ? fixedNow + 3_600_000 : nil, bingoCount: 3, shortfalls: shortfalls, reviewGate: false)
+                endedAt: stage == .ended ? fixedNow + 3_600_000 : nil, bingoCount: 3, shortfalls: shortfalls, reviewGate: false,
+                freeSpace: freeSpace, tasksPerBoard: freeSpace ? 24 : 25, dealable: dealable)
     }
 
     /// Pool as seen by `viewer`; the entry mentioning the viewer arrives without text.
@@ -25,14 +27,15 @@ enum SnapshotFixtures {
             PoolViewEntry(taskId: "t1", authorName: "Stephen", text: "Someone bobs for apples", mine: viewer == "s1"),
             PoolViewEntry(taskId: "t2", authorName: "Cody", text: nil, mine: false),
             PoolViewEntry(taskId: "t3", authorName: "Pat", text: "A costume needs emergency tape repair", mine: viewer == "s3"),
-            PoolViewEntry(taskId: "t4", authorName: "Mary Jane", text: "@Cody does the Monster Mash", mine: viewer == "s4"),
+            PoolViewEntry(taskId: "t4", authorName: "Mary Jane", text: "Cody does the Monster Mash", mine: viewer == "s4", refs: [[0, 4]]),
             PoolViewEntry(taskId: "t5", authorName: "Cody", text: "The dog steals candy", mine: viewer == "s2"),
             PoolViewEntry(taskId: "t6", authorName: "Stephen", text: "Fog machine sets off the smoke alarm", mine: viewer == "s1"),
         ]
     }
 
     static func lobby(mySeatId: String) -> GameSnapshot {
-        GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 2]), mySeatId: mySeatId, seats: seats,
+        GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 2],
+                                dealable: ["s1": 18, "s2": 22, "s3": 24, "s4": 23]), mySeatId: mySeatId, seats: seats,
                      view: pool(viewer: mySeatId), board: nil, bingos: [], reclaims: [])
     }
 
@@ -51,7 +54,8 @@ enum SnapshotFixtures {
     /// Filling up: five players, four short (more lines than the sheet shows), a max-length row.
     static func lobbyFilling() -> GameSnapshot {
         let view = [PoolViewEntry(taskId: "t0", authorName: "Bartholomew Fitzgerald-Smythe", text: maxLengthTask, mine: false)] + pool(viewer: "s1")
-        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 12, "s5": 7]), mySeatId: "s1",
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 3, "s3": 1, "s4": 12, "s5": 7],
+                                       dealable: ["s1": 7, "s2": 22, "s3": 24, "s4": 13, "s5": 18]), mySeatId: "s1",
                             seats: seats + [longNameSeat], view: view, board: nil, bingos: [], reclaims: [])
     }
 
@@ -61,7 +65,8 @@ enum SnapshotFixtures {
         let view = taskTexts.enumerated().map { i, text in
             PoolViewEntry(taskId: "r\(i)", authorName: authors[i % authors.count], text: i == 3 ? nil : text, mine: i % authors.count == 0)
         }
-        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 0, "s3": 0, "s4": 0]), mySeatId: "s1", seats: seats,
+        return GameSnapshot(game: game(stage: .lobby, shortfalls: ["s1": 0, "s2": 0, "s3": 0, "s4": 0],
+                                       dealable: ["s1": 25, "s2": 25, "s3": 25, "s4": 25]), mySeatId: "s1", seats: seats,
                             view: view, board: nil, bingos: [], reclaims: [])
     }
 
@@ -76,12 +81,20 @@ enum SnapshotFixtures {
         "Somebody wins the costume contest twice", "Spider prop falls from the ceiling",
     ]
 
-    /// A board with row 0 complete (highlighted) plus a few stray marks.
+    /// Task indexes whose text mentions a player: one marked (gold), one unmarked.
+    static let refCells: [Int: [[Int]]] = [7: [[0, 4]], 16: [[0, 3]]]
+
+    /// A board with row 0 complete (highlighted) plus a few stray marks; squares 7 (marked) and
+    /// 16 (unmarked) mention a player.
     static func board(lines: [String] = ["row_0"], extraMarks: [Int] = [7, 13, 21]) -> BoardDoc {
         var cells: [BoardCell] = []
         var t = 0
         for i in 0..<25 {
-            if i == 12 { cells.append(.free) } else { cells.append(.task(taskId: "b\(i)", text: taskTexts[t])); t += 1 }
+            if i == 12 { cells.append(.free); continue }
+            let refs = refCells[i] ?? []
+            let text = refs.isEmpty ? taskTexts[t] : (i == 7 ? "Cody does the Monster Mash" : "Pat trips on a cape")
+            cells.append(.task(taskId: "b\(i)", text: text, refs: refs))
+            t += 1
         }
         var marks = [Bool](repeating: false, count: 25)
         marks[12] = true
@@ -96,6 +109,22 @@ enum SnapshotFixtures {
         BingoDoc(seq: 3, seatId: "s4", name: "Mary Jane", line: "diag_main", playerBingoNumber: 1, at: fixedNow + 2_400_000, status: .announced),
         BingoDoc(seq: 4, seatId: "s3", name: "Pat", line: "row_4", playerBingoNumber: 2, at: fixedNow + 3_000_000, status: .announced),
     ]
+
+    /// Four players, server order: two with bingos, two without (one four in a row).
+    static let standings: [Standing] = [
+        Standing(seatId: "s3", name: "Pat", bingos: 2, marked: 14, bestLine: 3, firstBingoSeq: 1),
+        Standing(seatId: "s1", name: "Stephen", bingos: 1, marked: 11, bestLine: 3, firstBingoSeq: 2),
+        Standing(seatId: "s4", name: "Mary Jane", bingos: 0, marked: 9, bestLine: 4, firstBingoSeq: nil),
+        Standing(seatId: "s2", name: "Cody", bingos: 0, marked: 5, bestLine: 2, firstBingoSeq: nil),
+    ]
+
+    /// Ten players with 24+ character names; the leader has 12 bingos.
+    static let longNameStandings: [Standing] = (1...10).map { (i: Int) -> Standing in
+        let name: String = i % 2 == 0 ? "Bartholomew Fitzgerald-Smythe" : "Maximilian Featherstonehaugh"
+        let bingos: Int = i == 1 ? 12 : max(0, 4 - i)
+        return Standing(seatId: "s\(i)", name: name, bingos: bingos, marked: 24 - i, bestLine: bingos == 0 ? 4 - i % 3 : 3,
+                        firstBingoSeq: bingos == 0 ? nil : i)
+    }
 
     /// Ten bingos with 24+ character names; one player reaches #12.
     static let longNameBingos: [BingoDoc] = (1...10).map { (i: Int) -> BingoDoc in
@@ -113,13 +142,13 @@ enum SnapshotFixtures {
     }
 
     static func playing(mySeatId: String = "s1") -> GameSnapshot {
-        GameSnapshot(game: game(stage: .playing), mySeatId: mySeatId, seats: seats, view: [], board: board(),
-                     bingos: Array(bingos.prefix(3)), reclaims: [])
+        GameSnapshot(game: game(stage: .playing, freeSpace: true), mySeatId: mySeatId, seats: seats, view: [], board: board(),
+                     bingos: Array(bingos.prefix(3)), reclaims: [], standings: standings)
     }
 
     static func ended(mySeatId: String = "s1") -> GameSnapshot {
-        GameSnapshot(game: game(stage: .ended), mySeatId: mySeatId, seats: seats, view: [],
-                     board: board(lines: ["row_0", "col_0"], extraMarks: [7, 13]), bingos: bingos, reclaims: [])
+        GameSnapshot(game: game(stage: .ended, freeSpace: true), mySeatId: mySeatId, seats: seats, view: [],
+                     board: board(lines: ["row_0", "col_0"], extraMarks: [7, 13]), bingos: bingos, reclaims: [], standings: standings)
     }
 
     static let reclaims: [Reclaim] = [

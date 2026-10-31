@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Announced bingos in the order they happened (web `Leaderboard`): rank, name, the player's
-/// bingo-number pill (gold from #2) and the clock time, 56pt rows split by 1pt hairlines.
+/// The server-ranked standings (web `Leaderboard`): rank, name over a muted "{marked} squares"
+/// meta line (plus "· {bestLine} in a row" before a first bingo), and the "{n} bingos" pill
+/// (hidden at 0), rows split by 1pt hairlines.
 struct LeaderboardView: View {
-    let bingos: [BingoDoc]
-    /// Injected so snapshot tests render a fixed clock.
-    var timeZone: TimeZone = .current
+    /// Server order; one row per entry.
+    let standings: [Standing]
 
     var body: some View {
-        if bingos.isEmpty {
+        if standings.isEmpty {
             VStack(spacing: 14) {
                 RisoMiniBoardArt()
                 Text("No bingos yet").font(.risoHead(15, .bold)).foregroundStyle(Color.risoMuted)
@@ -18,45 +18,46 @@ struct LeaderboardView: View {
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
         } else {
-            let sorted = bingos.sorted { $0.seq < $1.seq }
             VStack(spacing: 0) {
-                ForEach(Array(sorted.enumerated()), id: \.element.seq) { i, b in
+                ForEach(Array(standings.enumerated()), id: \.element.seatId) { i, s in
                     if i > 0 { Rectangle().fill(Color.risoHair).frame(height: 1) }
-                    row(rank: i + 1, b)
+                    row(rank: i + 1, s)
                 }
             }
         }
     }
 
-    private func row(rank: Int, _ b: BingoDoc) -> some View {
+    private func row(rank: Int, _ s: Standing) -> some View {
         HStack(spacing: 12) {
             Text("\(rank)").font(.risoHead(20, .extraBold)).foregroundStyle(Color.risoMuted)
                 .frame(width: 28, alignment: .leading)
-            Text(b.name).font(.risoBody(16, .semibold)).foregroundStyle(Color.risoInk)
-                .lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            CountPill(number: b.playerBingoNumber)
-            Text(LobbyLogic.clock(b.at, timeZone: timeZone))
-                .font(.risoBody(14).monospacedDigit()).foregroundStyle(Color.risoMuted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.name).font(.risoBody(16, .semibold)).foregroundStyle(Color.risoInk)
+                    .lineLimit(1).truncationMode(.tail)
+                Text(LobbyLogic.standingMeta(s)).font(.risoBody(12.5, .semibold)).foregroundStyle(Color.risoMuted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let pill = LobbyLogic.bingoPill(s.bingos) { CountPill(text: pill) }
         }
+        .padding(.vertical, 8)
         .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// "#N" capsule: 24pt, 2pt keyline, transparent for a player's first bingo and gold from the
-/// second. Clipped to the capsule (a short capsule stroke draws flat stubs at its ends).
+/// Gold capsule with ink-static text: 24pt, 2pt keyline. Clipped to the capsule (a short
+/// capsule stroke draws flat stubs at its ends).
 struct CountPill: View {
-    let number: Int
-    private var repeated: Bool { number >= 2 }
+    let text: String
 
     var body: some View {
-        Text("#\(number)")
+        Text(text)
             .font(.risoHead(13, .extraBold))
-            .foregroundStyle(repeated ? Color.risoInkStatic : Color.risoInk)
-            .padding(.horizontal, 8)
+            .foregroundStyle(Color.risoInkStatic)
+            .padding(.horizontal, 10)
             .frame(minWidth: 36, minHeight: 24)
-            .background(Capsule().fill(repeated ? Color.risoGold : Color.clear))
+            .background(Capsule().fill(Color.risoGold))
             .overlay(Capsule().strokeBorder(Color.risoInk, lineWidth: Riso.Keyline.container))
             .clipShape(Capsule())
             .fixedSize()
