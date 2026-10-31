@@ -76,7 +76,7 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
     async whoAmI(code): Promise<WhoAmIRes> {
       const w = await room(code).hello();
       remember(w.gameId, code);
-      return w.seatId ? { gameId: w.gameId, seatId: w.seatId } : null;
+      return { gameId: w.gameId, seatId: w.seatId, ...(w.gameName && { gameName: w.gameName }), ...(w.hostName && { hostName: w.hostName }) };
     },
 
     subscribe(gameId, _seatId, onChange, onError) {

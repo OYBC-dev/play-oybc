@@ -13,6 +13,6 @@ export const whoAmI = onCall<WhoAmIReq, Promise<WhoAmIRes>>(async (req) => {
   const gameId = (codeSnap.data() as { gameId: string }).gameId;
   const [gameSnap, memberSnap] = await db.getAll(refs(gameId).game, refs(gameId).member(uid));
   if (!gameSnap.exists) throw appError('not-found', 'game-not-found');
-  if (!memberSnap.exists) return null;
+  if (!memberSnap.exists) return { gameId, seatId: null };
   return { gameId, seatId: (memberSnap.data() as MemberDoc).seatId };
 });

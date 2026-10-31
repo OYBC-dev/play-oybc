@@ -1,5 +1,7 @@
 :global(.page).play { padding-top: 10px; gap: 14px; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.gameName { flex: 1 1 0; min-width: 0; font-family: var(--riso-font-body); font-size: 13px; font-weight: 600; color: var(--riso-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actions { flex: 0 0 auto; }
 .code {
   display: inline-flex; align-items: center; box-sizing: border-box; height: 36px; padding: 0 12px;
   border: 2px solid var(--riso-ink); border-radius: var(--riso-r-pill); background: var(--riso-paper-2);

@@ -5,13 +5,16 @@ private let log = Logger(subsystem: "com.oybc.PlayOYBC", category: "room")
 
 // MARK: - Wire
 
-/// The server's answer to `hello`. `seatId` is nil when this uid holds no seat yet.
+/// The server's answer to `hello`. `seatId` is nil when this uid holds no seat yet; `gameName` is absent
+/// when the host set none; `hostName` is the host seat's display name (absent from older servers).
 struct Welcome: Decodable, Equatable {
     var uid: String
     var gameId: String
     var seatId: String?
     var stage: Stage
     var rev: Int
+    var gameName: String? = nil
+    var hostName: String? = nil
 }
 
 /// A `state` frame: each present section replaces the held copy wholesale. `board` is doubly optional

@@ -69,7 +69,8 @@ export type JoinGameRes =
   | { status: 'joined' | 'resumed'; gameId: string; seatId: string }
   | { status: 'reclaim-pending'; gameId: string; reclaimId: string };
 export interface WhoAmIReq { code: string }
-export type WhoAmIRes = { gameId: string; seatId: string } | null;
+/** What a `hello` on a game tells a phone: its seat if it has one, and the game's name and host for the join screen. */
+export type WhoAmIRes = { gameId: string; seatId: string | null; gameName?: string; hostName?: string };
 export interface AddTaskReq { gameId: string; text: string }
 export interface AddTaskRes { taskId: string }
 export interface DeleteTaskReq { gameId: string; taskId: string }

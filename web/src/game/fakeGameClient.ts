@@ -11,7 +11,7 @@ export class FakeGameClient implements GameClient {
   calls: Array<[string, ...unknown[]]> = [];
   createResult: CreateGameRes | Error = { gameId: 'g1', code: 'ABCDE', seatId: 's1' };
   joinResult: JoinGameRes | Error = { status: 'joined', gameId: 'g1', seatId: 's2' };
-  whoAmIResult: WhoAmIRes | Error = null;
+  whoAmIResult: WhoAmIRes | Error = { gameId: 'g1', seatId: null };
   snapshot: GameSnapshot | null = null;
   bindResult: void | Error = undefined;
   retireResult: void | Error = undefined;

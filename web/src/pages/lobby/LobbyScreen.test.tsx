@@ -109,6 +109,10 @@ describe('LobbyScreen', () => {
     client.addTask = () => Promise.reject(appError('self-mention'));
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(await screen.findByText("You can't mention yourself")).toBeInTheDocument();
+    client.addTask = () => Promise.reject(appError('duplicate-task'));
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('Already in the pool')).toBeInTheDocument();
+    expect(screen.getByLabelText('Task')).toHaveValue('Hey @Bob');
   });
 
   it('a delete hides the row at once; a failed delete restores it and shows the error', async () => {
@@ -262,7 +266,7 @@ describe('LobbyScreen', () => {
     const players = within(screen.getByRole('list', { name: 'Players' }));
     expect(players.getAllByRole('listitem')).toHaveLength(3);
     const hostChip = players.getByText('Host').closest('li')!;
-    expect(hostChip).toHaveTextContent('MeHost');
+    expect(hostChip).toHaveTextContent('MeYouHost');
     expect(players.getByText('Host')).toHaveClass('expiring');
     await userEvent.click(stack);
     expect(screen.queryByRole('list', { name: 'Players' })).toBeNull();

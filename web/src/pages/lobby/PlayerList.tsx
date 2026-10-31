@@ -80,6 +80,7 @@ export function PlayerList({ snapshot, id, isHost = false, onOpenName }: {
         {seats.map((s) => (
           <li key={s.seatId} className={styles.player}>
             <span className={styles.name}>{s.name}</span>
+            {s.seatId === snapshot.mySeatId && <span className={styles.you}>You</span>}
             {s.seatId === snapshot.game.hostSeatId && <RisoBadge kind="expiring">Host</RisoBadge>}
             {roster.filter((r) => r.seatId === s.seatId).map((r) => (canEdit ? (
               <button

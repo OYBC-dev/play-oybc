@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Every player as a 38pt pill in join order; the host's pill carries the Host badge (web
-/// `PlayerList`). Pills size to the name (names cap at 20 characters on Join).
+/// `PlayerList`); the viewer's own pill carries a muted "YOU" after the name. Pills size to the name (names cap at 20 characters on Join).
 ///
 /// A roster name bound to a player sits as a small tag inside that player's pill, after the name;
 /// every roster name nobody carries yet follows the pills as a dashed chip, in roster order. For
@@ -40,6 +40,15 @@ struct PlayerListView: View {
                 .font(.risoHead(14, .bold))
                 .foregroundStyle(Color.risoInk)
                 .lineLimit(1)
+            if seat.seatId == snapshot.mySeatId {
+                Text("You")
+                    .font(.risoHead(11, .bold))
+                    .tracking(1.32)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.risoMuted)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("player-you")
+            }
             if seat.seatId == snapshot.game.hostSeatId { RisoBadge("Host", kind: .expiring) }
             ForEach(bound) { name in tag(name) }
         }

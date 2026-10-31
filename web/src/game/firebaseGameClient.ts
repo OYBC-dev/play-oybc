@@ -9,7 +9,7 @@ import type { GameClient, GameSnapshot } from './GameClient';
 export const firebaseGameClient: GameClient = {
   createGame: (name, options = {}) => api.createGame({ name, ...options }),
   joinGame: (code, name, options) => api.joinGame(options?.reclaim ? { code, name, reclaim: true } : { code, name }),
-  whoAmI: (code) => api.whoAmI({ code }),
+  whoAmI: async (code) => (await api.whoAmI({ code })) ?? { gameId: '', seatId: null },
   addTask: async (gameId, text) => { await api.addTask({ gameId, text }); },
   deleteTask: async (gameId, taskId) => { await api.deleteTask({ gameId, taskId }); },
   launch: async (gameId) => { await api.launchGame({ gameId }); },

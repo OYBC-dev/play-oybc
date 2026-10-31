@@ -43,7 +43,8 @@ describe('GameRoom', () => {
     const g = await createGame('ua', 'Ann');
     const a = await connect(g.code);
     const w = await a.hello(tokenFor('ua'), g.gameId);
-    expect(w).toMatchObject({ t: 'welcome', uid: 'ua', gameId: g.gameId, seatId: g.seatId, stage: 'lobby' });
+    expect(w).toMatchObject({ t: 'welcome', uid: 'ua', gameId: g.gameId, seatId: g.seatId, stage: 'lobby', hostName: 'Ann' });
+    expect('gameName' in (w as object)).toBe(false);
     const s = await a.waitFor<StateMsg>(isState);
     expect(Object.keys(s).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'roster', 'seats', 'standings', 't', 'view']);
     expect(s.rev).toBe((w as { rev: number }).rev);

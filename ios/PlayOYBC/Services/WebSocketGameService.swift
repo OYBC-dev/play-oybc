@@ -156,7 +156,7 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
     func whoAmI(code: String) async throws -> WhoAmIRes? {
         let w = try await room(code).hello()
         remember(gameId: w.gameId, code: code)
-        return w.seatId.map { WhoAmIRes(gameId: w.gameId, seatId: $0) }
+        return WhoAmIRes(gameId: w.gameId, seatId: w.seatId, gameName: w.gameName, hostName: w.hostName)
     }
 
     func subscribe(gameId: String, seatId: String) -> AsyncThrowingStream<GameSnapshot, Error> {

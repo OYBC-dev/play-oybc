@@ -3,7 +3,7 @@
 .headerActions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .titleRow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.gameName { margin: 0; font-family: var(--riso-font-body); font-size: 13px; font-weight: 600; color: var(--riso-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gameName { margin: 2px 0 0; font-family: var(--riso-font-head); font-size: 15px; font-weight: 700; color: var(--riso-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pool { margin: 0; font-family: var(--riso-font-head); font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .count { font-family: var(--riso-font-head); font-size: 16px; font-weight: 800; color: var(--riso-muted); white-space: nowrap; }
 .inPool { font-family: var(--riso-font-head); font-size: 13px; font-weight: 700; color: var(--riso-muted); white-space: nowrap; }

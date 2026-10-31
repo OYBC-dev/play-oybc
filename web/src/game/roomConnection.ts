@@ -11,7 +11,7 @@ export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' |
   | 'bindName' | 'retireName';
 
 /** The server's answer to `hello`. `seatId` is null when this uid holds no seat yet. */
-export interface Welcome { uid: string; gameId: string; seatId: string | null; stage: Stage; rev: number }
+export interface Welcome { uid: string; gameId: string; seatId: string | null; stage: Stage; rev: number; gameName?: string; hostName?: string }
 
 interface StateMsg {
   t: 'state'; rev: number; game?: GameSnapshot['game']; seats?: GameSnapshot['seats']; view?: PoolViewEntry[];
@@ -437,7 +437,10 @@ export class RoomConnection {
     this.attempt = 0;
     this.state = 'ready';
     this.clearConnectDeadline();
-    const welcome: Welcome = { uid: w.uid, gameId: w.gameId, seatId: w.seatId, stage: w.stage, rev: w.rev };
+    const welcome: Welcome = {
+      uid: w.uid, gameId: w.gameId, seatId: w.seatId, stage: w.stage, rev: w.rev,
+      ...(w.gameName && { gameName: w.gameName }), ...(w.hostName && { hostName: w.hostName }),
+    };
     const waiters = this.helloWaiters;
     this.helloWaiters = [];
     for (const h of waiters) {

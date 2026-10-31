@@ -108,6 +108,19 @@ describe('RoomConnection', () => {
     expect(snaps[1].standings).toEqual(standings);
   });
 
+  it('hello carries the game name and host from the welcome, and leaves them out when the server sends none', async () => {
+    const room = makeRoom();
+    const first = room.hello();
+    await handshake(FakeSocket.last(), { ...WELCOME, seatId: null, gameName: "Halloween at Stephen's", hostName: 'Stephen' });
+    expect(await first).toMatchObject({ seatId: null, gameName: "Halloween at Stephen's", hostName: 'Stephen' });
+    const plain = makeRoom();
+    const second = plain.hello();
+    await handshake(FakeSocket.last());
+    const w = await second;
+    expect('gameName' in w).toBe(false);
+    expect('hostName' in w).toBe(false);
+  });
+
   it('act resolves with the ack result and rejects with details.code on a failed ack', async () => {
     const room = makeRoom();
     void room.hello();

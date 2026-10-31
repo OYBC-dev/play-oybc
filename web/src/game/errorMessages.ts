@@ -12,6 +12,7 @@ const MESSAGES: Record<string, string> = {
   'invalid-cell': 'That square is not available',
   'unknown-seat': 'That player is not in this game',
   'invalid-text': 'Task text is empty or too long',
+  'duplicate-task': 'Already in the pool',
   'reclaim-cooldown': 'Wait a minute before asking again',
   'name-not-found': 'That name is gone',
   'seat-not-found': 'That player left',

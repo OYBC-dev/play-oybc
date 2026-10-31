@@ -219,10 +219,10 @@ final class AppModel: ObservableObject {
     /// transient failure (the pointer is kept); every definitive answer also clears the prompt.
     private func check(code: String) async -> Error? {
         do {
-            if let me = try await service.whoAmI(code: code) {
+            if let me = try await service.whoAmI(code: code), let seatId = me.seatId {
                 resumePrompt = nil
-                resumed = ResumedGame(code: code, gameId: me.gameId, seatId: me.seatId)
-                route = .game(code: code, gameId: me.gameId, seatId: me.seatId)
+                resumed = ResumedGame(code: code, gameId: me.gameId, seatId: seatId)
+                route = .game(code: code, gameId: me.gameId, seatId: seatId)
             } else {
                 forget()
             }

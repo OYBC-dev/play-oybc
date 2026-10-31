@@ -26,6 +26,8 @@ export function JoinPage() {
   const [denied, setDenied] = useState(false);
   /** The name is held by someone here: offer "That's me" (a reclaim) beside picking another. */
   const [taken, setTaken] = useState(false);
+  /** The game's name and host, from `whoAmI`, for the header before the person joins. */
+  const [info, setInfo] = useState<{ gameName?: string; hostName?: string }>({});
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -33,7 +35,11 @@ export function JoinPage() {
     let live = true;
     setPhase({ kind: 'checking' });
     client.whoAmI(code).then(
-      (me) => { if (live) setPhase(me ? { kind: 'seated', ...me } : { kind: 'name' }); },
+      (me) => {
+        if (!live) return;
+        setInfo({ gameName: me.gameName, hostName: me.hostName });
+        setPhase(me.seatId ? { kind: 'seated', gameId: me.gameId, seatId: me.seatId } : { kind: 'name' });
+      },
       (e) => { if (live) setPhase({ kind: 'failed', message: errorMessage(e) }); },
     );
     return () => { live = false; };
@@ -58,7 +64,7 @@ export function JoinPage() {
         return;
       }
       client.whoAmI(code).then(
-        (me) => { if (me) { if (live) setPhase({ kind: 'seated', ...me }); } else backToName(null); },
+        (me) => { if (me.seatId) { if (live) setPhase({ kind: 'seated', gameId: me.gameId, seatId: me.seatId }); } else backToName(null); },
         backToName,
       );
     }, backToName);
@@ -124,7 +130,7 @@ export function JoinPage() {
     case 'checking':
       return <main className="page"><p className="muted">Loading</p></main>;
     case 'waiting':
-      return <JoinShell code={code}>{nameForm(true)}</JoinShell>;
+      return <JoinShell code={code} {...info}>{nameForm(true)}</JoinShell>;
     case 'failed':
       return (
         <main className="page">
@@ -134,12 +140,14 @@ export function JoinPage() {
         </main>
       );
     case 'name':
-      return <JoinShell code={code}>{nameForm(false)}</JoinShell>;
+      return <JoinShell code={code} {...info}>{nameForm(false)}</JoinShell>;
   }
 }
 
-/** Page chrome for the join flow: header (mark, kicker, code) over the name card. */
-function JoinShell({ code, children }: { code: string; children: React.ReactNode }): React.ReactElement {
+/** Page chrome for the join flow: header (mark, kicker, code, the game's name and host when known) over the name card. */
+function JoinShell({ code, gameName, hostName, children }: {
+  code: string; gameName?: string; hostName?: string; children: React.ReactNode;
+}): React.ReactElement {
   return (
     <main className={`page ${styles.join}`}>
       <div className={styles.joinHead}>
@@ -147,6 +155,8 @@ function JoinShell({ code, children }: { code: string; children: React.ReactNode
         <div>
           <RisoSectionLabel variant="kicker">Join</RisoSectionLabel>
           <div className={styles.joinCode}>{code}</div>
+          {gameName && <p className={styles.joinGameName} data-testid="join-game-name">{gameName}</p>}
+          {hostName && <p className={styles.joinHost}>Host · {hostName}</p>}
         </div>
       </div>
       <RisoCard padded>{children}</RisoCard>
