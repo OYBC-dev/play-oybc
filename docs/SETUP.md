@@ -157,18 +157,21 @@ iOS hosts; two web phones (A, B) join. Build the PlayOYBC scheme to a device (re
 | --- | --- | --- |
 | 1 | iOS: launch, enter a name, tap Host a game | Lobby: code, QR, `https://play-oybc.web.app/g/<CODE>`, Copy link; you are listed with Host and You badges |
 | 2 | iOS: tap Copy link, paste into Notes | The link above |
-| 3 | Phone A scans the QR (before Go: opens `https://play-oybc--realtime-kd3r1anx.web.app` and types the code), joins as "Cody"; phone B types the code on the web home page, joins as "Pat" | Both appear in the iOS player list live; the iOS host sees "Cody needs 24 more tasks" / "Pat needs 24 more tasks" lines and the pool counter |
-| 4 | iOS: type `@co`, tap Cody in the suggestions, finish "@Cody does the Monster Mash", tap Add | Pool updates on all three; on phone A the entry is a redacted bar with no text; iOS and B see the text |
+| 3 | Phone A scans the QR (before Go: opens `https://play-oybc--realtime-kd3r1anx.web.app` and types the code), joins as "Cody"; phone B types the code on the web home page, joins as "Pat" | Both appear in the iOS player list live; the iOS host sees "Cody needs 25 more tasks" / "Pat needs 25 more tasks" lines; the header reads `<yours> / 25` and `<total> in pool` |
+| 4 | iOS: type `@co`, tap Cody in the suggestions, finish "@Cody does the Monster Mash", tap Add | Pool updates on all three; on phone A the entry is a redacted bar with no text; iOS and B see "**Cody** does the Monster Mash" (name bold, no `@`) |
 | 5 | iOS: add tasks with `@someone` and `@anyone`; type a 121-character task | Blurring matches the web rules on each phone; the field stops at 120 characters |
 | 6 | iOS: delete one of your tasks with ×, and (host) delete one of Pat's | Both disappear everywhere |
-| 7 | Everyone adds tasks until the shortfall lines are gone and the counter reads at least 24 / 24 | Launch turns on (iOS only) |
-| 8 | iOS: tap Launch | All three switch to a 5x5 board with Free in the center |
+| 7 | Everyone adds tasks until the shortfall lines are gone and the counter reads at least 25 / 25 | Launch turns on (iOS only) |
+| 7b | iOS (host): in the sheet, flip the Free space switch on, then off | The switch moves only after the server echoes (no instant flip); the counter's needed value reads 24 while on, 25 when off; phones A and B show no switch |
+| 8 | iOS: tap Launch | All three switch to a 5x5 board; no Free square (Free space off) — with it on, Free in the center |
 | 9 | iOS: tap a square, then tap it again | It turns red at once and back; no flicker, no error |
+| 9b | iOS: tap a square whose text names a player (a resolved `@Cody` / `@someone` task) | It turns gold, not red; the name stays bold |
+| 9c | iOS: find the `@anyone` task | It is on at most one of the three boards |
 | 10 | iOS: press and hold a square with long text | A "Task" sheet shows the full text; Close dismisses it and the square is not toggled |
 | 11 | iOS: start a drag on a square and scroll the page up and down | The page scrolls; the square neither toggles nor opens the Task sheet (long-press vs scroll) |
 | 12 | Phone A completes a line | iOS shows "Cody got a bingo!" for about 4 s (tap dismisses it early); A sees no banner for its own bingo |
-| 13 | iOS: complete a line | The five squares turn gold; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
-| 14 | iOS: tap Leaderboard | Sheet lists the bingos in order with #n and h:mm times |
+| 13 | iOS: complete a line | The five squares turn green; A and B show "<host> got a bingo!"; iOS shows no banner for itself |
+| 14 | iOS: tap Leaderboard | One row per player: rank, name, a gold `1 bingo` pill for players with a bingo, `N squares` under the name, and `· M in a row` for players without a bingo; players with bingos rank first |
 | 15 | iOS: force-quit and relaunch the app | It returns to the same seat, board and marks without asking for a name |
 | 16 | Phone B: open the join link in a new private window, join as "Cody" | iOS shows "Someone wants to take Cody's seat" with Allow / Deny; tap Deny: B shows "The host said no" |
 | 17 | Phone B: join as "Cody" again; iOS taps Allow | B gets Cody's board; phone A shows "You've been replaced in this game." with a Home link |
