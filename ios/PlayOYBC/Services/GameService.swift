@@ -10,6 +10,8 @@ struct GameSnapshot: Equatable {
     var bingos: [BingoDoc]
     /// Pending reclaims; only populated while this seat is the host.
     var reclaims: [Reclaim]
+    /// Server-ranked leaderboard; empty before launch or from a backend that sends none.
+    var standings: [Standing] = []
 }
 
 /// The only door between UI and backend: callables for writes, listeners for reads.
@@ -21,6 +23,8 @@ protocol GameService {
     func addTask(gameId: String, text: String) async throws
     func deleteTask(gameId: String, taskId: String) async throws
     func launch(gameId: String) async throws
+    /// Host, lobby only: sets the game's options. The state frame carries the change.
+    func setOptions(gameId: String, freeSpace: Bool) async throws
     /// Sets the square to `marked` (idempotent on retry).
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes
     func end(gameId: String) async throws

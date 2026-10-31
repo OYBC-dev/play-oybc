@@ -143,6 +143,21 @@ final class RoomConnectionTests: XCTestCase {
         XCTAssertEqual(s.seats.map(\.seatId), ["s1"])
         XCTAssertNil(s.board)
         XCTAssertEqual(s.reclaims, [])
+        XCTAssertEqual(s.standings, [], "a frame without standings still completes the snapshot")
+    }
+
+    func testStandingsSectionMergesIntoTheSnapshot() async throws {
+        let (room, dialer) = makeRoom()
+        let snaps = collect(await room.snapshots())
+        let t = try await dialer.made.take()
+        _ = try await t.nextSent()
+        t.push(welcome(seat: "s1"))
+        t.push(fullState(rev: 1))
+        _ = try await snaps.take()
+        t.push(#"{"t":"state","rev":2,"standings":[{"seatId":"s1","name":"Ann","bingos":1,"marked":6,"bestLine":3,"firstBingoSeq":1}]}"#)
+        let next = try await snaps.take()
+        XCTAssertEqual(next.standings, [Standing(seatId: "s1", name: "Ann", bingos: 1, marked: 6, bestLine: 3, firstBingoSeq: 1)])
+        XCTAssertEqual(next.view.first?.text, "Sing")
     }
 
     func testAckResolvesWithDecodedResult() async throws {

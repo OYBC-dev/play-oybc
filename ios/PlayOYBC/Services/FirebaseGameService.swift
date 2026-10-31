@@ -86,6 +86,10 @@ final class FirebaseGameService: GameService {
     func resolveReclaim(gameId: String, reclaimId: String, approve: Bool) async throws {
         try await callVoid("resolveReclaim", ResolveReclaimReq(gameId: gameId, reclaimId: reclaimId, approve: approve))
     }
+    /// The Firebase backend has no options callable.
+    func setOptions(gameId: String, freeSpace: Bool) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
     func transferHost(gameId: String, toSeatId: String) async throws {
         try await callVoid("transferHost", TransferHostReq(gameId: gameId, toSeatId: toSeatId))
     }

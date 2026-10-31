@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// The lobby's bottom sheet (web `LobbySheet`): the game code and, for the host, red
-/// shortfall lines, a QR tile that opens the share sheet, and Launch. Ready (nobody short,
-/// pool ≥ 24) turns it olive with a `dark` Launch. Players get the code and Copy link.
+/// shortfall lines, the Free space switch, a QR tile that opens the share sheet, and Launch.
+/// Ready (nobody short) turns it olive with a `dark` Launch. Everyone sees "{mine} / {needed}"
+/// while nobody is listed short. Players get the code and Copy link.
 ///
 /// Drawn to the screen's bottom edge; `bottomInset` is the home-indicator safe area so the
 /// content clears it with `bottomClearance` from the edge.
@@ -12,9 +13,13 @@ struct LobbySheetView: View {
     let isHost: Bool
     /// Home-indicator safe-area height under the sheet.
     var bottomInset: CGFloat = 0
+    /// Host: sends the Free space option; the state frame flips the switch.
+    var onSetFreeSpace: (Bool) async throws -> Void = { _ in }
     let onLaunch: () async throws -> Void
     @State var qrOpen = false
     @State var busy = false
+    /// A `setOptions` call is in flight.
+    @State var optionsBusy = false
     @State var error: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -32,8 +37,7 @@ struct LobbySheetView: View {
     }
 
     private var lines: [String] { isHost ? LobbyLogic.shortfallLines(game: snapshot.game, seats: snapshot.seats) : [] }
-    private var pool: Int { snapshot.view.count }
-    private var ready: Bool { isHost && lines.isEmpty && pool >= GameConstants.minPoolSize }
+    private var ready: Bool { LobbyLogic.canLaunch(game: snapshot.game, seats: snapshot.seats, isHost: isHost) }
     private var link: String { GameConstants.joinLink(code: snapshot.game.code) }
     private var fg: Color { ready ? .risoOnColor : .risoInk }
 
@@ -44,6 +48,7 @@ struct LobbySheetView: View {
                 .frame(width: 40, height: 5)
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
+            if isHost { freeSpaceRow }
             HStack(alignment: .center, spacing: 14) {
                 info.frame(maxWidth: .infinity, alignment: .leading)
                 if isHost {
@@ -107,11 +112,35 @@ struct LobbySheetView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .modifier(CappedHeight(cap: shortfallCap))
                 .accessibilityIdentifier("shortfalls")
-            } else if isHost && !ready {
-                Text("\(pool) / \(GameConstants.minPoolSize)")
+            } else {
+                Text(LobbyLogic.poolCount(game: snapshot.game, mySeatId: snapshot.mySeatId))
                     .font(.risoBody(12.5, .bold))
-                    .foregroundStyle(Color.risoMuted)
+                    .foregroundStyle(ready ? Color.risoOnColor : Color.risoMuted)
             }
+        }
+    }
+
+    /// Host only: "Free space" switch over an ink keyline, bound to `game.freeSpace` (no
+    /// optimistic flip), disabled while the call is in flight.
+    private var freeSpaceRow: some View {
+        VStack(spacing: 8) {
+            Toggle(isOn: Binding(get: { snapshot.game.freeSpace }, set: { setFreeSpace($0) })) {
+                Text("Free space").font(.risoBody(15, .bold)).foregroundStyle(fg)
+            }
+            .tint(ready ? Color.risoInkStatic : Color.risoBlue)
+            .disabled(optionsBusy)
+            .accessibilityIdentifier("free-space")
+            Rectangle().fill(fg).frame(height: Riso.Keyline.container).accessibilityHidden(true)
+        }
+    }
+
+    private func setFreeSpace(_ on: Bool) {
+        guard !optionsBusy else { return }
+        optionsBusy = true
+        error = nil
+        _Concurrency.Task {
+            do { try await onSetFreeSpace(on) } catch { self.error = ErrorMessages.message(for: error) }
+            optionsBusy = false
         }
     }
 

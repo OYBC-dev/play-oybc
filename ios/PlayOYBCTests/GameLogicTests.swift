@@ -70,17 +70,37 @@ final class LobbyLogicTests: XCTestCase {
                        ["Cody needs 3 more tasks", "Pat needs 1 more task", "Someone needs 2 more tasks"])
     }
 
-    func testCanLaunch() {
-        XCTAssertFalse(LobbyLogic.canLaunch(game: game(["a": 1]), seats: seats, poolSize: 30))
-        XCTAssertFalse(LobbyLogic.canLaunch(game: game([:]), seats: seats, poolSize: 23))
-        XCTAssertTrue(LobbyLogic.canLaunch(game: game(["a": 0]), seats: seats, poolSize: 24))
+    func testCanLaunchIsHostInLobbyWithNobodyShort() {
+        XCTAssertFalse(LobbyLogic.canLaunch(game: game(["a": 1]), seats: seats, isHost: true))
+        XCTAssertTrue(LobbyLogic.canLaunch(game: game([:]), seats: seats, isHost: true), "no pool-size gate")
+        XCTAssertTrue(LobbyLogic.canLaunch(game: game(["a": 0]), seats: seats, isHost: true))
+        XCTAssertFalse(LobbyLogic.canLaunch(game: game([:]), seats: seats, isHost: false))
+        var playing = game([:])
+        playing.stage = .playing
+        XCTAssertFalse(LobbyLogic.canLaunch(game: playing, seats: seats, isHost: true))
     }
 
-    func testSeatsByJoinAndClock() {
+    func testPoolCountIsMineOverTasksPerBoard() {
+        var g = game([:])
+        g.dealable = ["a": 18]
+        XCTAssertEqual(LobbyLogic.poolCount(game: g, mySeatId: "a"), "18 / 25")
+        XCTAssertEqual(LobbyLogic.poolCount(game: g, mySeatId: "zz"), "0 / 25")
+        g.tasksPerBoard = 24
+        XCTAssertEqual(LobbyLogic.poolCount(game: g, mySeatId: "a"), "18 / 24")
+    }
+
+    func testStandingPillAndMeta() {
+        XCTAssertNil(LobbyLogic.bingoPill(0))
+        XCTAssertEqual(LobbyLogic.bingoPill(1), "1 bingo")
+        XCTAssertEqual(LobbyLogic.bingoPill(3), "3 bingos")
+        let none = Standing(seatId: "a", name: "Pat", bingos: 0, marked: 7, bestLine: 4, firstBingoSeq: nil)
+        XCTAssertEqual(LobbyLogic.standingMeta(none), "7 squares · 4 in a row")
+        let some = Standing(seatId: "b", name: "Cody", bingos: 2, marked: 12, bestLine: 3, firstBingoSeq: 1)
+        XCTAssertEqual(LobbyLogic.standingMeta(some), "12 squares")
+    }
+
+    func testSeatsByJoin() {
         XCTAssertEqual(LobbyLogic.seatsByJoin(seats).map(\.name), ["Cody", "Pat"])
-        let utc = TimeZone(identifier: "UTC")!
-        XCTAssertEqual(LobbyLogic.clock(0, timeZone: utc), "12:00")
-        XCTAssertEqual(LobbyLogic.clock(13 * 3_600_000 + 5 * 60_000, timeZone: utc), "1:05")
     }
 }
 
@@ -96,8 +116,15 @@ final class BoardLinesTests: XCTestCase {
     }
 
     func testCellStyle() {
-        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: true).fill, .risoGold)
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: true).fill, .risoGreen)
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: true).foreground, .risoOnColor)
         XCTAssertTrue(CellStyle(free: false, marked: true, highlighted: true).halftone)
+        // A completed line wins over a marked reference square.
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: true, ref: true).fill, .risoGreen)
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false, ref: true).fill, .risoGold)
+        XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false, ref: true).foreground, .risoInkStatic)
+        XCTAssertFalse(CellStyle(free: false, marked: true, highlighted: false, ref: true).halftone)
+        XCTAssertEqual(CellStyle(free: false, marked: false, highlighted: false, ref: true).fill, .risoPaper2)
         XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false).fill, .risoRed)
         XCTAssertEqual(CellStyle(free: false, marked: true, highlighted: false).foreground, .risoOnColor)
         XCTAssertEqual(CellStyle(free: false, marked: false, highlighted: false).fill, .risoPaper2)

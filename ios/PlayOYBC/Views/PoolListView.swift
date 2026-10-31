@@ -40,8 +40,8 @@ struct PoolListView: View {
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 if let text = e.text {
-                    Text(text)
-                        .font(.risoBody(15, .medium))
+                    Text(MentionText.attributed(text, refs: e.refs, font: .risoBody(15, .medium), boldFont: .risoBody(15, .extraBold)))
+                        .accessibilityLabel(text)
                         .lineSpacing(3)
                         .foregroundStyle(Color.risoInk)
                         .fixedSize(horizontal: false, vertical: true)

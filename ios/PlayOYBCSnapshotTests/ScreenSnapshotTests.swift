@@ -119,20 +119,20 @@ final class ScreenSnapshotTests: XCTestCase {
     }
 
     func testLeaderboard() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.bingos, timeZone: F.utc) }, height: 420)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(standings: F.standings) }, height: 420)
     }
 
     func testLeaderboardEmpty() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: []) }, height: 260)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(standings: []) }, height: 260)
     }
 
-    /// Ten rows, 24+ character names and a double-digit bingo number: names truncate, pills stay whole.
+    /// Ten rows, 24+ character names and a double-digit bingo count: names truncate, pills stay whole.
     func testLeaderboardLongNames() {
-        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(bingos: F.longNameBingos, timeZone: F.utc) }, height: 760)
+        assertBoth(RisoSheet(title: "Leaderboard", onClose: {}) { LeaderboardView(standings: F.longNameStandings) }, height: 760)
     }
 
     func testEnded() {
-        assertBoth(EndedView(snapshot: F.ended(), timeZone: F.utc), height: 900)
+        assertBoth(EndedView(snapshot: F.ended()), height: 900)
     }
 
     func testReclaimPrompt() {
@@ -186,7 +186,7 @@ final class ScreenSnapshotTests: XCTestCase {
     /// Lobby header at an accessibility text size: title, count, avatars and dots stay whole.
     func testLobbyHeaderAccessibilitySize() {
         assertBoth(HeaderHarness { focus in
-            LobbyHeaderView(poolCount: 18, seats: F.seats, playersOpen: false, showsMenu: true, menuFocus: focus, onTogglePlayers: {}, onMenu: {})
+            LobbyHeaderView(count: "18 / 25", poolSize: 30, seats: F.seats, playersOpen: false, showsMenu: true, menuFocus: focus, onTogglePlayers: {}, onMenu: {})
         }.environment(\.dynamicTypeSize, .accessibility2), height: 220)
     }
 
