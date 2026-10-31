@@ -43,6 +43,22 @@ describe('claimGame', () => {
   it('rejects an invalid name', () => {
     expect(codeOf(() => claimGame(fresh(), ctxFor('u1'), { gameId: 'g', code: 'ABCDE', name: '' }))).toBe('invalid-name');
   });
+  it('takes the settings chosen before creation: free space and a trimmed game name; defaults off and absent', () => {
+    const state = fresh();
+    claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen', gameName: "  Halloween   at Stephen's ", freeSpace: true });
+    expect(state.game).toMatchObject({ freeSpace: true, gameName: "Halloween at Stephen's" });
+    const g = buildSections(state, state.seatOf('u1'), ['game']).game!;
+    expect(g).toMatchObject({ gameName: "Halloween at Stephen's", freeSpace: true, tasksPerBoard: 24 });
+    const plain = fresh();
+    claimGame(plain, ctxFor('u1'), { gameId: 'g2', code: 'ABCDF', name: 'Stephen', gameName: '   ' });
+    expect(plain.game!.freeSpace).toBe(false);
+    expect('gameName' in plain.game!).toBe(false);
+    expect(codeOf(() => claimGame(fresh(), ctxFor('u1'), { gameId: 'g3', code: 'ABCDG', name: 'S', gameName: 'x'.repeat(41) }))).toBe('invalid-argument');
+    // Persists through a reload.
+    const p = new MemoryPersistence();
+    claimGame(new GameState(p, { now: () => clock }), ctxFor('u1'), { gameId: 'g4', code: 'ABCDH', name: 'S', gameName: 'Party', freeSpace: true });
+    expect(new GameState(p, { now: () => clock }).game).toMatchObject({ gameName: 'Party', freeSpace: true });
+  });
   it('claimGame on an occupied object is resource-exhausted', () => {
     const { state } = setup();
     expect(codeOf(() => claimGame(state, ctxFor('u9'), { gameId: 'g2', code: 'ZZZZZ', name: 'X' }))).toBe('resource-exhausted');

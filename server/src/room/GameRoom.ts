@@ -119,10 +119,12 @@ export class GameRoom implements DurableObject {
    * with a new code; any other `AppError` is 400 `{code}`.
    */
   private async claim(req: Request): Promise<Response> {
-    const { gameId, code, uid, name } = (await req.json()) as { gameId: string; code: string; uid: string; name: string };
+    const { gameId, code, uid, name, gameName, freeSpace } = (await req.json()) as {
+      gameId: string; code: string; uid: string; name: string; gameName?: string; freeSpace?: boolean;
+    };
     const t0 = Date.now();
     try {
-      const out = claimGame(this.state, this.opCtx(uid), { gameId, code, name });
+      const out = claimGame(this.state, this.opCtx(uid), { gameId, code, name, gameName, freeSpace });
       this.log('createGame', 'ok', t0);
       await this.afterMutation(out.push, 'createGame');
       return json({ seatId: out.result.seatId });

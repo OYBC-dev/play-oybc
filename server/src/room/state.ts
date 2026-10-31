@@ -8,6 +8,8 @@ import type { Persistence } from './persistence';
 export interface GameRow {
   gameId: string; code: string; stage: Stage; hostSeatId: string; createdAt: number;
   launchedAt?: number; endedAt?: number; bingoCount: number; reviewGate: boolean; freeSpace: boolean; rev: number; lastMutationAt: number;
+  /** The host's optional title (absent when not set). */
+  gameName?: string;
 }
 export interface SeatRow { seatId: string; name: string; nameKey: string; joinedAt: number }
 export interface TaskRow { taskId: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number }

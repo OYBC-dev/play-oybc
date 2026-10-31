@@ -41,6 +41,20 @@ describe('Worker routes', () => {
     expect(await bad.json()).toEqual({ code: 'invalid-name' });
   });
 
+  it('POST /api/createGame takes gameName and freeSpace; rejects a long name and a non-boolean', async () => {
+    const res = await post('/api/createGame', { name: 'Ann', gameName: '  Halloween   party ', freeSpace: true }, { Authorization: `Bearer ${tokenFor('ua')}` });
+    expect(res.status).toBe(200);
+    const g = (await res.json()) as { code: string };
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName(g.code));
+    const seats = await stub.fetch('https://room/internal/admin/seats');
+    expect(seats.status).toBe(200);
+    const long = await post('/api/createGame', { name: 'Ann', gameName: 'x'.repeat(41) }, { Authorization: `Bearer ${tokenFor('ua')}` });
+    expect(long.status).toBe(400);
+    expect(await long.json()).toEqual({ code: 'invalid-argument' });
+    const bad = await post('/api/createGame', { name: 'Ann', freeSpace: 'yes' }, { Authorization: `Bearer ${tokenFor('ua')}` });
+    expect(bad.status).toBe(400);
+  });
+
   it('/admin without the token is 401; with it lists seats', async () => {
     const g = await createGame('ua', 'Ann');
     expect((await SELF.fetch(`https://api.test/admin/${g.code}/seats`)).status).toBe(401);

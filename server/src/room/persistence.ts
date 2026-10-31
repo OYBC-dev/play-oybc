@@ -73,7 +73,8 @@ export class SqlPersistence implements Persistence {
     const ddl = [
       `CREATE TABLE IF NOT EXISTS game (id INTEGER PRIMARY KEY CHECK (id = 1), gameId TEXT NOT NULL, code TEXT NOT NULL, stage TEXT NOT NULL,
         hostSeatId TEXT NOT NULL, createdAt INTEGER NOT NULL, launchedAt INTEGER, endedAt INTEGER, bingoCount INTEGER NOT NULL,
-        reviewGate INTEGER NOT NULL, freeSpace INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`,
+        reviewGate INTEGER NOT NULL, freeSpace INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL,
+        gameName TEXT)`,
       `CREATE TABLE IF NOT EXISTS seats (seatId TEXT PRIMARY KEY, name TEXT NOT NULL, nameKey TEXT NOT NULL, joinedAt INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS members (uid TEXT PRIMARY KEY, seatId TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS tasks (taskId TEXT PRIMARY KEY, text TEXT NOT NULL, authorSeatId TEXT NOT NULL, mentions TEXT NOT NULL, createdAt INTEGER NOT NULL)`,
@@ -92,6 +93,7 @@ export class SqlPersistence implements Persistence {
       sql.exec('ALTER TABLE game ADD COLUMN freeSpace INTEGER NOT NULL DEFAULT 0');
       sql.exec("UPDATE game SET freeSpace = 1 WHERE stage != 'lobby'");
     }
+    if (!cols.includes('gameName')) sql.exec('ALTER TABLE game ADD COLUMN gameName TEXT');
   }
 
   load(): Loaded {
@@ -104,6 +106,7 @@ export class SqlPersistence implements Persistence {
             createdAt: g.createdAt as number, ...(g.launchedAt !== null && { launchedAt: g.launchedAt as number }),
             ...(g.endedAt !== null && { endedAt: g.endedAt as number }), bingoCount: g.bingoCount as number,
             reviewGate: g.reviewGate === 1, freeSpace: g.freeSpace === 1, rev: g.rev as number, lastMutationAt: g.lastMutationAt as number,
+            ...(typeof g.gameName === 'string' && g.gameName !== '' && { gameName: g.gameName }),
           }
         : null,
       seats: all('SELECT * FROM seats') as unknown as SeatRow[],
@@ -124,10 +127,10 @@ export class SqlPersistence implements Persistence {
 
   putGame(g: GameRow): void {
     this.sql.exec(
-      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, freeSpace, rev, lastMutationAt)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, freeSpace, rev, lastMutationAt, gameName)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       g.gameId, g.code, g.stage, g.hostSeatId, g.createdAt, g.launchedAt ?? null, g.endedAt ?? null, g.bingoCount,
-      g.reviewGate ? 1 : 0, g.freeSpace ? 1 : 0, g.rev, g.lastMutationAt,
+      g.reviewGate ? 1 : 0, g.freeSpace ? 1 : 0, g.rev, g.lastMutationAt, g.gameName ?? null,
     );
   }
   putSeat(s: SeatRow): void {

@@ -1,5 +1,5 @@
 import {
-  CENTER_INDEX, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, rosterHas, scanTask, shortfalls, unboundKeys,
+  CENTER_INDEX, MAX_GAME_NAME_LENGTH, MAX_TASK_LENGTH, RECLAIM_RETRY_COOLDOWN_MS, applyMark, assignAnyone, dealBoard, buildRoster, nameKey, nearMissMentions, normalizeName, parseMentions, rosterHas, scanTask, shortfalls, unboundKeys,
   type AddTaskRes, type CreateGameRes, type JoinGameRes, type ReclaimDoc, type ToggleMarkRes,
 } from 'game-core';
 import { AppError } from '../errors';
@@ -53,17 +53,24 @@ function requireLobby(game: GameRow): void {
 }
 
 /**
- * Creates the game on an empty room with the caller as host.
- * @throws AppError `resource-exhausted` if the room already holds a game (caller retries with another code); `invalid-name`.
+ * Creates the game on an empty room with the caller as host, with the settings chosen before creation
+ * (`freeSpace`, default off; `gameName`, optional, trimmed, ≤ 40 chars).
+ * @throws AppError `resource-exhausted` if the room already holds a game (caller retries with another code); `invalid-name`;
+ *   `invalid-argument` for a game name over the limit.
  */
-export function claimGame(state: GameState, ctx: OpCtx, args: { gameId: string; code: string; name: string }): OpOut<CreateGameRes> {
+export function claimGame(
+  state: GameState, ctx: OpCtx, args: { gameId: string; code: string; name: string; gameName?: string; freeSpace?: boolean },
+): OpOut<CreateGameRes> {
   if (state.game) throw new AppError('resource-exhausted');
   const name = normalizeName(args.name);
   if (!name) throw new AppError('invalid-name');
+  const gameName = (args.gameName ?? '').trim().replace(/\s+/g, ' ');
+  if (gameName.length > MAX_GAME_NAME_LENGTH) throw new AppError('invalid-argument');
   const seatId = ctx.newId();
   state.putGame({
     gameId: args.gameId, code: args.code, stage: 'lobby', hostSeatId: seatId, createdAt: ctx.now,
-    bingoCount: 0, reviewGate: false, freeSpace: false, rev: 0, lastMutationAt: ctx.now,
+    bingoCount: 0, reviewGate: false, freeSpace: args.freeSpace === true, rev: 0, lastMutationAt: ctx.now,
+    ...(gameName && { gameName }),
   });
   state.putSeat({ seatId, name, nameKey: nameKey(name), joinedAt: ctx.now });
   state.putMember(ctx.uid, seatId);

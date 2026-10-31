@@ -43,7 +43,9 @@ export function scanTask(task: PoolTask, seats: readonly Seat[], names?: NameSta
     if (t.kind === 'seat') { named.add(t.seat.seatId); referenced.add(t.seat.seatId); }
     else if (t.kind === 'unknown') {
       const key = nameKey(t.token.slice(1));
-      if (!names?.get(key)?.retired) unbound = true;
+      // The host said this person is not coming: the name holds nobody back, not even a near match.
+      if (names?.get(key)?.retired) continue;
+      unbound = true;
       for (const s of seats) if (isNearName(key, nameKey(s.name))) referenced.add(s.seatId);
     }
   }
