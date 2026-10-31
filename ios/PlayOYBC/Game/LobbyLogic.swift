@@ -26,8 +26,8 @@ enum LobbyLogic {
     /// Leaderboard pill, "1 bingo" / "3 bingos"; nil at 0 (no pill).
     static func bingoPill(_ n: Int) -> String? { n > 0 ? "\(n) bingo\(n == 1 ? "" : "s")" : nil }
 
-    /// Leaderboard meta line: "{marked} squares", plus " · {bestLine} in a row" before a first bingo.
+    /// Leaderboard meta line: "{marked} squares" ("1 square"), plus " · {bestLine} in a row" before a first bingo.
     static func standingMeta(_ s: Standing) -> String {
-        "\(s.marked) squares" + (s.bingos == 0 ? " · \(s.bestLine) in a row" : "")
+        "\(s.marked) square\(s.marked == 1 ? "" : "s")" + (s.bingos == 0 ? " · \(s.bestLine) in a row" : "")
     }
 }

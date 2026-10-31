@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { render, screen, within } from '@testing-library/react';
 import type { Standing } from 'game-core';
-import { Leaderboard } from './Leaderboard';
+import { Leaderboard, standingMeta } from './Leaderboard';
 
 const s = (seatId: string, bingos: number, marked: number, bestLine: number): Standing =>
   ({ seatId, name: seatId, bingos, marked, bestLine, firstBingoSeq: bingos ? 1 : null });
@@ -26,6 +26,12 @@ describe('Leaderboard', () => {
     const row = screen.getByRole('listitem');
     expect(within(row).getByText('7 squares · 3 in a row')).toBeInTheDocument();
     expect(within(row).queryByText(/bingo/)).toBeNull();
+  });
+
+  it('says "1 square" at one mark and pluralises otherwise', () => {
+    expect(standingMeta(s('Pat', 0, 1, 1))).toBe('1 square · 1 in a row');
+    expect(standingMeta(s('Pat', 1, 1, 1))).toBe('1 square');
+    expect(standingMeta(s('Pat', 0, 0, 0))).toBe('0 squares · 0 in a row');
   });
 
   it('has an empty state', () => {

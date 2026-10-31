@@ -97,6 +97,10 @@ final class LobbyLogicTests: XCTestCase {
         XCTAssertEqual(LobbyLogic.standingMeta(none), "7 squares · 4 in a row")
         let some = Standing(seatId: "b", name: "Cody", bingos: 2, marked: 12, bestLine: 3, firstBingoSeq: 1)
         XCTAssertEqual(LobbyLogic.standingMeta(some), "12 squares")
+        let one = Standing(seatId: "c", name: "Ann", bingos: 0, marked: 1, bestLine: 1, firstBingoSeq: nil)
+        XCTAssertEqual(LobbyLogic.standingMeta(one), "1 square · 1 in a row")
+        let oneBingo = Standing(seatId: "d", name: "Bo", bingos: 1, marked: 1, bestLine: 1, firstBingoSeq: 1)
+        XCTAssertEqual(LobbyLogic.standingMeta(oneBingo), "1 square")
     }
 
     func testSeatsByJoin() {

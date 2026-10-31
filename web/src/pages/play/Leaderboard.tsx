@@ -5,9 +5,11 @@ import styles from './Leaderboard.module.css';
 /** "{n} bingo" / "{n} bingos". */
 export const bingoPill = (n: number): string => `${n} bingo${n === 1 ? '' : 's'}`;
 
-/** "{marked} squares", plus " · {bestLine} in a row" while the player has no bingo. */
-export const standingMeta = (s: Standing): string =>
-  s.bingos === 0 ? `${s.marked} squares · ${s.bestLine} in a row` : `${s.marked} squares`;
+/** "{marked} squares" ("1 square"), plus " · {bestLine} in a row" while the player has no bingo. */
+export const standingMeta = (s: Standing): string => {
+  const squares = `${s.marked} square${s.marked === 1 ? '' : 's'}`;
+  return s.bingos === 0 ? `${squares} · ${s.bestLine} in a row` : squares;
+};
 
 /**
  * The standings, one row per player in server order: rank, name, a gold bingo pill (hidden at 0) and a
