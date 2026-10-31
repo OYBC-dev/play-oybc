@@ -42,7 +42,7 @@ What Phase 0 does **not** fix tonight: a friend who joins under a nickname is ne
 
 ---
 
-## Phase 0: party cut (server only)
+## Phase 0: party cut (server only) — SHIPPED (PR #14, dev 55d2642)
 
 ### Task 1: game-core — names on tasks, resolution, visibility, dealing, display
 
@@ -90,9 +90,9 @@ What Phase 0 does **not** fix tonight: a friend who joins under a nickname is ne
 
 ---
 
-## Phase 1: full roster (after the party)
+## Phase 1: full roster — BUILT THE SAME DAY (owner: tonight)
 
-Builds on Phase 0 and the design handoff for the roster UI (see the design prompt handed to the owner in chat; the handoff arrives as a zip under `design_handoff_roster/`, gitignored).
+Builds on Phase 0 without a design handoff: the UI follows the existing Riso kit (dashed pill = unbound name, tag on a player's pill = bound name, bind sheet = radio list + `Nobody yet` + `Not coming`, autocomplete `+ Jess` row). Bindings are a `bindings` table, the roster is derived (`docs/ROSTER.md` §9).
 
 ### Task 1: game-core — roster model and explicit bindings
 

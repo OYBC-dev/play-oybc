@@ -1,6 +1,6 @@
 # Roster: mention people before they join
 
-Status: design agreed with the owner 2026-10-31 (the night before the first party); builder-checked; builds after the party on top of `docs/PARTY_FEATURES.md` (PR #12). Supersedes the "a mention must name a current player" rule in `docs/DESIGN.md` §4.3 and the "late joiners can't be `@Name`d" line in §4.4.
+Status: design agreed with the owner 2026-10-31 (the night before the first party); builder-checked. **Built the same day** (owner: tonight, not after the party): Phase 0 (server only, PR #14) then Phase 1 (bindings, roster section, bind / retire, both apps) per `docs/PLAN_ROSTER.md`; amendments from the build are in §9. Supersedes the "a mention must name a current player" rule in `docs/DESIGN.md` §4.3 and the "late joiners can't be `@Name`d" line in §4.4.
 
 ## 1. Intent
 
@@ -117,3 +117,15 @@ One PR after the party, on top of PR #12: game-core → server → web → iOS, 
 | `+ <name>` autocomplete row instead of a prompt or error | Claude (owner agreed) |
 | 100 referenced names per game; joins never count against it | Claude |
 | Built after PR #12 merges | Claude |
+
+## 9. Amendments from the build (2026-10-31)
+
+| Change | Why |
+|---|---|
+| No `roster` table. A roster row is derived: every `@word` in the pool that matches no seat's own name (`buildRoster`), with the host's binding from a `bindings` table (key → seatId). `TaskMentions.names` records the keys typed as unbound at authoring. | Nothing to migrate, nothing to cap; `join` never creates rows, so the §4 cap is moot. |
+| Resolution re-scans the text against the current seats on every read (`scanTask` / `MentionContext`), with explicit bindings folded into the scanner (`scanMentions(text, seats, bindings)`), so a bound name IS that seat for parse, display, visibility, dealing and readiness. | One rule everywhere; a name written before its person joined resolves the moment they do. |
+| **Identified** = a seat some task names exactly (stored seat id, exact-name match, or explicit binding). A nearly named seat is kept from that task but is not identified. | §2's definition plus the implicit own-name match; the party has no time to bind everyone by hand. |
+| **Near-miss refusal.** An unknown `@word` whose key is a seat's first name, a 3+ char prefix of it, or that name plus "s" is refused at add time with the apps' existing `unknown-mention` copy, and such a seat is kept from the task at read time regardless. | "@Cody" with "Cody B" seated must never reach Cody B. |
+| Curly apostrophes fold to plain ones in `nameKey` and in the scanner; name matching compares whole words lower-cased. | The iOS keyboard types `’`. |
+| Retire rewrites `@Jess` → `Jess` for whole tokens only (`retireNameInText`) and drops the key from `names`. | As §3.2, pinned by tests. |
+| The `roster` section rides with `view` on every push that can change it (claim, join, addTask, deleteTask, bindName, retireName). | Clients hold it like `standings`. |
