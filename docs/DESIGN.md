@@ -141,7 +141,7 @@ Three forms, typed inline in task text:
 ### 4.4 Boards & dealing
 - **5×5; the FREE center is a host option, off by default** (`docs/PARTY_FEATURES.md` §3). 25 tasks per board without it, 24 with it. Mentions render as bold names without the `@`; marked squares are red (plain), gold (reference) or green (in a completed line).
 - **Launch is enabled** only when **every** player's eligible pool (pool minus tasks that
-  `@Name` them) has ≥ 24 tasks. Until then the lobby shows who is short and by how
+  `@Name` them) has ≥ the board's task count (25, or 24 with free space on). Until then the lobby shows who is short and by how
   many ("Cody needs 3 more tasks"). *(Owner decision.)* Late joiners can't be `@Name`d
   (they weren't present when tasks were written), so their eligible pool is the whole
   locked pool minus nothing — always ≥ 24.
