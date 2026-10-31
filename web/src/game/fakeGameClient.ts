@@ -1,5 +1,5 @@
 import type { CreateGameRes, JoinGameRes, ReclaimDoc, ToggleMarkRes, WhoAmIRes } from 'game-core';
-import type { GameClient, GameSnapshot } from './GameClient';
+import type { CreateGameOptions, GameClient, GameSnapshot } from './GameClient';
 
 /** Error shaped like a callable failure, for tests. */
 export function appError(code: string): Error & { details: { code: string } } {
@@ -26,7 +26,9 @@ export class FakeGameClient implements GameClient {
     return value;
   }
 
-  createGame(name: string) { return this.result('createGame', [name], this.createResult); }
+  createGame(name: string, options?: CreateGameOptions) {
+    return this.result('createGame', options === undefined ? [name] : [name, options], this.createResult);
+  }
   joinGame(code: string, name: string) { return this.result('joinGame', [code, name], this.joinResult); }
   whoAmI(code: string) { return this.result('whoAmI', [code], this.whoAmIResult); }
 

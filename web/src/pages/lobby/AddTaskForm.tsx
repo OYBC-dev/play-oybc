@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { RosterName } from 'game-core';
 import { errorMessage } from '../../game/errorMessages';
 import { RisoButton } from '../../components/riso/RisoButton';
@@ -28,6 +28,9 @@ export function AddTaskForm({
   myName,
   seats = [],
   mySeatId,
+  onHowTo,
+  inputRef,
+  howToRef,
 }: {
   /** Adds the trimmed text to the pool; rejects with the server error. */
   onAdd: (text: string) => Promise<void>;
@@ -41,6 +44,12 @@ export function AddTaskForm({
   seats?: ReadonlyArray<{ seatId: string; name: string }>;
   /** Your seat: a roster name bound to you is not offered (it would mention yourself). */
   mySeatId?: string;
+  /** Opens "How tasks work"; when given, an (i) bubble follows Add. */
+  onHowTo?: () => void;
+  /** Receives the task input (focus returns here when the first-join explainer closes). */
+  inputRef?: RefObject<HTMLInputElement | null>;
+  /** Receives the (i) bubble (focus returns here when the explainer it opened closes). */
+  howToRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [text, setText] = useState('');
   const [caret, setCaret] = useState(0);
@@ -48,7 +57,8 @@ export function AddTaskForm({
   const [dismissed, setDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const ownInput = useRef<HTMLInputElement>(null);
+  const input = inputRef ?? ownInput;
   const pendingCaret = useRef<number | null>(null);
   const latest = useRef(text);
   latest.current = text;
@@ -134,6 +144,11 @@ export function AddTaskForm({
             onBlur={() => setDismissed(true)}
           />
           <RisoButton type="submit" disabled={busy || !text.trim()}>Add</RisoButton>
+          {onHowTo && (
+            <button ref={howToRef} type="button" className={styles.info} aria-label="How tasks work" onClick={onHowTo}>
+              <span className={styles.infoGlyph} aria-hidden="true">i</span>
+            </button>
+          )}
         </div>
         <MentionAutocomplete options={options} active={active} onPick={pick} />
       </div>

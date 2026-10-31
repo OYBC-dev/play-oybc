@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { RosterName } from 'game-core';
 import type { GameSnapshot } from '../../game/GameClient';
 import { appError, FakeGameClient } from '../../game/fakeGameClient';
+import { HOW_TO_SEEN_KEY } from './howTo';
 import { LobbyScreen } from './LobbyScreen';
 
 const ROSTER: RosterName[] = [
@@ -41,6 +42,9 @@ async function openPlayers() {
 
 const rerenderWith = (rerender: (ui: React.ReactElement) => void, client: FakeGameClient, s: GameSnapshot) =>
   rerender(<LobbyScreen client={client} snapshot={s} gameId="g1" onLeave={() => {}} />);
+
+// These suites are about the lobby itself: the first-lobby explainer is covered in howTo.test.tsx.
+beforeEach(() => localStorage.setItem(HOW_TO_SEEN_KEY, '1'));
 
 describe('roster in the lobby', () => {
   it('host: an unbound name is a dashed chip button after the players, a bound name a tag button inside its player', async () => {

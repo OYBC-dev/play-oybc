@@ -3,4 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, expect } from 'vitest';
 
 expect.extend(matchers);
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  try { localStorage.clear(); } catch { /* no storage */ }
+});

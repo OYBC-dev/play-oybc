@@ -13,6 +13,12 @@ import type {
   WhoAmIRes,
 } from 'game-core';
 
+/** Settings chosen on Game settings, sent with `createGame`. */
+export interface CreateGameOptions {
+  gameName?: string;
+  freeSpace?: boolean;
+}
+
 /** Tasks per board when a frame does not say (free space off). */
 export const DEFAULT_TASKS_PER_BOARD = 25;
 
@@ -54,7 +60,11 @@ export interface GameSnapshot {
 
 /** The only door between UI and backend: callables for writes, listeners for reads. */
 export interface GameClient {
-  createGame(name: string): Promise<CreateGameRes>;
+  /**
+   * Creates a game with the caller (`name`) as host. `options` are the game's settings, locked at creation:
+   * `gameName` (optional, ≤ 40 chars, the server trims it) and `freeSpace` (default off).
+   */
+  createGame(name: string, options?: CreateGameOptions): Promise<CreateGameRes>;
   joinGame(code: string, name: string): Promise<JoinGameRes>;
   whoAmI(code: string): Promise<WhoAmIRes>;
   subscribe(
@@ -67,7 +77,10 @@ export interface GameClient {
   addTask(gameId: string, text: string, taskId?: string): Promise<void>;
   deleteTask(gameId: string, taskId: string): Promise<void>;
   launch(gameId: string): Promise<void>;
-  /** Host, lobby only: sets the game's options. */
+  /**
+   * Host, lobby only: sets the game's options. Kept for the server's op (and the legacy backend); the UI no
+   * longer calls it: settings are chosen before the game exists and sent with `createGame`.
+   */
   setOptions(gameId: string, options: { freeSpace: boolean }): Promise<void>;
   /** Host: binds the roster name `key` to a joined seat, or unbinds it (`seatId` null). */
   bindName(gameId: string, key: string, seatId: string | null): Promise<void>;

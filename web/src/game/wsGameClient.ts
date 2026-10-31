@@ -48,14 +48,14 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
   };
 
   return {
-    async createGame(name) {
+    async createGame(name, options = {}) {
       const token = await getToken();
       let res: Response;
       try {
         res = await (deps.fetchImpl ?? fetch)(`${httpUrl}/api/createGame`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, ...options }),
         });
       } catch {
         throw appError('offline');

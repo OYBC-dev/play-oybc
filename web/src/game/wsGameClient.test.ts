@@ -45,6 +45,14 @@ describe('createWsGameClient', () => {
     expect(appErrorCode(err)).toBe('invalid-name');
   });
 
+  it('createGame sends the game settings in the body', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ gameId: 'g8', code: 'ASDFG', seatId: 's1' }), { status: 200 }));
+    const c = client(fetchImpl);
+    await c.createGame('Ann', { gameName: 'Halloween', freeSpace: true });
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toEqual({ name: 'Ann', gameName: 'Halloween', freeSpace: true });
+  });
+
   it('subscribe emits GameSnapshot with reclaims [] by default', async () => {
     const c = client();
     const code = nextCode();

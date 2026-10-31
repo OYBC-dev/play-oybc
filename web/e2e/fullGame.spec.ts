@@ -52,7 +52,14 @@ test('three phones play a full game', async ({ browser }) => {
   await A.page.goto('/');
   await A.page.getByLabel('Your name').fill('Stephen');
   await A.page.getByRole('button', { name: 'Host a game' }).click();
+  // Game settings come first; the game exists only once Create game is pressed. Free space stays off.
+  await expect(A.page).toHaveURL(/\/host$/);
+  await expect(A.page.getByRole('switch', { name: 'Free space' })).not.toBeChecked();
+  await expect(A.page.getByTestId('tasks-per-board')).toHaveText('25');
+  await A.page.getByLabel('Game name').fill('Halloween at Stephen\'s');
+  await A.page.getByRole('button', { name: 'Create game' }).click();
   await expect(A.page.getByTestId('stage-lobby')).toBeVisible();
+  await expect(A.page.getByTestId('game-name')).toHaveText('Halloween at Stephen\'s');
   const code = (await A.page.getByLabel('Game code').textContent())!.trim();
   expect(code).toMatch(/^[A-Z0-9]{5}$/);
   await join(B.page, code, 'Cody');
@@ -60,8 +67,8 @@ test('three phones play a full game', async ({ browser }) => {
   await expect(B.page.getByTestId('stage-lobby')).toBeVisible();
   await expect(C.page.getByTestId('stage-lobby')).toBeVisible();
 
-  // Only the host gets the Free space switch, off by default.
-  await expect(A.page.getByRole('switch', { name: 'Free space' })).not.toBeChecked();
+  // Settings locked at creation: no Free space switch in any lobby.
+  await expect(A.page.getByRole('switch')).toHaveCount(0);
   await expect(B.page.getByRole('switch')).toHaveCount(0);
 
   // 2. B mentions Stephen: A sees it blurred, C sees the display text with the name in bold and no '@'.

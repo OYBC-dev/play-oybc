@@ -1,9 +1,8 @@
-/// <reference types="node" />
-import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { GameSnapshot, SnapshotGame } from '../../game/GameClient';
 import { appError, FakeGameClient } from '../../game/fakeGameClient';
+import { HOW_TO_SEEN_KEY } from './howTo';
 import { LobbyScreen } from './LobbyScreen';
 import { nonsenseFor } from './nonsense';
 
@@ -41,6 +40,9 @@ function setup(s: GameSnapshot) {
   const utils = render(<LobbyScreen client={client} snapshot={s} gameId="g1" onLeave={noop} />);
   return { client, ...utils };
 }
+
+// These suites are about the lobby itself: the first-lobby explainer is covered in howTo.test.tsx.
+beforeEach(() => localStorage.setItem(HOW_TO_SEEN_KEY, '1'));
 
 describe('LobbyScreen', () => {
   it('renders entries; blurred ones show the author and two copies of per-task nonsense, never task text', () => {
@@ -228,35 +230,10 @@ describe('LobbyScreen', () => {
     expect(within(row).getByRole('button', { name: 'Delete task: Cody carves the pumpkin' })).toBeInTheDocument();
   });
 
-  it('host sees the Free space switch; toggling sends setOptions, disabled while in flight, no optimistic flip', async () => {
-    const { client, rerender } = setup(snap({ game: { freeSpace: false, tasksPerBoard: 25 } }));
-    let resolve!: () => void;
-    const setOptions = vi.fn(() => new Promise<void>((r) => { resolve = r; }));
-    client.setOptions = setOptions;
-    const sw = within(screen.getByTestId('lobby-sheet')).getByRole('switch', { name: 'Free space' });
-    expect(sw).not.toBeChecked();
-    await userEvent.click(sw);
-    expect(setOptions).toHaveBeenCalledWith('g1', { freeSpace: true });
-    expect(sw).toBeDisabled();
-    expect(sw).not.toBeChecked();
-    await act(async () => resolve());
-    expect(sw).toBeEnabled();
-    expect(sw).not.toBeChecked();
-    rerender(<LobbyScreen client={client} snapshot={snap({ game: { freeSpace: true, tasksPerBoard: 24 } })} gameId="g1" onLeave={noop} />);
-    expect(screen.getByRole('switch', { name: 'Free space' })).toBeChecked();
-  });
-
-  it('a failed Free space change shows its error and leaves the switch as the server has it', async () => {
-    const { client } = setup(snap({ game: { freeSpace: true } }));
-    client.setOptions = () => Promise.reject(appError('not-host'));
-    await userEvent.click(screen.getByRole('switch', { name: 'Free space' }));
-    expect(await screen.findByText('Only the host can do that')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Free space' })).toBeChecked();
-  });
-
-  it('the switch turns ink-static, not blue, when on over the blue ready sheet', () => {
-    const css = readFileSync(`${process.cwd()}/src/pages/lobby/LobbySheet.module.css`, 'utf8');
-    expect(css).toMatch(/\.ready \.switch:checked \{ background: var\(--riso-ink-static\); \}/);
+  it('the sheet has no Free space switch for the host either (settings lock at creation)', () => {
+    setup(snap({ game: { freeSpace: true, tasksPerBoard: 24 } }));
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByText('Free space')).toBeNull();
   });
 
   it('guests get no Free space row', () => {
@@ -314,23 +291,135 @@ describe('LobbyScreen', () => {
     expect(screen.queryByText('Waiting for players')).toBeNull();
   });
 
-  it('host sheet shows the code, a QR tile and Launch; tapping the tile expands it', async () => {
+  it('host sheet shows the code, a QR tile and Launch; tapping the tile opens the expanded sheet, Done collapses it', async () => {
     setup(snap({ shortfalls: { s2: 1 } }));
-    const sheet = within(screen.getByTestId('lobby-sheet'));
+    const sheetEl = screen.getByTestId('lobby-sheet');
+    const sheet = within(sheetEl);
     expect(sheet.getByLabelText('Game code')).toHaveTextContent('ABCDE');
     expect(sheet.getByRole('button', { name: 'Launch' })).toHaveClass('primary', 'large');
     expect(sheet.queryByRole('link')).toBeNull();
     expect(sheet.queryByText(/\/g\/ABCDE/)).toBeNull();
-    const tile = sheet.getByRole('button', { name: 'Share' });
+    const tile = sheet.getByRole('button', { name: 'Show QR code' });
     expect(tile.querySelector('svg')).not.toBeNull();
     expect(sheet.queryByRole('img', { name: 'QR code' })).toBeNull();
     expect(sheet.queryByRole('button', { name: 'Copy link' })).toBeNull();
     await userEvent.click(tile);
-    expect(tile).toHaveAttribute('aria-expanded', 'true');
-    expect(sheet.getByRole('img', { name: 'QR code' }).querySelector('svg')).not.toBeNull();
-    expect(sheet.getByRole('button', { name: 'Copy link' })).toHaveClass('neutral', 'fullWidth');
-    await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
-    expect(sheet.queryByRole('img', { name: 'QR code' })).toBeNull();
+    expect(sheetEl).toHaveAttribute('data-expanded', 'true');
+    const region = screen.getByRole('dialog', { name: 'Game ABCDE' });
+    expect(region).toHaveFocus();
+    expect(within(region).getByRole('img', { name: 'QR code' }).querySelector('svg')).not.toBeNull();
+    expect(within(region).getByText(/\/g\/ABCDE$/)).toBeInTheDocument();
+    expect(within(region).getByRole('button', { name: 'Copy link' })).toHaveClass('neutral');
+    await userEvent.click(within(region).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(sheet.getByRole('button', { name: 'Show QR code' })).toHaveFocus();
+  });
+
+  it('the handle expands on tap and on a drag up; Escape, the scrim and a drag down collapse', async () => {
+    setup(snap({ shortfalls: { s2: 1 } }));
+    const handle = () => screen.getByRole('button', { name: 'Expand' });
+    await userEvent.click(handle());
+    expect(screen.getByRole('dialog', { name: 'Game ABCDE' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(handle()).toHaveFocus();
+    fireEvent.pointerDown(handle(), { clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(handle(), { clientY: 440, pointerId: 1 });
+    fireEvent.pointerUp(handle(), { clientY: 440, pointerId: 1 });
+    expect(screen.getByRole('dialog', { name: 'Game ABCDE' })).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('sheet-scrim'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await userEvent.click(handle());
+    const collapse = screen.getByRole('button', { name: 'Collapse' });
+    fireEvent.pointerDown(collapse, { clientY: 300, pointerId: 1 });
+    fireEvent.pointerMove(collapse, { clientY: 360, pointerId: 1 });
+    fireEvent.pointerUp(collapse, { clientY: 360, pointerId: 1 });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('expanded host sheet while filling: summary, red per-player lines, short players first, Launch · need n more disabled', async () => {
+    setup(snap({ shortfalls: { s2: 3, s3: 1 }, game: { tasksPerBoard: 25, dealable: { s1: 25, s2: 22, s3: 24 } } }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }));
+    const region = within(screen.getByRole('dialog', { name: 'Game ABCDE' }));
+    const summary = within(screen.getByTestId('readiness'));
+    expect(summary.getByText('3 of 25 in the pool')).toBeInTheDocument();
+    expect(summary.getByText('Need 3 more')).toBeInTheDocument();
+    expect(summary.getByText('Cody needs 3 more')).toHaveClass('lineShort');
+    expect(summary.getByText('Pat needs 1 more')).toBeInTheDocument();
+    expect(region.getByText('Players · 3')).toBeInTheDocument();
+    const rows = region.getAllByTestId('player-row');
+    expect(rows.map((r) => r.textContent)).toEqual(['C' + 'Cody22 / 25 · 3 more', 'P' + 'Pat24 / 25 · 1 more', 'M' + 'MeHost25 / 25']);
+    const launch = region.getByRole('button', { name: 'Launch · need 3 more' });
+    expect(launch).toBeDisabled();
+    expect(launch).toHaveClass('primary', 'fullWidth');
+  });
+
+  it('expanded host sheet when ready: Pool is full, one all-set row, dark Launch that fires', async () => {
+    const { client } = setup(snap({ game: { tasksPerBoard: 25, dealable: { s1: 25, s2: 25, s3: 25 } } }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }));
+    const region = within(screen.getByRole('dialog', { name: 'Game ABCDE' }));
+    expect(region.getByText('Pool is full')).toBeInTheDocument();
+    expect(region.getByText('Ready to launch')).toBeInTheDocument();
+    expect(region.queryAllByTestId('player-row')).toHaveLength(0);
+    expect(region.getByTestId('players-all-set')).toHaveTextContent('3 players · all set25 / 25');
+    const launch = region.getByRole('button', { name: 'Launch' });
+    expect(launch).toHaveClass('dark');
+    await userEvent.click(launch);
+    expect(client.calls).toContainEqual(['launch', 'g1']);
+  });
+
+  it('expanded player sheet: own line, Pool needs n more tasks (red, no dots) until ready, then Waiting for host to start', async () => {
+    const { rerender, client } = setup(snap({ host: false, shortfalls: { s1: 3, s3: 5 } }));
+    expect(screen.queryByTestId('player-waiting-mini')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(screen.getByText("You've added 1 · 3 more to go")).toHaveClass('lineShort');
+    let pill = screen.getByTestId('player-waiting');
+    expect(pill).toHaveTextContent('Pool needs 5 more tasks');
+    expect(pill).toHaveClass('pillShort');
+    expect(pill.querySelector('[aria-hidden="true"] i')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Launch/ })).toBeNull();
+    rerender(<LobbyScreen client={client} snapshot={snap({ host: false })} gameId="g1" onLeave={noop} />);
+    expect(screen.getByText("You've added 1 · all set")).not.toHaveClass('lineShort');
+    pill = screen.getByTestId('player-waiting');
+    expect(pill).toHaveTextContent('Waiting for host to start');
+    expect(pill).not.toHaveClass('pillShort');
+    expect(pill.querySelectorAll('i')).toHaveLength(3);
+    expect(screen.getByText('Waiting on host')).toBeInTheDocument();
+  });
+
+  it('collapsed player sheet shows the mini Waiting for host pill only when ready', () => {
+    const { unmount } = setup(snap({ host: false, shortfalls: { s2: 1 } }));
+    expect(screen.queryByTestId('player-waiting-mini')).toBeNull();
+    unmount();
+    setup(snap({ host: false }));
+    expect(screen.getByTestId('player-waiting-mini')).toHaveTextContent('Waiting for host');
+  });
+
+  it('Share appears only where the browser has a share sheet', async () => {
+    const share = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    try {
+      setup(snap());
+      await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+      expect(share).toHaveBeenCalledWith({ title: 'Play OYBC', url: `${window.location.origin}/g/ABCDE` });
+    } finally {
+      Reflect.deleteProperty(navigator, 'share');
+    }
+  });
+
+  it('without navigator.share there is no Share button', async () => {
+    setup(snap());
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }));
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
+  });
+
+  it('header shows the game name under Pool when set', () => {
+    const { unmount } = setup(snap({ game: { gameName: "Halloween at Stephen's" } }));
+    expect(screen.getByTestId('game-name')).toHaveTextContent("Halloween at Stephen's");
+    unmount();
+    setup(snap());
+    expect(screen.queryByTestId('game-name')).toBeNull();
   });
 
   it('Copy link writes the join link, reads Copied, and reverts after 2s', async () => {
@@ -383,7 +472,7 @@ describe('LobbyScreen', () => {
     expect(block.children).toHaveLength(20);
     const sheet = within(screen.getByTestId('lobby-sheet'));
     expect(block.contains(sheet.getByLabelText('Game code'))).toBe(false);
-    expect(block.contains(sheet.getByRole('button', { name: 'Share' }))).toBe(false);
+    expect(block.contains(sheet.getByRole('button', { name: 'Show QR code' }))).toBe(false);
     expect(block.contains(sheet.getByRole('button', { name: 'Launch' }))).toBe(false);
   });
 
@@ -392,7 +481,7 @@ describe('LobbyScreen', () => {
     const sheet = within(screen.getByTestId('lobby-sheet'));
     expect(sheet.getByLabelText('Game code')).toHaveTextContent('ABCDE');
     expect(sheet.getByRole('button', { name: 'Copy link' })).toHaveClass('neutral', 'small');
-    expect(sheet.queryByRole('button', { name: 'Share' })).toBeNull();
+    expect(sheet.queryByRole('button', { name: 'Show QR code' })).toBeNull();
     expect(screen.queryByRole('img', { name: 'QR code' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
   });

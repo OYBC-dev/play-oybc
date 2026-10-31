@@ -12,3 +12,14 @@
 @supports (-webkit-touch-callout: none) {
   .input { font-size: 16px; }
 }
+/* (i) bubble after Add: a 44×44 target holding a 24px circle outlined 2px in muted, "i" in Bricolage 800 13px. */
+.info {
+  flex: none; display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0 -8px 0 -4px;
+  padding: 0; background: none; border: 0; border-radius: 50%; color: var(--riso-muted); cursor: pointer;
+}
+.info:focus-visible { outline: 3px solid var(--riso-blue); outline-offset: -2px; }
+.infoGlyph {
+  box-sizing: border-box; width: 24px; height: 24px; display: grid; place-items: center;
+  border: 2px solid currentColor; border-radius: 50%;
+  font-family: var(--riso-font-head); font-weight: 800; font-size: 13px; line-height: 1;
+}

@@ -29,6 +29,7 @@ test('the host binds a name someone joined under differently, unbinds it, then r
   await A.page.goto('/');
   await A.page.getByLabel('Your name').fill('Stephen');
   await A.page.getByRole('button', { name: 'Host a game' }).click();
+  await A.page.getByRole('button', { name: 'Create game' }).click();
   await expect(A.page.getByTestId('stage-lobby')).toBeVisible();
   const code = (await A.page.getByLabel('Game code').textContent())!.trim();
   await join(C.page, code, 'Seth');
@@ -96,6 +97,7 @@ test('Launch with an unbound name asks first; confirming launches', async ({ bro
   await A.page.goto('/');
   await A.page.getByLabel('Your name').fill('Stephen');
   await A.page.getByRole('button', { name: 'Host a game' }).click();
+  await A.page.getByRole('button', { name: 'Create game' }).click();
   await expect(A.page.getByTestId('stage-lobby')).toBeVisible();
   const code = (await A.page.getByLabel('Game code').textContent())!.trim();
   await join(B.page, code, 'Sam');
