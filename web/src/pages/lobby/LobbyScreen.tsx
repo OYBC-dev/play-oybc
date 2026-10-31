@@ -14,8 +14,10 @@ import styles from './LobbyScreen.module.css';
 /** Scroll padding under the content when the sheet has not been measured yet. */
 const SHEET_FALLBACK_PX = 150;
 
-/** The pre-game lobby: pool header + players, composer, live pool, and the share/launch sheet. */
-export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; snapshot: GameSnapshot; gameId: string }) {
+/** The pre-game lobby: pool header + players, game menu, composer, live pool, and the share/launch sheet. */
+export function LobbyScreen({ client, snapshot, gameId, onLeave }: {
+  client: GameClient; snapshot: GameSnapshot; gameId: string; onLeave: () => void;
+}) {
   const { game, mySeatId } = snapshot;
   const isHost = game.hostSeatId === mySeatId;
   const [playersOpen, setPlayersOpen] = useState(false);
@@ -38,8 +40,7 @@ export function LobbyScreen({ client, snapshot, gameId }: { client: GameClient; 
         </div>
         <div className={styles.headerActions}>
           <AvatarStack seats={seats} max={5} expanded={playersOpen} controls={playersId} onToggle={() => setPlayersOpen((o) => !o)} />
-          {/* endGame only ends a playing game server-side, so the lobby menu offers Make host alone. */}
-          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd={false} />
+          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} />
         </div>
       </header>
       {playersOpen && <PlayerList snapshot={snapshot} id={playersId} />}

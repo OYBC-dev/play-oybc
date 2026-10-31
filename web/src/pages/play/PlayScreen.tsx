@@ -10,8 +10,10 @@ import { Sheet } from './Sheet';
 import { useBingoBanners } from './useBingoBanners';
 import styles from './PlayScreen.module.css';
 
-/** The live game: code pill + Leaderboard (+ host menu) header, your board, bingo banners. */
-export function PlayScreen({ client, snapshot, gameId }: { client: GameClient; snapshot: GameSnapshot; gameId: string }) {
+/** The live game: code pill + Leaderboard + game menu header, your board, bingo banners. */
+export function PlayScreen({ client, snapshot, gameId, onLeave }: {
+  client: GameClient; snapshot: GameSnapshot; gameId: string; onLeave: () => void;
+}) {
   const { game, mySeatId, board, bingos } = snapshot;
   const isHost = game.hostSeatId === mySeatId;
   const banner = useBingoBanners(bingos, mySeatId);
@@ -25,7 +27,7 @@ export function PlayScreen({ client, snapshot, gameId }: { client: GameClient; s
         <span className={styles.code} data-testid="game-code">{game.code}</span>
         <div className={styles.actions}>
           <RisoButton size="small" onClick={() => setLeaderboard(true)}>Leaderboard</RisoButton>
-          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd />
+          <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} />
         </div>
       </header>
       {board ? (

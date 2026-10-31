@@ -7,6 +7,8 @@ import { FakeGameClient } from '../../game/fakeGameClient';
 import { EndedScreen } from './EndedScreen';
 import { PlayScreen } from './PlayScreen';
 
+const noop = () => {};
+
 function snap(over: { host?: boolean; stage?: 'playing' | 'ended'; bingos?: BingoDoc[] } = {}): GameSnapshot {
   const cells = Array.from({ length: 25 }, (_, i) =>
     i === 12 ? ({ kind: 'free' } as const) : ({ kind: 'task', taskId: `t${i}`, text: `Task ${i}` } as const),
@@ -26,15 +28,15 @@ const bingo = (seq: number, name: string): BingoDoc => ({ seq, seatId: 's2', nam
 describe('PlayScreen', () => {
   it('tapping a cell calls toggleMark with its index', async () => {
     const client = new FakeGameClient();
-    render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
+    render(<PlayScreen client={client} snapshot={snap()} gameId="g1" onLeave={noop} />);
     await userEvent.click(screen.getByRole('button', { name: 'Task 3' }));
     expect(client.calls).toContainEqual(['toggleMark', 'g1', 3, true]);
   });
 
   it('shows a banner for a new bingo from another player, tap dismisses', async () => {
     const client = new FakeGameClient();
-    const { rerender } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
-    rerender(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" />);
+    const { rerender } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" onLeave={noop} />);
+    rerender(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" onLeave={noop} />);
     const banner = await screen.findByRole('button', { name: 'Cody got a bingo!' });
     expect(screen.getByTestId('bingo-announce')).toHaveTextContent('Cody got a bingo!');
     await userEvent.click(banner);
@@ -43,7 +45,7 @@ describe('PlayScreen', () => {
 
   it('opens the leaderboard as a dialog; Escape closes', async () => {
     const client = new FakeGameClient();
-    render(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" />);
+    render(<PlayScreen client={client} snapshot={snap({ bingos: [bingo(1, 'Cody')] })} gameId="g1" onLeave={noop} />);
     await userEvent.click(screen.getByRole('button', { name: 'Leaderboard' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Cody')).toBeInTheDocument();
@@ -51,23 +53,24 @@ describe('PlayScreen', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('header: code pill + Leaderboard for everyone, dots menu for the host only', () => {
+  it('header: code pill + Leaderboard + dots menu for everyone; End game for the host only', async () => {
     const client = new FakeGameClient();
-    const { unmount } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
+    const { unmount } = render(<PlayScreen client={client} snapshot={snap()} gameId="g1" onLeave={noop} />);
     const header = screen.getByRole('banner');
     expect(within(header).getByText('ABCDE')).toBeInTheDocument();
     expect(within(header).getByRole('button', { name: 'Leaderboard' })).toBeInTheDocument();
     expect(within(header).getByRole('button', { name: 'Menu' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'End game' })).not.toBeInTheDocument();
     unmount();
-    render(<PlayScreen client={client} snapshot={snap({ host: false })} gameId="g1" />);
+    render(<PlayScreen client={client} snapshot={snap({ host: false })} gameId="g1" onLeave={noop} />);
     expect(within(screen.getByRole('banner')).getByText('ABCDE')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Menu' }));
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
   });
 
   it('host ends the game from the menu: End the game? dialog, confirm calls end', async () => {
     const client = new FakeGameClient();
-    render(<PlayScreen client={client} snapshot={snap()} gameId="g1" />);
+    render(<PlayScreen client={client} snapshot={snap()} gameId="g1" onLeave={noop} />);
     await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'End game' }));
     const dialog = screen.getByRole('dialog', { name: 'End the game?' });

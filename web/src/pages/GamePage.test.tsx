@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ClientProvider } from '../game/ClientContext';
 import { FakeGameClient } from '../game/fakeGameClient';
 import type { GameSnapshot } from '../game/GameClient';
@@ -26,6 +26,27 @@ function setup(client: FakeGameClient) {
 }
 
 describe('GamePage', () => {
+  it('Leave game releases the game on the client and goes Home', async () => {
+    const client = new FakeGameClient();
+    render(
+      <ClientProvider value={client}>
+        <MemoryRouter initialEntries={['/g/ABCDE']}>
+          <Routes>
+            <Route path="/" element={<p>home page</p>} />
+            <Route path="/g/:code" element={<GamePage gameId="g1" seatId="s1" />} />
+          </Routes>
+        </MemoryRouter>
+      </ClientProvider>,
+    );
+    act(() => client.emit(snapshot));
+    expect(await screen.findByTestId('stage-lobby')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Leave game' }));
+    expect(client.calls).toContainEqual(['leave', 'g1']);
+    expect(await screen.findByText('home page')).toBeInTheDocument();
+    expect(screen.queryByTestId('stage-lobby')).toBeNull();
+  });
+
   it('tells a previously seated player they were replaced, with a Home link', async () => {
     const client = new FakeGameClient();
     setup(client);

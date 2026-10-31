@@ -44,4 +44,6 @@ export interface GameClient {
   resolveReclaim(gameId: string, reclaimId: string, approve: boolean): Promise<void>;
   transferHost(gameId: string, toSeatId: string): Promise<void>;
   watchReclaim(gameId: string, reclaimId: string, onStatus: (s: ReclaimDoc['status']) => void, onError?: (e: Error) => void): () => void;
+  /** Lets go of the game on this device (its connection closes); the seat stays, so rejoining by code resumes it. */
+  leave(gameId: string): void;
 }

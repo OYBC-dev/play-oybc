@@ -85,4 +85,30 @@ describe('createWsGameClient', () => {
     await expect(res).resolves.toEqual({ marks: [true], completedLines: [], newBingoSeqs: [] });
     stop();
   });
+
+  it('leave closes the room socket at once and the next use opens a fresh one', async () => {
+    const c = client();
+    const code = nextCode();
+    sessionStorage.setItem('play.codeFor.g3', code);
+    const stop = c.subscribe('g3', 's1', () => {}, () => {});
+    const sock = FakeSocket.last();
+    sock.open();
+    await flush();
+    sock.serverSend({ t: 'welcome', uid: 'u1', gameId: 'g3', seatId: 's1', stage: 'lobby', rev: 1 });
+    c.leave('g3');
+    expect(sock.closeCalls).toEqual([1000]);
+    stop();
+    const count = FakeSocket.instances.length;
+    c.leave('g3'); // nothing live: never opens a socket just to close it
+    expect(FakeSocket.instances).toHaveLength(count);
+    const again = c.subscribe('g3', 's1', () => {}, () => {});
+    expect(FakeSocket.instances).toHaveLength(count + 1);
+    again();
+  });
+
+  it('leave on an unknown game is a no-op', () => {
+    const c = client();
+    c.leave('nope');
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
 });

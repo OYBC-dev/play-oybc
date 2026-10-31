@@ -232,13 +232,13 @@ export function mark(state: GameState, ctx: OpCtx, args: { cellIndex: number; ma
 }
 
 /**
- * Host-only: ends a playing game.
+ * Host-only: ends a game from the lobby or while playing; an already-ended game is `wrong-stage`.
  * @throws AppError `game-not-found`, `permission-denied`, `not-host`, `wrong-stage`.
  */
 export function end(state: GameState, ctx: OpCtx, _args: Record<string, never>): OpOut<Record<string, never>> {
   const game = requireGame(state);
   requireHost(state, game, ctx.uid);
-  if (game.stage !== 'playing') throw new AppError('wrong-stage');
+  if (game.stage === 'ended') throw new AppError('wrong-stage');
   state.putGame({ ...game, stage: 'ended', endedAt: ctx.now });
   return { result: {}, push: { all: ['game'] } };
 }

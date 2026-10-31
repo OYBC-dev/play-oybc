@@ -1,7 +1,7 @@
 import type { CreateGameRes, JoinGameRes, ToggleMarkRes, WhoAmIRes } from 'game-core';
 import { ensureSignedIn } from '../firebase/session';
 import type { GameClient } from './GameClient';
-import { appError, getRoom, type Op, type RoomConnection } from './roomConnection';
+import { appError, getRoom, releaseRoom, type Op, type RoomConnection } from './roomConnection';
 
 /** Injection points for tests; production uses the browser globals and the Firebase session. */
 export interface WsClientDeps {
@@ -119,6 +119,11 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
         offStatus();
         offFatal();
       };
+    },
+
+    leave(gameId) {
+      const code = codeFor(gameId);
+      if (code) releaseRoom(code);
     },
   };
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The live game (web `PlayScreen`): the code pill + Leaderboard (+ host dots menu) header,
+/// The live game (web `PlayScreen`): the code pill + Leaderboard + game dots menu header,
 /// your board, bingo banners and the leaderboard sheet.
 struct PlayView: View {
     let service: GameService
@@ -14,6 +14,8 @@ struct PlayView: View {
     var toggleError: String?
     var onToggle: (Int) -> Void = { _ in }
     var onDismissBanner: () -> Void = {}
+    /// "Leave game" from the menu: forget the game on this device and go Home.
+    var onLeave: () -> Void = {}
     var timeZone: TimeZone = .current
 
     @State var leaderboard = false
@@ -41,7 +43,8 @@ struct PlayView: View {
             // Leaderboard and dots stay reachable (the stack passes taps through gaps).
             BingoBannerView(banners: banners, animates: bannerMotion, onDismiss: onDismissBanner)
         }
-        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused)
+        .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused,
+                  onLeave: onLeave)
         .accessibilityIdentifier("stage-playing")
         .sheet(isPresented: $leaderboard) {
             RisoSheet(title: "Leaderboard", onClose: { leaderboard = false }) {
@@ -51,8 +54,8 @@ struct PlayView: View {
     }
 }
 
-/// The board header (README §5): the game-code pill on the left; "Leaderboard" and, for the
-/// host, the dots button on the right. At large text sizes the actions wrap under the pill.
+/// The board header (README §5): the game-code pill on the left; "Leaderboard" and the game
+/// dots button on the right. At large text sizes the actions wrap under the pill.
 struct BoardHeaderView: View {
     let code: String
     let showsMenu: Bool

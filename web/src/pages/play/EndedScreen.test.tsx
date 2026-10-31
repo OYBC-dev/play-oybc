@@ -32,4 +32,16 @@ describe('EndedScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New game' }));
     expect(screen.getByText('home')).toBeInTheDocument();
   });
+
+  it('a game ended from the lobby (no board, no bingos) shows the empty leaderboard and no board section', () => {
+    render(
+      <MemoryRouter>
+        <EndedScreen client={new FakeGameClient()} snapshot={{ ...snapshot, board: null }} gameId="g1" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { name: 'Final leaderboard' })).toBeInTheDocument();
+    expect(screen.getByText('No bingos yet')).toBeInTheDocument();
+    expect(screen.queryByText('Your board')).toBeNull();
+    expect(screen.getByRole('button', { name: 'New game' })).toBeInTheDocument();
+  });
 });

@@ -10,19 +10,21 @@ export interface HostMenuProps {
   client: GameClient;
   gameId: string;
   snapshot: GameSnapshot;
-  /** Offer "End game" (only while playing: the server ends a playing game only). */
+  /** Offer the host "End game" (the server ends a game from the lobby or while playing). */
   canEnd: boolean;
+  /** "Leave game": lets go of the game on this device and goes Home (the seat stays; rejoin by code). */
+  onLeave: () => void;
 }
 
 /**
- * Host-only dots button + popover menu: "Make host" (opens the radio dialog;
- * disabled with no other players) and, when `canEnd`, a red "End game" (opens
- * the confirm dialog). Renders nothing for non-hosts, or when there is no
- * other player and End game is not offered. The popover closes on an
+ * The game menu, for every seat: a dots button + popover. The host gets
+ * "Make host" (opens the radio dialog; disabled with no other players) and,
+ * when `canEnd`, a red "End game" (opens the confirm dialog); everyone gets
+ * "Leave game" (calls `onLeave`, no confirm). The popover closes on an
  * outside tap or Escape; focus goes to the first item on open and back to the
  * button on close.
  */
-export function HostMenu({ client, gameId, snapshot, canEnd }: HostMenuProps) {
+export function HostMenu({ client, gameId, snapshot, canEnd, onLeave }: HostMenuProps) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<'make' | 'end' | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -41,15 +43,11 @@ export function HostMenu({ client, gameId, snapshot, canEnd }: HostMenuProps) {
     return () => document.removeEventListener('pointerdown', onDown);
   }, [open]);
 
-  if (snapshot.game.hostSeatId !== snapshot.mySeatId) return null;
-
+  const isHost = snapshot.game.hostSeatId === snapshot.mySeatId;
   const others = [...snapshot.seats]
     .filter((s) => s.seatId !== snapshot.mySeatId)
     .sort((a, b) => a.joinedAt - b.joinedAt)
     .map((s) => ({ seatId: s.seatId, name: s.name }));
-  // Nothing to offer (lobby, host alone): no button at all. The board keeps a disabled Make host.
-  if (!canEnd && others.length === 0) return null;
-
   const closeMenu = () => { setOpen(false); button.current?.focus(); };
   const choose = (d: 'make' | 'end') => { setOpen(false); setDialog(d); };
 
@@ -88,25 +86,33 @@ export function HostMenu({ client, gameId, snapshot, canEnd }: HostMenuProps) {
       {open && (
         <RisoCard shadow="large" className={styles.menu}>
           <div ref={menu} id={menuId} role="menu" aria-label="Menu" tabIndex={-1} className={styles.menuList} onKeyDown={onMenuKey}>
-            <button type="button" role="menuitem" className={styles.item} disabled={others.length === 0} onClick={() => choose('make')}>
-              <RisoIcon name="you" size={18} />Make host
-            </button>
-            {canEnd && (
+            {isHost && (
               <>
-                <div className={styles.hairline} role="separator" />
-                <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={() => choose('end')}>
-                  <RisoIcon name="logout" size={18} />End game
+                <button type="button" role="menuitem" className={styles.item} disabled={others.length === 0} onClick={() => choose('make')}>
+                  <RisoIcon name="you" size={18} />Make host
                 </button>
+                {canEnd && (
+                  <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={() => choose('end')}>
+                    <RisoIcon name="logout" size={18} />End game
+                  </button>
+                )}
+                <div className={styles.hairline} role="separator" />
               </>
             )}
+            <button type="button" role="menuitem" className={styles.item} onClick={() => { setOpen(false); onLeave(); }}>
+              <RisoIcon name="back" size={18} />Leave game
+            </button>
           </div>
         </RisoCard>
       )}
-      {dialog === 'make' && (
+      {dialog === 'make' && isHost && (
         <MakeHostDialog client={client} gameId={gameId} candidates={others} onClose={() => setDialog(null)} returnFocus={button} />
       )}
-      {dialog === 'end' && canEnd && (
-        <EndGameDialog client={client} gameId={gameId} onClose={() => setDialog(null)} returnFocus={button} />
+      {dialog === 'end' && isHost && canEnd && (
+        <EndGameDialog
+          client={client} gameId={gameId} onClose={() => setDialog(null)} returnFocus={button}
+          inLobby={snapshot.game.stage === 'lobby'}
+        />
       )}
     </div>
   );

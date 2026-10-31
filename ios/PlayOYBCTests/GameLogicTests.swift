@@ -154,9 +154,11 @@ final class HostMenuModelTests: XCTestCase {
 
     func testMakeHostDisabledWithNoOtherPlayers() {
         let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: [seat("s1", "Stephen", 1)]), canEnd: true)
-        XCTAssertTrue(m.showsButton, "the board keeps the button for End game")
+        XCTAssertTrue(m.showsButton)
+        XCTAssertTrue(m.showsMakeHost)
         XCTAssertFalse(m.makeHostEnabled)
         XCTAssertTrue(m.showsEndGame)
+        XCTAssertTrue(m.showsLeave)
     }
 
     func testCandidatesAreOthersInJoinOrder() {
@@ -166,22 +168,47 @@ final class HostMenuModelTests: XCTestCase {
         XCTAssertTrue(m.makeHostEnabled)
     }
 
-    func testLobbyMenuHasNoEndGame() {
+    func testLobbyHostGetsMakeHostEndGameAndLeave() {
         let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
-        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: seats, stage: .lobby), canEnd: false)
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: seats, stage: .lobby), canEnd: true)
         XCTAssertTrue(m.showsButton)
-        XCTAssertFalse(m.showsEndGame)
+        XCTAssertTrue(m.showsMakeHost)
         XCTAssertTrue(m.makeHostEnabled)
+        XCTAssertTrue(m.showsEndGame)
+        XCTAssertTrue(m.showsLeave)
+        XCTAssertTrue(m.inLobby)
     }
 
-    func testLobbyHidesButtonWhenHostAlone() {
-        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: [seat("s1", "Stephen", 1)], stage: .lobby), canEnd: false)
-        XCTAssertFalse(m.showsButton)
+    func testLobbyHostAloneStillHasTheButton() {
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: [seat("s1", "Stephen", 1)], stage: .lobby), canEnd: true)
+        XCTAssertTrue(m.showsButton, "End game and Leave game need no other player")
+        XCTAssertFalse(m.makeHostEnabled)
+        XCTAssertTrue(m.showsEndGame)
     }
 
-    func testNonHostNeverSeesButton() {
+    func testWithoutCanEndTheHostHasNoEndGame() {
         let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
-        XCTAssertFalse(HostMenuModel(snapshot: snapshot(me: "s2", seats: seats), canEnd: true).showsButton)
+        let m = HostMenuModel(snapshot: snapshot(me: "s1", seats: seats), canEnd: false)
+        XCTAssertFalse(m.showsEndGame)
+        XCTAssertTrue(m.showsMakeHost)
+        XCTAssertTrue(m.showsLeave)
+    }
+
+    func testGuestGetsLeaveOnly() {
+        let seats = [seat("s1", "Stephen", 1), seat("s2", "Cody", 2)]
+        for stage in [Stage.lobby, .playing] {
+            let m = HostMenuModel(snapshot: snapshot(me: "s2", seats: seats, stage: stage), canEnd: true)
+            XCTAssertTrue(m.showsButton)
+            XCTAssertFalse(m.showsMakeHost)
+            XCTAssertFalse(m.showsEndGame)
+            XCTAssertTrue(m.showsLeave)
+        }
+    }
+
+    func testInLobbyFollowsTheStage() {
+        let seats = [seat("s1", "Stephen", 1)]
+        XCTAssertFalse(HostMenuModel(snapshot: snapshot(me: "s1", seats: seats), canEnd: true).inLobby)
+        XCTAssertTrue(HostMenuModel(snapshot: snapshot(me: "s1", seats: seats, stage: .lobby), canEnd: true).inLobby)
     }
 }
 

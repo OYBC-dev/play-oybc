@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { RisoButton } from '../components/riso/RisoButton';
 import { useClient } from '../game/ClientContext';
 import { errorMessage } from '../game/errorMessages';
@@ -13,6 +13,11 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   const client = useClient();
   const { snapshot, error, retry } = useGame(client, gameId, seatId);
   const wasSeated = useRef(false);
+  const navigate = useNavigate();
+  const onLeave = useCallback(() => {
+    client.leave(gameId);
+    navigate('/');
+  }, [client, gameId, navigate]);
   if (snapshot) wasSeated.current = true;
   if (error) {
     const denied = (error as { code?: unknown }).code === 'permission-denied';
@@ -27,8 +32,8 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   }
   if (!snapshot) return <div className="page"><p className="muted">Loading</p></div>;
   switch (snapshot.game.stage) {
-    case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} />;
-    case 'playing': return <PlayScreen client={client} snapshot={snapshot} gameId={gameId} />;
+    case 'lobby': return <LobbyScreen client={client} snapshot={snapshot} gameId={gameId} onLeave={onLeave} />;
+    case 'playing': return <PlayScreen client={client} snapshot={snapshot} gameId={gameId} onLeave={onLeave} />;
     case 'ended': return <EndedScreen client={client} snapshot={snapshot} gameId={gameId} />;
   }
 }
