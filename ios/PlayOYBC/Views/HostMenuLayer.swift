@@ -47,10 +47,12 @@ extension View {
     ///   - gameId: The game.
     ///   - triggerFocus: The dots button's VoiceOver focus, restored on close.
     ///   - onLeave: "Leave game": forget the game on this device and go Home (no confirm; rejoining by code restores the seat).
+    ///   - onRoster: "Roster" (host, lobby): expand the player chip list. Nil leaves the item out.
     func hostMenu(stage: Binding<HostMenuStage?>, model: HostMenuModel, service: GameService, gameId: String,
-                  triggerFocus: AccessibilityFocusState<Bool>.Binding, onLeave: @escaping () -> Void) -> some View {
+                  triggerFocus: AccessibilityFocusState<Bool>.Binding, onLeave: @escaping () -> Void,
+                  onRoster: (() -> Void)? = nil) -> some View {
         modifier(HostMenuLayer(stage: stage, model: model, service: service, gameId: gameId, triggerFocus: triggerFocus,
-                               onLeave: onLeave))
+                               onLeave: onLeave, onRoster: onRoster))
     }
 }
 
@@ -61,6 +63,7 @@ private struct HostMenuLayer: ViewModifier {
     let gameId: String
     var triggerFocus: AccessibilityFocusState<Bool>.Binding
     let onLeave: () -> Void
+    let onRoster: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let menuWidth: CGFloat = 216
@@ -78,7 +81,8 @@ private struct HostMenuLayer: ViewModifier {
                                 .onTapGesture(perform: close)
                                 .accessibilityHidden(true)
                             HostMenuCard(model: model, onMakeHost: { stage = .makeHost },
-                                         onEndGame: { stage = .endGame }, onLeave: leave, onClose: close)
+                                         onEndGame: { stage = .endGame }, onLeave: leave, onClose: close,
+                                         onRoster: onRoster.map { open in { roster(open) } })
                                 .frame(width: Self.menuWidth)
                                 .padding(.leading, max(0, button.maxX - Self.menuWidth))
                                 .padding(.top, button.maxY + 8)
@@ -110,6 +114,11 @@ private struct HostMenuLayer: ViewModifier {
         DispatchQueue.main.async { triggerFocus.wrappedValue = true }
     }
 
+    private func roster(_ open: () -> Void) {
+        stage = nil
+        open()
+    }
+
     private func leave() {
         stage = nil
         onLeave()
@@ -119,20 +128,30 @@ private struct HostMenuLayer: ViewModifier {
 // MARK: - Menu card
 
 /// The 216pt popover menu (README §8 Menu). The host gets "Make host" (disabled with no other
-/// players) and a red "End game", then a hairline; every seat gets "Leave game" (web `HostMenu`).
+/// players), "Roster" in the lobby once the pool mentions a name (with a dashed count of the
+/// unbound names, hidden at 0) and a red "End game", then a hairline; every seat gets "Leave game"
+/// (web `HostMenu`).
 struct HostMenuCard: View {
     let model: HostMenuModel
     let onMakeHost: () -> Void
     let onEndGame: () -> Void
     let onLeave: () -> Void
     let onClose: () -> Void
+    /// Expands the player chip list; nil leaves "Roster" out.
+    var onRoster: (() -> Void)?
 
-    private enum Item: Hashable { case makeHost, endGame, leave }
+    private enum Item: Hashable { case makeHost, roster, endGame, leave }
+
+    /// "Roster" is drawn (the model offers it and the screen handles it).
+    var showsRoster: Bool { model.showsRoster && onRoster != nil }
+    /// The Roster row's dashed count bubble, or nil (hidden at 0).
+    var rosterCount: String? { model.unboundCount > 0 ? "\(model.unboundCount)" : nil }
     @AccessibilityFocusState private var focus: Item?
 
     /// The first enabled item, which takes VoiceOver focus on open (as web does).
     private var firstItem: Item {
         if model.showsMakeHost && model.makeHostEnabled { return .makeHost }
+        if showsRoster { return .roster }
         return model.showsEndGame ? .endGame : .leave
     }
 
@@ -141,6 +160,10 @@ struct HostMenuCard: View {
             if model.showsMakeHost {
                 item("Make host", systemImage: "person", color: .risoInk, enabled: model.makeHostEnabled, action: onMakeHost)
                     .accessibilityFocused($focus, equals: .makeHost)
+            }
+            if showsRoster, let onRoster {
+                rosterItem(action: onRoster)
+                    .accessibilityFocused($focus, equals: .roster)
             }
             if model.showsEndGame {
                 item("End game", systemImage: "rectangle.portrait.and.arrow.right", color: .risoDanger, enabled: true, action: onEndGame)
@@ -195,6 +218,41 @@ struct HostMenuCard: View {
     }
 }
 
+extension HostMenuCard {
+    /// "Roster": a list glyph, the label and, while names are unbound, a dashed count bubble.
+    fileprivate func rosterItem(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+                Text("Roster")
+                    .font(.risoHead(15, .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if let rosterCount {
+                    Text(rosterCount)
+                        .font(.risoHead(12, .extraBold))
+                        .foregroundStyle(Color.risoMuted)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .overlay(Capsule().strokeBorder(Color.risoInk, style: Riso.dashedKeyline))
+                        .accessibilityIdentifier("roster-unbound-count")
+                }
+            }
+            .foregroundStyle(Color.risoInk)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MenuItemStyle())
+        .accessibilityLabel("Roster")
+        .accessibilityValue(model.unboundCount > 0 ? "\(model.unboundCount) unbound" : "")
+        .accessibilityIdentifier("menu-roster")
+    }
+}
+
 /// A menu row: pressed shows the paper fill (web `.item:hover`).
 private struct MenuItemStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -236,34 +294,10 @@ struct MakeHostDialog: View {
     }
 
     private func radio(_ seat: Seat) -> some View {
-        let checked = picked?.seatId == seat.seatId
-        return Button {
+        RisoRadioRow(label: seat.name, checked: picked?.seatId == seat.seatId) {
             error = nil
             pickedId = seat.seatId
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle().fill(checked ? Color.risoBlue : .clear)
-                    Circle().strokeBorder(Color.risoInk, lineWidth: 2)
-                    if checked { Circle().fill(Color.risoOnColor).frame(width: 10, height: 10) }
-                }
-                .frame(width: 22, height: 22)
-                Text(seat.name)
-                    .font(.risoHead(16, .bold))
-                    .foregroundStyle(Color.risoInk)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .frame(minHeight: 46)
-            .overlay(alignment: .top) { Rectangle().fill(Color.risoHair).frame(height: 1) }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(seat.name)
-        .accessibilityAddTraits(checked ? [.isSelected] : [])
     }
 
     private func transfer() {

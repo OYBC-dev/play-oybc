@@ -12,6 +12,10 @@ struct AddTaskView: View {
     let roster: [RosterName]
     /// This seat's own name (never offered as a new name).
     let selfName: String?
+    /// Every seat in join order (a player / bound row wears that seat's avatar).
+    let seats: [Seat]
+    /// This seat's id (a roster name bound to it is not offered).
+    let selfSeatId: String?
 
     @State var text = ""
     @State var error: String?
@@ -19,12 +23,15 @@ struct AddTaskView: View {
     @State var dismissed = false
     @FocusState private var focused: Bool
 
-    init(service: GameService, gameId: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil) {
+    init(service: GameService, gameId: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil,
+         seats: [Seat] = [], selfSeatId: String? = nil) {
         self.service = service
         self.gameId = gameId
         self.seatNames = seatNames
         self.roster = roster
         self.selfName = selfName
+        self.seats = seats
+        self.selfSeatId = selfSeatId
     }
 
     private var mention: ActiveMention? {
@@ -33,7 +40,8 @@ struct AddTaskView: View {
 
     private var options: [Mentions.Option] {
         guard focused, let mention else { return [] }
-        return Mentions.options(partial: mention.partial, seatNames: seatNames, roster: roster, selfName: selfName)
+        return Mentions.options(partial: mention.partial, seatNames: seatNames, roster: roster, selfName: selfName,
+                                selfSeatId: selfSeatId)
     }
 
     private var canSubmit: Bool { !busy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -61,7 +69,8 @@ struct AddTaskView: View {
             .focused($focused)
             .autocorrectionDisabled()
             .submitLabel(.done)
-            .onSubmit { if let first = options.first { pick(first.name) } else { submit() } }
+            // Return picks the first row, but never the add row: then it submits the task as typed.
+            .onSubmit { if let row = Mentions.returnPick(options) { pick(row.name) } else { submit() } }
             .font(.risoBody(15, .medium))
             .foregroundStyle(Color.risoInk)
             .tint(Color.risoBlue)
@@ -75,18 +84,21 @@ struct AddTaskView: View {
             }
     }
 
-    /// Suggestion card floating under the field (web `MentionAutocomplete`).
+    /// Suggestion card floating under the field (web `MentionAutocomplete`). The row Return
+    /// would pick shows the active (paper) fill.
     private var autocomplete: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let active = Mentions.returnPick(options)
+        return VStack(alignment: .leading, spacing: 0) {
             ForEach(options, id: \.self) { option in
                 Button { pick(option.name) } label: {
                     HStack(spacing: 10) {
-                        MentionGlyph(kind: option.kind)
-                        Text(option.name).foregroundStyle(Color.risoInk).lineLimit(1)
+                        MentionLeading(kind: option.kind, avatar: avatar(for: option))
+                        rowLabel(option)
                     }
                     .font(.risoHead(15, .bold))
                     .padding(.horizontal, 12)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(option == active ? Color.risoPaper : .clear))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -100,6 +112,35 @@ struct AddTaskView: View {
         .risoHardShadow(Riso.Shadow.small)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Mentions")
+    }
+
+    /// `@` in blue then the name (muted for an unbound name); the add row shows the typed text alone.
+    @ViewBuilder
+    private func rowLabel(_ option: Mentions.Option) -> some View {
+        if option.kind == .add {
+            Text(option.name).foregroundStyle(Color.risoInk).lineLimit(1)
+        } else {
+            HStack(spacing: 2) {
+                Text("@").foregroundStyle(Color.risoBlue).accessibilityHidden(true)
+                Text(option.name).foregroundStyle(option.kind == .unbound ? Color.risoMuted : Color.risoInk)
+            }
+            .lineLimit(1)
+        }
+    }
+
+    /// The seat whose avatar a player row (that player) or a bound row (its player) wears.
+    private func avatar(for option: Mentions.Option) -> (name: String, index: Int)? {
+        let seatId: String?
+        switch option.kind {
+        case .player:
+            seatId = seats.first { Mentions.key($0.name) == Mentions.key(option.name) }?.seatId
+        case .bound:
+            seatId = roster.first { $0.display == option.name }?.seatId
+        default:
+            return nil
+        }
+        guard let seatId, let index = seats.firstIndex(where: { $0.seatId == seatId }) else { return nil }
+        return (seats[index].name, index)
     }
 
     private func pick(_ name: String) {
@@ -123,33 +164,5 @@ struct AddTaskView: View {
             }
             busy = false
         }
-    }
-}
-
-/// The leading glyph of an autocomplete row: `@` for players, bound names and keywords; `@` in a
-/// dashed ring for a name nobody here carries yet; a blue `+` for a new name.
-struct MentionGlyph: View {
-    let kind: Mentions.Kind
-
-    var body: some View {
-        Group {
-            switch kind {
-            case .add:
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(Color.risoBlue)
-                    .frame(width: 22, height: 22)
-            case .unbound:
-                Text("@")
-                    .font(.risoHead(12, .bold))
-                    .foregroundStyle(Color.risoMuted)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(Color.risoMuted, style: StrokeStyle(lineWidth: 2, dash: [3])))
-            case .player, .bound, .keyword:
-                // Muted, not blue: blue is never text on paper.
-                Text("@").foregroundStyle(Color.risoMuted)
-            }
-        }
-        .accessibilityHidden(true)
     }
 }

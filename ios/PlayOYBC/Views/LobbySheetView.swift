@@ -15,9 +15,13 @@ struct LobbySheetView: View {
     var bottomInset: CGFloat = 0
     /// Host: sends the Free space option; the state frame flips the switch.
     var onSetFreeSpace: (Bool) async throws -> Void = { _ in }
-    let onLaunch: () async throws -> Void
+    /// Host: Launch tapped (the lobby asks first when unbound roster names remain).
+    let onLaunch: () -> Void
+    /// The launch call is in flight (Launch is disabled).
+    var launchBusy = false
+    /// Copy for the last failed launch.
+    var launchError: String?
     @State var qrOpen = false
-    @State var busy = false
     /// A `setOptions` call is in flight.
     @State var optionsBusy = false
     @State var error: String?
@@ -55,14 +59,14 @@ struct LobbySheetView: View {
                     Button { qrOpen = true } label: { QRTile(link: link, side: 64, pad: 3) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Share")
-                    RisoButton(title: "Launch", kind: ready ? .dark : .primary, large: true) { launch() }
-                        .risoDisabled(!ready || busy)
+                    RisoButton(title: "Launch", kind: ready ? .dark : .primary, large: true, action: onLaunch)
+                        .risoDisabled(!ready || launchBusy)
                 } else {
                     CopyLinkButton(link: link, small: true)
                         .risoHitSlop(6)
                 }
             }
-            if let error {
+            if let error = error ?? launchError {
                 Text(error)
                     .font(.risoBody(13, .semibold))
                     .foregroundStyle(ready ? Color.risoOnColor : Color.risoDanger)
@@ -141,15 +145,6 @@ struct LobbySheetView: View {
         _Concurrency.Task {
             do { try await onSetFreeSpace(on) } catch { self.error = ErrorMessages.message(for: error) }
             optionsBusy = false
-        }
-    }
-
-    private func launch() {
-        busy = true
-        error = nil
-        _Concurrency.Task {
-            do { try await onLaunch() } catch { self.error = ErrorMessages.message(for: error) }
-            busy = false
         }
     }
 }

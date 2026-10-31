@@ -52,32 +52,58 @@ enum Mentions {
         var kind: Kind
     }
 
-    /// Rows offered for a partial, in order: other players by case-insensitive prefix, roster names
-    /// bound to a player, unbound roster names, someone / anyone, then one `.add` row for the typed
-    /// partial when it is a valid one-word name (the server reads an unknown `@name` as one word) that
-    /// matches none of them exactly and is not a near-miss of a player here, `selfName` included (the
-    /// server refuses those). No `.add` row for a finished word (trailing space) or while the partial
-    /// is still a prefix of someone / anyone.
+    /// Rows offered for a partial, in order (web `mentionOptions`; keep both identical): other
+    /// players by case-insensitive prefix, roster names bound to a player (not to you: that would
+    /// be a self-mention), unbound roster names, someone / anyone, then one `.add` row for the typed
+    /// partial. The add row needs a single word (no whitespace: past a space the person is typing
+    /// the task) of at least `minAddLength` characters that is a valid name, matches no row or
+    /// roster name exactly, is not the start of a present name or a keyword (that is them being
+    /// typed), and is not a near-miss of a present name (the server refuses those).
     /// - Parameters:
     ///   - partial: the text after the `@`.
-    ///   - seatNames: the other players' names, in display order.
+    ///   - seatNames: the other players' names (not you), in display order.
     ///   - roster: the game's roster (names the pool mentions that no seat owns).
-    ///   - selfName: this seat's own name; never offered as a new name.
-    static func options(partial: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil) -> [Option] {
+    ///   - selfName: this seat's own name; never offered, and gates the add row like any present name.
+    ///   - selfSeatId: this seat's id; a roster name bound to it is not offered.
+    /// - Returns: the rows, in display order.
+    static func options(partial: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil,
+                        selfSeatId: String? = nil) -> [Option] {
         let p = key(partial)
         let matches: (String) -> Bool = { key($0).hasPrefix(p) }
         var rows = seatNames.filter(matches).map { Option(name: $0, kind: .player) }
-        rows += roster.filter { $0.seatId != nil && matches($0.display) }.map { Option(name: $0.display, kind: .bound) }
+        rows += roster.filter { $0.seatId != nil && $0.seatId != selfSeatId && matches($0.display) }
+            .map { Option(name: $0.display, kind: .bound) }
         rows += roster.filter { $0.seatId == nil && matches($0.display) }.map { Option(name: $0.display, kind: .unbound) }
-        rows += ["someone", "anyone"].filter { $0.hasPrefix(p) }.map { Option(name: $0, kind: .keyword) }
-        let typingKeyword = rows.contains { $0.kind == .keyword }
-        if !typingKeyword, partial.last?.isWhitespace != true, let name = normalizeName(partial), !name.contains(" ") {
-            let k = key(name)
-            let seats = (seatNames + [selfName].compactMap { $0 }).map(key)
-            let taken = seats.contains { isNearName(k, seatKey: $0) } || roster.contains { key($0.display) == k }
-            if !taken { rows.append(Option(name: name, kind: .add)) }
+        rows += keywords.filter(matches).map { Option(name: $0, kind: .keyword) }
+        if let add = addRow(partial: partial, rows: rows, roster: roster, present: seatNames + [selfName].compactMap { $0 }) {
+            rows.append(add)
         }
         return rows
+    }
+
+    /// Fewest characters the add row offers (one stray character never creates a name).
+    static let minAddLength = 2
+
+    private static let keywords = ["someone", "anyone"]
+
+    /// The `.add` row for `partial`, or nil (see `options`).
+    private static func addRow(partial: String, rows: [Option], roster: [RosterName], present: [String]) -> Option? {
+        guard !partial.contains(where: \.isWhitespace), let name = normalizeName(partial), name.count >= minAddLength
+        else { return nil }
+        let k = key(name)
+        let taken = (rows.map(\.name) + roster.map(\.display) + present + keywords).contains { key($0) == k }
+        let near = (present + keywords).contains { key($0).hasPrefix(k) }
+            || present.contains { isNearName(k, seatKey: key($0)) }
+        return taken || near ? nil : Option(name: name, kind: .add)
+    }
+
+    /// The row Return picks: the first row, unless it is the add row (Return then submits the task
+    /// as typed; the add row is picked by tap only).
+    /// - Parameter options: the rows on show.
+    /// - Returns: the row to pick, or nil to submit.
+    static func returnPick(_ options: [Option]) -> Option? {
+        guard let first = options.first, first.kind != .add else { return nil }
+        return first
     }
 
     /// A display name as the server normalizes it (game-core `normalizeName`): trimmed, whitespace

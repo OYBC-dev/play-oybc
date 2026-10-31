@@ -24,6 +24,8 @@ struct LobbyView: View {
     /// Host: the roster key whose bind sheet is open.
     @State var bindingKey: String?
     @AccessibilityFocusState private var dotsFocused: Bool
+    /// Launch, and its "Launch?" confirm while unbound roster names remain.
+    @StateObject private var launchModel = LaunchModel()
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
     private var seats: [Seat] { LobbyLogic.seatsByJoin(snapshot.seats) }
@@ -35,8 +37,9 @@ struct LobbyView: View {
             ScrollView { content }.scrollDismissesKeyboard(.interactively)
         }
         .overlay { sheet }
+        .overlay { launchConfirm }
         .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused,
-                  onLeave: onLeave)
+                  onLeave: onLeave, onRoster: { playersOpen = true })
         .accessibilityIdentifier("stage-lobby")
         .sheet(isPresented: bindSheetShown) { bindSheet }
     }
@@ -70,7 +73,8 @@ struct LobbyView: View {
             AddTaskView(service: service, gameId: gameId,
                         seatNames: seats.filter { $0.seatId != snapshot.mySeatId }.map(\.name),
                         roster: snapshot.roster,
-                        selfName: seats.first { $0.seatId == snapshot.mySeatId }?.name)
+                        selfName: seats.first { $0.seatId == snapshot.mySeatId }?.name,
+                        seats: seats, selfSeatId: snapshot.mySeatId)
                 .zIndex(1)
             if let deleteError { ErrorText(deleteError) }
             PoolListView(entries: snapshot.view, isHost: isHost, deleting: deleting) { remove($0) }
@@ -97,14 +101,40 @@ struct LobbyView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 LobbySheetView(snapshot: snapshot, isHost: isHost, bottomInset: inset,
-                               onSetFreeSpace: { try await service.setOptions(gameId: gameId, freeSpace: $0) }) {
-                    try await service.launch(gameId: gameId)
-                }
+                               onSetFreeSpace: { try await service.setOptions(gameId: gameId, freeSpace: $0) },
+                               onLaunch: requestLaunch, launchBusy: launchModel.busy, launchError: launchModel.error)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = max(0, $0 - inset) }
             }
             .ignoresSafeArea(edges: .bottom)
         }
         .ignoresSafeArea(.keyboard)
+    }
+
+    /// "Launch?" with the unbound names as dashed chips: Cancel / Launch.
+    @ViewBuilder
+    private var launchConfirm: some View {
+        if !launchModel.confirming.isEmpty {
+            RisoDialog(title: "Launch?", onClose: { launchModel.cancel() }) {
+                FlowLayout(spacing: 8) {
+                    ForEach(launchModel.confirming) { UnboundNameChip(name: $0.display) }
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    RisoButton(title: "Cancel", kind: .ghost, fullWidth: true) { launchModel.cancel() }
+                    RisoButton(title: "Launch", kind: .dark, fullWidth: true) { confirmLaunch() }
+                }
+                .padding(.top, 4)
+            }
+            .accessibilityIdentifier("launch-confirm")
+        }
+    }
+
+    private func requestLaunch() {
+        let roster = snapshot.roster
+        _Concurrency.Task { await launchModel.request(roster: roster) { try await service.launch(gameId: gameId) } }
+    }
+
+    private func confirmLaunch() {
+        _Concurrency.Task { await launchModel.confirm { try await service.launch(gameId: gameId) } }
     }
 
     private func remove(_ id: String) {
@@ -174,7 +204,7 @@ struct LobbyHeaderView: View {
 
     private var actions: some View {
         HStack(spacing: 10) {
-            AvatarStack(seats: seats, max: 5, expanded: playersOpen, onToggle: onTogglePlayers)
+            AvatarStack(seats: seats, max: 3, expanded: playersOpen, onToggle: onTogglePlayers)
                 .padding(.trailing, 6)
             if showsMenu {
                 HostMenuButton(open: menuOpen, focus: menuFocus, action: onMenu)

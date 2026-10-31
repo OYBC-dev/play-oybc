@@ -20,6 +20,12 @@ enum LobbyLogic {
         "\(game.dealable[mySeatId] ?? 0) / \(game.tasksPerBoard)"
     }
 
+    /// Roster names nobody carries yet, in roster order (the dashed chips, the menu's Roster count
+    /// and the names the Launch confirm lists).
+    /// - Parameter roster: the snapshot's roster.
+    /// - Returns: the names whose `seatId` is nil.
+    static func unboundRosterNames(_ roster: [RosterName]) -> [RosterName] { roster.filter { $0.seatId == nil } }
+
     /// Seats in join order.
     static func seatsByJoin(_ seats: [Seat]) -> [Seat] { seats.sorted { $0.doc.joinedAt < $1.doc.joinedAt } }
 
