@@ -1,4 +1,4 @@
-import { parseMentions } from '../src/mentions';
+import { parseMentions, resolveMentionRefs } from '../src/mentions';
 import { Seat } from '../src/types';
 
 const seat = (seatId: string, name: string): Seat => ({ seatId, name, joinedAt: 0 });
@@ -79,5 +79,35 @@ describe('parseMentions', () => {
     expect(b.ok && b.mentions.seatIds).toEqual(['s1']);
     const c = parseMentions('@someone.', seats);
     expect(c.ok && c.mentions.someone).toBe(true);
+  });
+});
+
+describe('resolveMentionRefs', () => {
+  const party = [seat('s1', 'Jo'), seat('s2', 'Cody'), seat('s3', 'Mary Jane')];
+  it('@Name', () => {
+    expect(resolveMentionRefs('@cody does X', party, null)).toEqual({ text: 'Cody does X', refs: [[0, 4]] });
+  });
+  it('@someone with a given name', () => {
+    expect(resolveMentionRefs('hug @someone now', party, 'Jo')).toEqual({ text: 'hug Jo now', refs: [[4, 6]] });
+  });
+  it('@someone without a name stays verbatim, no ref', () => {
+    expect(resolveMentionRefs('hug @someone', party, null)).toEqual({ text: 'hug @someone', refs: [] });
+  });
+  it('@anyone', () => {
+    expect(resolveMentionRefs('@ANYONE sings', party, null)).toEqual({ text: 'Anyone sings', refs: [[0, 6]] });
+  });
+  it('two mentions', () => {
+    expect(resolveMentionRefs('@jo hugs @cody', party, null)).toEqual({ text: 'Jo hugs Cody', refs: [[0, 2], [8, 12]] });
+  });
+  it('an unknown @word stays verbatim with no ref', () => {
+    expect(resolveMentionRefs('@Zed waves at @jo', party, null)).toEqual({ text: '@Zed waves at Jo', refs: [[14, 16]] });
+  });
+  it('a name containing a space', () => {
+    expect(resolveMentionRefs("@mary   jane's cat", party, null)).toEqual({ text: "Mary Jane's cat", refs: [[0, 9]] });
+  });
+  it('offsets are UTF-16 code units of the resolved text', () => {
+    const r = resolveMentionRefs('🎉 @jo', party, null);
+    expect(r).toEqual({ text: '🎉 Jo', refs: [[3, 5]] });
+    expect(r.text.slice(3, 5)).toBe('Jo');
   });
 });

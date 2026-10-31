@@ -1,4 +1,6 @@
-import { shortfalls } from '../src/readiness';
+import { assignAnyone, dealBoard } from '../src/deal';
+import { dealableCounts, shortfalls } from '../src/readiness';
+import { makeSeededRng } from './seededRng';
 import { PoolTask, Seat } from '../src/types';
 
 const seats: Seat[] = ['s1', 's2', 's3'].map((id, i) => ({ seatId: id, name: id, joinedAt: i }));
@@ -14,5 +16,68 @@ describe('shortfalls', () => {
   it('reports only short seats', () => {
     const tasks = [...Array.from({ length: 23 }, (_, i) => mk('p' + i)), mk('m', ['s2'])];
     expect(shortfalls(tasks, seats)).toEqual({ s2: 1 });
+  });
+});
+
+describe('dealableCounts', () => {
+  const any = (id: string): PoolTask => ({ ...mk(id), mentions: { seatIds: [], someone: false, anyone: true } });
+  it('adds floor(anyone / seats) per seat', () => {
+    const tasks = [...Array.from({ length: 10 }, (_, i) => mk('p' + i)), mk('m', ['s2']), ...['a1', 'a2', 'a3', 'a4'].map(any)];
+    expect(dealableCounts(tasks, seats, { freeSpace: true })).toEqual({ s1: 12, s2: 11, s3: 12 });
+  });
+});
+
+describe('shortfalls options', () => {
+  const tasks = Array.from({ length: 24 }, (_, i) => mk('p' + i));
+  it('needs 25 with freeSpace:false', () => {
+    expect(shortfalls(tasks, seats, { freeSpace: false })).toEqual({ s1: 1, s2: 1, s3: 1 });
+  });
+  it('default call still needs 24', () => {
+    expect(shortfalls(tasks, seats)).toEqual({});
+    expect(shortfalls(tasks.slice(1), seats)).toEqual({ s1: 1, s2: 1, s3: 1 });
+  });
+});
+
+describe('readiness guarantees launch (property)', () => {
+  it('whenever shortfalls is empty, assignAnyone + dealBoard succeeds for every seat', () => {
+    const rng = makeSeededRng(20261030);
+    const int = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
+    let readyRuns = 0;
+    for (let iter = 0; iter < 200; iter++) {
+      const n = int(2, 8);
+      const party: Seat[] = Array.from({ length: n }, (_, i) => ({ seatId: 's' + i, name: 'N' + i, joinedAt: i }));
+      const tasks: PoolTask[] = [];
+      const plainCount = int(0, 40);
+      for (let i = 0; i < plainCount; i++) tasks.push(mk('p' + i));
+      const anyCount = int(0, 10);
+      for (let i = 0; i < anyCount; i++) tasks.push({ ...mk('a' + i), mentions: { seatIds: [], someone: false, anyone: true } });
+      const nameCount = int(0, 5);
+      for (let i = 0; i < nameCount; i++) tasks.push(mk('n' + i, [party[int(0, n - 1)].seatId]));
+      const freeSpace = rng() < 0.5;
+      if (Object.keys(shortfalls(tasks, party, { freeSpace })).length > 0) continue;
+      readyRuns++;
+      const assignment = assignAnyone(tasks, party, rng);
+      for (const s of party) {
+        expect(() => dealBoard(tasks, party, s.seatId, rng, { freeSpace, anyoneAssignment: assignment })).not.toThrow();
+      }
+    }
+    expect(readyRuns).toBeGreaterThan(20);
+  });
+});
+
+describe('assignAnyone', () => {
+  it('assigns every @anyone task to one seat, balanced floor/ceil', () => {
+    const tasks: PoolTask[] = [
+      ...Array.from({ length: 7 }, (_, i) => ({ ...mk('a' + i), mentions: { seatIds: [], someone: false, anyone: true } })),
+      mk('plain'),
+    ];
+    const a = assignAnyone(tasks, seats, makeSeededRng(5));
+    expect(Object.keys(a).sort()).toEqual(['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6']);
+    const per = seats.map((s) => Object.values(a).filter((v) => v === s.seatId).length).sort();
+    expect(per).toEqual([2, 2, 3]);
+  });
+  it('is empty without @anyone tasks or seats', () => {
+    expect(assignAnyone([mk('p')], seats, makeSeededRng(1))).toEqual({});
+    expect(assignAnyone([{ ...mk('a'), mentions: { seatIds: [], someone: false, anyone: true } }], [], makeSeededRng(1))).toEqual({});
   });
 });
