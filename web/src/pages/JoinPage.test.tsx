@@ -55,6 +55,15 @@ describe('JoinPage', () => {
     expect(client.calls[0]).toEqual(['whoAmI', 'ABCDE']);
   });
 
+  it('shows the game name and host before joining', async () => {
+    const client = new FakeGameClient();
+    client.whoAmIResult = { gameId: 'g1', seatId: null, gameName: "Halloween at Stephen's", hostName: 'Stephen' };
+    setup(client);
+    expect(await screen.findByTestId('join-game-name')).toHaveTextContent("Halloween at Stephen's");
+    expect(screen.getByText('Host · Stephen')).toBeInTheDocument();
+    await nameField();
+  });
+
   it('asks for a name, joins, and renders the game', async () => {
     const client = new FakeGameClient();
     setup(client);

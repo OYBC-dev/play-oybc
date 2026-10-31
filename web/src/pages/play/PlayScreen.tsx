@@ -25,6 +25,7 @@ export function PlayScreen({ client, snapshot, gameId, onLeave }: {
       {isHost && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} seats={snapshot.seats} />}
       <header className={styles.header}>
         <span className={styles.code} data-testid="game-code">{game.code}</span>
+        {game.gameName && <span className={styles.gameName} data-testid="game-name">{game.gameName}</span>}
         <div className={styles.actions}>
           <RisoButton size="small" onClick={() => setLeaderboard(true)}>Leaderboard</RisoButton>
           <HostMenu client={client} gameId={gameId} snapshot={snapshot} canEnd onLeave={onLeave} />

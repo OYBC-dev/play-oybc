@@ -18,7 +18,7 @@ export function EndedScreen({ client, snapshot, gameId }: { client: GameClient; 
       {snapshot.game.hostSeatId === snapshot.mySeatId && <ReclaimPrompt client={client} gameId={gameId} reclaims={snapshot.reclaims} seats={snapshot.seats} />}
       <header className={styles.head}>
         <RisoSectionLabel variant="kicker">Ended · {snapshot.game.code}</RisoSectionLabel>
-        <h1 className={styles.title}>Final leaderboard</h1>
+        <h1 className={styles.title}>{snapshot.game.gameName || 'Final leaderboard'}</h1>
       </header>
       <RisoCard padded>
         <Leaderboard standings={snapshot.standings} />

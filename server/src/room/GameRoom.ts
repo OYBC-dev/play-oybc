@@ -217,7 +217,8 @@ export class GameRoom implements DurableObject {
     const seatId = this.state.seatOf(uid);
     ws.serializeAttachment({ uid, seatId } satisfies Attachment);
     this.capSocketsFor(uid, ws);
-    send(ws, { t: 'welcome', uid, gameId: game.gameId, seatId, stage: game.stage, rev: game.rev });
+    const hostName = this.state.seats.get(game.hostSeatId)?.name ?? '';
+    send(ws, { t: 'welcome', uid, gameId: game.gameId, seatId, stage: game.stage, rev: game.rev, hostName, ...(game.gameName && { gameName: game.gameName }) });
     if (seatId) send(ws, { t: 'state', rev: game.rev, ...buildSections(this.state, seatId, ALL_SECTIONS) });
     // A seated uid already knows its outcome; replaying `approved` to it would make a client re-hello in a loop.
     else this.replayReclaims(ws, uid);

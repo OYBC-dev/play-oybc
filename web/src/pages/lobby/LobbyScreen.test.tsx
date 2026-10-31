@@ -266,7 +266,7 @@ describe('LobbyScreen', () => {
     const players = within(screen.getByRole('list', { name: 'Players' }));
     expect(players.getAllByRole('listitem')).toHaveLength(3);
     const hostChip = players.getByText('Host').closest('li')!;
-    expect(hostChip).toHaveTextContent('MeHost');
+    expect(hostChip).toHaveTextContent('MeYouHost');
     expect(players.getByText('Host')).toHaveClass('expiring');
     await userEvent.click(stack);
     expect(screen.queryByRole('list', { name: 'Players' })).toBeNull();

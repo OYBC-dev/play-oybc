@@ -17,7 +17,7 @@ export interface StateMsg {
 }
 export type AckMsg = { t: 'ack'; id: string; ok: true; result: unknown } | { t: 'ack'; id: string; ok: false; code: string; details?: Record<string, unknown> };
 export type ServerMsg =
-  | { t: 'welcome'; uid: string; gameId: string; seatId: string | null; stage: Stage; rev: number }
+  | { t: 'welcome'; uid: string; gameId: string; seatId: string | null; stage: Stage; rev: number; gameName?: string; hostName: string }
   | StateMsg | AckMsg
   | { t: 'reclaim'; id: string; status: ReclaimDoc['status'] }
   | { t: 'evicted'; reason: 'replaced' }
