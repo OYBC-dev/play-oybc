@@ -130,13 +130,17 @@ Three forms, typed inline in task text:
 
 - Blurred entries show that a task exists (and its author) but carry **no text** in what
   the server sends that player.
-- `@Name` must match a current player's name; picked from an autocomplete of joined
-  players. A task may mention more than one `@Name`; it is then hidden from / never
-  dealt to each of them.
+- `@Name` is picked from an autocomplete of joined players, or typed for someone not
+  here yet (`docs/ROSTER.md`; the party cut in `docs/PLAN_ROSTER.md` Phase 0). A name
+  nobody has yet is an **unbound name**: the task is kept from every player the pool
+  does not refer to by name (any of them might be that person) and binds itself the
+  moment someone joins under that name. A task may mention more than one `@Name`; it
+  is then hidden from / never dealt to each of them.
 - A task mentioning its own author by `@Name` is rejected (it would be hidden from the
   only person who wrote it).
-- Mentions are stored by uid, picked from players already joined. A late joiner (after
-  Launch) can't be `@Name`d, because the pool is locked by then.
+- Mentions are resolved against the current players whenever the pool, a board or the
+  readiness counts are built, so a task written about someone who joins later becomes
+  theirs on arrival (hidden from them, never dealt to them, shown bold to the rest).
 
 ### 4.4 Boards & dealing
 - **5×5; the FREE center is a host option, off by default** (`docs/PARTY_FEATURES.md` §3). 25 tasks per board without it, 24 with it. Mentions render as bold names without the `@`; marked squares are red (plain), gold (reference) or green (in a completed line).

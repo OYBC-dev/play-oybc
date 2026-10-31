@@ -54,10 +54,11 @@ describe('dealBoard', () => {
       expect((b.find((c) => c.kind === 'task' && c.taskId === 'mix') as { text: string }).text).toMatch(/^(Bo|Cy) hugs Cy$/);
     }
   });
-  it('passes an unknown @word through unchanged', () => {
-    const tasks = [...plain(23), mk('u', '@Zed waves at @bo')];
+  it('shows a name nobody here has yet without its @', () => {
+    // Ann (s1) is named by a task, so the Zed task may be dealt to her.
+    const tasks = [...plain(23), mk('ann', '@Ann naps', { seatIds: ['s1'] }), mk('u', '@Zed waves at @bo', { names: ['zed'] })];
     const b = dealBoard(tasks, seats, 's1', makeSeededRng(3));
-    expect((b.find((c) => c.kind === 'task' && c.taskId === 'u') as { text: string }).text).toBe('@Zed waves at Bo');
+    expect(b.find((c) => c.kind === 'task' && c.taskId === 'u')).toEqual({ kind: 'task', taskId: 'u', text: 'Zed waves at Bo', refs: [[0, 3], [13, 15]] });
   });
   it('leaves tasks without mentions unchanged', () => {
     const tasks = [...plain(23), mk('p', 'Someone trips, then someone@home sings')];
@@ -97,8 +98,8 @@ describe('resolveMentionDisplay', () => {
     const withElse: Seat[] = [...party, { seatId: 'd', name: 'Someone Else', joinedAt: 3 }];
     expect(resolveMentionDisplay('@someone else and @someone wave', withElse, 'Jo')).toBe('Someone Else and Jo wave');
   });
-  it('keeps unknown mentions, embedded @ and text without mentions verbatim', () => {
-    expect(resolveMentionDisplay('@Joshua waves at a@jo', party, null)).toBe('@Joshua waves at a@jo');
+  it('shows an unbound name without its @; keeps embedded @ and text without mentions verbatim', () => {
+    expect(resolveMentionDisplay('@Joshua waves at a@jo', party, null)).toBe('Joshua waves at a@jo');
     expect(resolveMentionDisplay('Plain text, no tags', party, 'Jo')).toBe('Plain text, no tags');
   });
 });
@@ -176,5 +177,28 @@ describe('dealBoard options', () => {
     expect(cell).toEqual({ kind: 'task', taskId: 'c', text: 'Cody does X', refs: [[0, 4]] });
     const p = b.find((c) => c.kind === 'task' && c.taskId === 't0') as { refs?: unknown[] };
     expect(p.refs ?? []).toEqual([]);
+  });
+});
+
+describe('dealBoard with names nobody here has yet', () => {
+  // Ann (s1) is named by a task, so she is identified; Bo (s2) is named by nobody.
+  const named = mk('ann', '@Ann naps', { seatIds: ['s1'] });
+  const ghost = (id: string) => mk(id, `@Ghost ${id}`, { names: ['ghost'] });
+  const ids = (b: ReturnType<typeof dealBoard>) =>
+    b.filter((c) => c.kind === 'task').map((c) => (c as { taskId: string }).taskId);
+
+  it('an identified seat may receive them; an unidentified seat never does', () => {
+    const tasks = [...plain(30), named, ...Array.from({ length: 10 }, (_, i) => ghost('g' + i))];
+    for (let seed = 0; seed < 20; seed++) {
+      expect(ids(dealBoard(tasks, seats, 's2', makeSeededRng(seed))).some((i) => i.startsWith('g'))).toBe(false);
+    }
+    const got = Array.from({ length: 20 }, (_, seed) => ids(dealBoard(tasks, seats, 's1', makeSeededRng(seed))).some((i) => i.startsWith('g')));
+    expect(got).toContain(true);
+  });
+  it('the seat that joins under that name never receives them, and others then may', () => {
+    const tasks = [...plain(23), ghost('g0')];
+    const joined: Seat[] = [...seats, { seatId: 's4', name: 'ghost', joinedAt: 3 }];
+    expect(() => dealBoard(tasks, joined, 's4', makeSeededRng(1))).toThrow('insufficient-pool');
+    for (let seed = 0; seed < 10; seed++) expect(ids(dealBoard(tasks, joined, 's2', makeSeededRng(seed)))).toContain('g0');
   });
 });

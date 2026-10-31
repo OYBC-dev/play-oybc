@@ -20,12 +20,11 @@ export const addTask = onCall<AddTaskReq, Promise<{ taskId: string }>>(async (re
     ]);
     if (game.stage !== 'lobby') throw appError('failed-precondition', 'wrong-stage');
     const seats = toSeats(seatsSnap.docs);
-    const parsed = parseMentions(text, seats);
-    if (!parsed.ok) throw appError('invalid-argument', 'unknown-mention', undefined, { token: parsed.token });
-    if (parsed.mentions.seatIds.includes(seatId)) throw appError('invalid-argument', 'self-mention');
+    const mentions = parseMentions(text, seats);
+    if (mentions.seatIds.includes(seatId)) throw appError('invalid-argument', 'self-mention');
 
     const taskRef = r.tasks.doc();
-    const doc: TaskDoc = { text, authorSeatId: seatId, mentions: parsed.mentions, createdAt: Date.now() };
+    const doc: TaskDoc = { text, authorSeatId: seatId, mentions, createdAt: Date.now() };
     tx.set(taskRef, doc);
     rebuildViews(tx, gameId, [...toTasks(tasksSnap.docs), { id: taskRef.id, ...doc }], seats);
     return { taskId: taskRef.id };

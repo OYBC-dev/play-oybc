@@ -292,6 +292,16 @@ describe('join while playing', () => {
     plain(state, 'extra');
     for (let seed = 1; seed <= 20; seed++) expect(joinWith(state, seeded(seed))).not.toContain('any1');
   });
+  it('a task naming someone not here yet never reaches them, nor an unidentified late joiner', () => {
+    const ghost = (s: GameState) =>
+      s.putTask({ taskId: 'gh', text: '@Ghost trips', authorSeatId: 'x', mentions: { seatIds: [], someone: false, anyone: false, names: ['ghost'] }, createdAt: 99 });
+    const { state, host } = soloLaunched(25, ghost);
+    expect(taskIdsOf(state.boards.get(host)!)).not.toContain('gh');
+    const other = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
+    expect(taskIdsOf(state.boards.get(other.seatId)!)).not.toContain('gh');
+    const them = join(state, ctxFor('u3'), { name: 'Ghost' }).result as { seatId: string };
+    expect(taskIdsOf(state.boards.get(them.seatId)!)).not.toContain('gh');
+  });
   it('an @anyone task on no board may reach a late joiner', () => {
     const { state } = soloLaunched(25);
     anyone(state, 'any2');

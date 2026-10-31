@@ -1,4 +1,4 @@
-import { normalizeName, nameKey } from '../src/names';
+import { isNearName, nameKey, normalizeName } from '../src/names';
 
 describe('names', () => {
   it('trims and collapses whitespace', () => {
@@ -24,5 +24,20 @@ describe('names', () => {
   it('nameKey is case- and whitespace-insensitive', () => {
     expect(nameKey(' CODY ')).toBe(nameKey('cody'));
     expect(nameKey('Mary   Jane')).toBe('mary jane');
+  });
+  it('nameKey folds curly apostrophes', () => {
+    expect(nameKey('O’Neil')).toBe("o'neil");
+    expect(nameKey("O'Neil")).toBe(nameKey('O‘Neil'));
+  });
+  it('isNearName: same key, first name, a 3+ char prefix of it, or first name + s; never a longer or unrelated name', () => {
+    expect(isNearName('cody', 'cody b')).toBe(true);
+    expect(isNearName('cod', 'cody b')).toBe(true);
+    expect(isNearName('codys', 'cody b')).toBe(true);
+    expect(isNearName('mary', 'mary jane')).toBe(true);
+    expect(isNearName('jo', 'josh')).toBe(false);
+    expect(isNearName('jo-ann', 'jo')).toBe(false);
+    expect(isNearName('mike', 'michael')).toBe(false);
+    expect(isNearName('samantha', 'sam')).toBe(false);
+    expect(isNearName('seth', 'cody b')).toBe(false);
   });
 });

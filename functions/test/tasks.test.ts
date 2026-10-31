@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { canSeeText, type PoolTask } from 'game-core';
+import { canSeeText, mentionContext, type PoolTask, type Seat } from 'game-core';
 import { admin, appCodeOf, callAs, clearFirestore, readAdmin } from './helpers';
 
 beforeEach(clearFirestore);
@@ -30,16 +30,15 @@ describe('addTask', () => {
     expect((await view(gameId, s2))[0].text).toBeNull();
     expect((await view(gameId, s3))[0].text).toBe('@someone takes a shot');
   });
-  it('carries the unresolved token on unknown-mention', async () => {
+  it('accepts a name nobody here has yet as an unbound name', async () => {
     const { gameId } = await setup();
-    const err: any = await callAs('u2', 'addTask', { gameId, text: '@Bob sings' }).catch((e) => e);
-    expect(err.details.code).toBe('unknown-mention');
-    expect(err.details.token).toBe('@Bob');
+    const { taskId } = (await callAs('u2', 'addTask', { gameId, text: '@Bob sings' })) as { taskId: string };
+    const doc = (await admin.doc(`games/${gameId}/tasks/${taskId}`).get()).data() as any;
+    expect(doc.mentions).toEqual({ seatIds: [], someone: false, anyone: false, names: ['bob'] });
   });
-  it('rejects self-mention, unknown mention and bad text', async () => {
+  it('rejects self-mention and bad text', async () => {
     const { gameId } = await setup();
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '@Cody dances' }))).toBe('self-mention');
-    expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '@Bob sings' }))).toBe('unknown-mention');
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '' }))).toBe('invalid-text');
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: '   ' }))).toBe('invalid-text');
     expect(await appCodeOf(callAs('u2', 'addTask', { gameId, text: 'x'.repeat(121) }))).toBe('invalid-text');
@@ -122,6 +121,9 @@ describe('leak check', () => {
     const tasks = new Map<string, PoolTask>();
     for (const d of (await admin.collection(`games/${gameId}/tasks`).get()).docs) tasks.set(d.id, { id: d.id, ...(d.data() as any) });
     expect(tasks.size).toBe(5);
+    const seats: Seat[] = (await admin.collection(`games/${gameId}/seats`).get()).docs
+      .map((d) => ({ seatId: d.id, name: d.data().name as string, joinedAt: d.data().joinedAt as number }));
+    const ctx = mentionContext([...tasks.values()], seats);
     const viewDocs = await admin.collection(`games/${gameId}/views`).get();
     expect(viewDocs.size).toBe((await admin.collection(`games/${gameId}/seats`).get()).size);
     expect(viewDocs.docs.map((d) => d.id).sort()).toEqual([s1, s2, s3].sort());
@@ -131,7 +133,7 @@ describe('leak check', () => {
       expect(entries).toHaveLength(5);
       for (const e of entries) {
         const t = tasks.get(e.taskId)!;
-        expect(e.text === null).toBe(!canSeeText(t, seat));
+        expect(e.text === null).toBe(!canSeeText(t, seat, ctx));
         if (e.text !== null) expect(e.text).toBe(t.text);
       }
     }
