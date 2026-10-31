@@ -7,7 +7,7 @@ enum GameConstants {
     /// Board side length; with free space on, the FREE square sits at index 12.
     static let gridSize = 5
     /// Production web origin the join link and QR point at.
-    static let webOrigin = "https://play-oybc.web.app"
+    static let webOrigin = "https://play.oybc.com"
 
     /// The shareable join link for a game code.
     static func joinLink(code: String) -> String { "\(webOrigin)/g/\(code)" }

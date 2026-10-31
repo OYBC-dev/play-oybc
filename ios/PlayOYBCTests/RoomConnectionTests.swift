@@ -146,6 +146,26 @@ final class RoomConnectionTests: XCTestCase {
         XCTAssertEqual(s.standings, [], "a frame without standings still completes the snapshot")
     }
 
+    func testRosterSectionReplacesWholesaleAndAbsentKeeps() async throws {
+        let (room, dialer) = makeRoom()
+        let snaps = collect(await room.snapshots())
+        let t = try await dialer.made.take()
+        _ = try await t.nextSent()
+        t.push(welcome(seat: "s1"))
+        t.push(fullState(rev: 1))
+        let first = try await snaps.take()
+        XCTAssertEqual(first.roster, [], "no roster section yet → empty")
+        t.push(#"{"t":"state","rev":2,"roster":[{"key":"jess","display":"Jess","seatId":null},{"key":"jo","display":"Jo","seatId":"s1"}]}"#)
+        let second = try await snaps.take()
+        XCTAssertEqual(second.roster.map(\.key), ["jess", "jo"])
+        t.push(#"{"t":"state","rev":3,"standings":[]}"#)
+        let third = try await snaps.take()
+        XCTAssertEqual(third.roster.map(\.key), ["jess", "jo"], "a frame without roster keeps it")
+        t.push(#"{"t":"state","rev":4,"roster":[{"key":"jo","display":"Jo","seatId":null}]}"#)
+        let fourth = try await snaps.take()
+        XCTAssertEqual(fourth.roster, [RosterName(key: "jo", display: "Jo", seatId: nil)])
+    }
+
     func testStandingsSectionMergesIntoTheSnapshot() async throws {
         let (room, dialer) = makeRoom()
         let snaps = collect(await room.snapshots())

@@ -12,6 +12,8 @@ struct GameSnapshot: Equatable {
     var reclaims: [Reclaim]
     /// Server-ranked leaderboard; empty before launch or from a backend that sends none.
     var standings: [Standing] = []
+    /// Names the pool mentions that no seat owns, with the host's bindings; empty from a backend that sends none.
+    var roster: [RosterName] = []
 }
 
 /// The only door between UI and backend: callables for writes, listeners for reads.
@@ -25,6 +27,12 @@ protocol GameService {
     func launch(gameId: String) async throws
     /// Host, lobby only: sets the game's options. The state frame carries the change.
     func setOptions(gameId: String, freeSpace: Bool) async throws
+    /// Host, any stage but ended: binds roster name `key` to a seat, or unbinds it when `seatId` is nil.
+    /// - Throws: `name-not-found`, `seat-not-found`, `not-host`, `game-ended`, `invalid-argument`.
+    func bindName(gameId: String, key: String, seatId: String?) async throws
+    /// Host, any stage but ended: drops roster name `key` (its tasks lose the `@` on that name).
+    /// - Throws: `name-not-found`, `not-host`, `game-ended`, `invalid-argument`.
+    func retireName(gameId: String, key: String) async throws
     /// Sets the square to `marked` (idempotent on retry).
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes
     func end(gameId: String) async throws

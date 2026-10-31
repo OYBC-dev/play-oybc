@@ -8,6 +8,10 @@ struct AddTaskView: View {
     let gameId: String
     /// Names of the other players (not you), in display order.
     let seatNames: [String]
+    /// Names the pool mentions that no seat owns (offered after the players).
+    let roster: [RosterName]
+    /// This seat's own name (never offered as a new name).
+    let selfName: String?
 
     @State var text = ""
     @State var error: String?
@@ -15,19 +19,21 @@ struct AddTaskView: View {
     @State var dismissed = false
     @FocusState private var focused: Bool
 
-    init(service: GameService, gameId: String, seatNames: [String]) {
+    init(service: GameService, gameId: String, seatNames: [String], roster: [RosterName] = [], selfName: String? = nil) {
         self.service = service
         self.gameId = gameId
         self.seatNames = seatNames
+        self.roster = roster
+        self.selfName = selfName
     }
 
     private var mention: ActiveMention? {
         dismissed ? nil : Mentions.active(in: text, caret: text.count)
     }
 
-    private var options: [String] {
+    private var options: [Mentions.Option] {
         guard focused, let mention else { return [] }
-        return Mentions.options(partial: mention.partial, seatNames: seatNames)
+        return Mentions.options(partial: mention.partial, seatNames: seatNames, roster: roster, selfName: selfName)
     }
 
     private var canSubmit: Bool { !busy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -55,7 +61,7 @@ struct AddTaskView: View {
             .focused($focused)
             .autocorrectionDisabled()
             .submitLabel(.done)
-            .onSubmit { if let first = options.first { pick(first) } else { submit() } }
+            .onSubmit { if let first = options.first { pick(first.name) } else { submit() } }
             .font(.risoBody(15, .medium))
             .foregroundStyle(Color.risoInk)
             .tint(Color.risoBlue)
@@ -72,12 +78,11 @@ struct AddTaskView: View {
     /// Suggestion card floating under the field (web `MentionAutocomplete`).
     private var autocomplete: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(options, id: \.self) { name in
-                Button { pick(name) } label: {
+            ForEach(options, id: \.self) { option in
+                Button { pick(option.name) } label: {
                     HStack(spacing: 10) {
-                        // Muted, not blue: blue is never text on paper.
-                        Text("@").foregroundStyle(Color.risoMuted).accessibilityHidden(true)
-                        Text(name).foregroundStyle(Color.risoInk).lineLimit(1)
+                        MentionGlyph(kind: option.kind)
+                        Text(option.name).foregroundStyle(Color.risoInk).lineLimit(1)
                     }
                     .font(.risoHead(15, .bold))
                     .padding(.horizontal, 12)
@@ -85,6 +90,7 @@ struct AddTaskView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(option.kind == .add ? "Add \(option.name)" : option.name)
             }
         }
         .padding(6)
@@ -117,5 +123,33 @@ struct AddTaskView: View {
             }
             busy = false
         }
+    }
+}
+
+/// The leading glyph of an autocomplete row: `@` for players, bound names and keywords; `@` in a
+/// dashed ring for a name nobody here carries yet; a blue `+` for a new name.
+struct MentionGlyph: View {
+    let kind: Mentions.Kind
+
+    var body: some View {
+        Group {
+            switch kind {
+            case .add:
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(Color.risoBlue)
+                    .frame(width: 22, height: 22)
+            case .unbound:
+                Text("@")
+                    .font(.risoHead(12, .bold))
+                    .foregroundStyle(Color.risoMuted)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().strokeBorder(Color.risoMuted, style: StrokeStyle(lineWidth: 2, dash: [3])))
+            case .player, .bound, .keyword:
+                // Muted, not blue: blue is never text on paper.
+                Text("@").foregroundStyle(Color.risoMuted)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

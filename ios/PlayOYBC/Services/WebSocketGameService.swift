@@ -195,6 +195,19 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
         try await actVoid(gameId, "setOptions", ["freeSpace": freeSpace])
     }
 
+    func bindName(gameId: String, key: String, seatId: String?) async throws {
+        try await actVoid(gameId, "bindName", Self.bindNameArgs(key: key, seatId: seatId))
+    }
+
+    func retireName(gameId: String, key: String) async throws {
+        try await actVoid(gameId, "retireName", ["key": key])
+    }
+
+    /// `bindName` args: `seatId` goes out as an explicit JSON `null` for "nobody yet".
+    static func bindNameArgs(key: String, seatId: String?) -> [String: Any] {
+        ["key": key, "seatId": seatId.map { $0 as Any } ?? NSNull()]
+    }
+
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         try await act(gameId, "mark", ["cellIndex": cellIndex, "marked": marked])
     }

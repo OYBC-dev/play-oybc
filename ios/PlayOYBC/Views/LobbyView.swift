@@ -21,6 +21,8 @@ struct LobbyView: View {
     var animateWaiting = true
     /// What the host menu has open (snapshots start it open).
     @State var hostMenu: HostMenuStage?
+    /// Host: the roster key whose bind sheet is open.
+    @State var bindingKey: String?
     @AccessibilityFocusState private var dotsFocused: Bool
 
     private var isHost: Bool { snapshot.game.hostSeatId == snapshot.mySeatId }
@@ -36,17 +38,39 @@ struct LobbyView: View {
         .hostMenu(stage: $hostMenu, model: menuModel, service: service, gameId: gameId, triggerFocus: $dotsFocused,
                   onLeave: onLeave)
         .accessibilityIdentifier("stage-lobby")
+        .sheet(isPresented: bindSheetShown) { bindSheet }
+    }
+
+    /// The roster name the bind sheet is for, while the host has one open and it is still listed.
+    private var boundName: RosterName? {
+        guard isHost, let bindingKey else { return nil }
+        return snapshot.roster.first { $0.key == bindingKey }
+    }
+
+    /// Open while `boundName` resolves; a retired / vanished name or a lost host closes it.
+    private var bindSheetShown: Binding<Bool> {
+        Binding(get: { boundName != nil }, set: { if !$0 { bindingKey = nil } })
+    }
+
+    @ViewBuilder
+    private var bindSheet: some View {
+        if let name = boundName {
+            BindNameSheetView(name: name, seats: seats, service: service, gameId: gameId) { bindingKey = nil }
+                .id(name.key)
+        }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            if playersOpen { PlayerListView(snapshot: snapshot) }
+            if playersOpen { PlayerListView(snapshot: snapshot, onOpen: isHost ? { bindingKey = $0 } : nil) }
             if seats.count <= 1 {
                 WaitingPill(title: "Waiting for players", style: .compact, animated: animateWaiting)
             }
             AddTaskView(service: service, gameId: gameId,
-                        seatNames: seats.filter { $0.seatId != snapshot.mySeatId }.map(\.name))
+                        seatNames: seats.filter { $0.seatId != snapshot.mySeatId }.map(\.name),
+                        roster: snapshot.roster,
+                        selfName: seats.first { $0.seatId == snapshot.mySeatId }?.name)
                 .zIndex(1)
             if let deleteError { ErrorText(deleteError) }
             PoolListView(entries: snapshot.view, isHost: isHost, deleting: deleting) { remove($0) }

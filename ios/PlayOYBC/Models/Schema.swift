@@ -70,6 +70,21 @@ struct Standing: Codable, Equatable {
     var firstBingoSeq: Int?
 }
 
+/// A name the pool mentions that no seat carries as its own (game-core `RosterName`), in order of first
+/// mention. `seatId` is the host's binding, nil = nobody yet.
+struct RosterName: Codable, Equatable, Identifiable {
+    var key: String
+    var display: String
+    var seatId: String?
+    var id: String { key }
+
+    init(key: String, display: String, seatId: String? = nil) {
+        self.key = key
+        self.display = display
+        self.seatId = seatId
+    }
+}
+
 /// Mention references: UTF-16 `[start, end)` pairs into a display text. Decodes `[[Int]]` and
 /// keeps only well-formed pairs; absent or malformed (not `[[Int]]`) → empty, never a throw.
 enum MentionRefs {

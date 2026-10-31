@@ -90,6 +90,14 @@ final class FirebaseGameService: GameService {
     func setOptions(gameId: String, freeSpace: Bool) async throws {
         throw AppError(code: "unimplemented", token: nil, underlying: nil)
     }
+    /// The Firebase backend has no roster.
+    func bindName(gameId: String, key: String, seatId: String?) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
+    /// The Firebase backend has no roster.
+    func retireName(gameId: String, key: String) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
     func transferHost(gameId: String, toSeatId: String) async throws {
         try await callVoid("transferHost", TransferHostReq(gameId: gameId, toSeatId: toSeatId))
     }
