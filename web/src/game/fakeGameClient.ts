@@ -66,6 +66,7 @@ export class FakeGameClient implements GameClient {
     return this.result('resolveReclaim', [gameId, reclaimId, approve], undefined);
   }
   transferHost(gameId: string, toSeatId: string) { return this.result('transferHost', [gameId, toSeatId], undefined); }
+  leave(gameId: string) { this.calls.push(['leave', gameId]); }
 
   watchReclaim(gameId: string, reclaimId: string, onStatus: (s: ReclaimDoc['status']) => void, onError?: (e: Error) => void): () => void {
     this.calls.push(['watchReclaim', gameId, reclaimId]);

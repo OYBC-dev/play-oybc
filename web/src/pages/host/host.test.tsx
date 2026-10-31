@@ -9,6 +9,8 @@ import { EndedScreen } from '../play/EndedScreen';
 import { HostMenu } from './HostMenu';
 import { ReclaimPrompt } from './ReclaimPrompt';
 
+const noop = () => {};
+
 const reclaim = { id: 'r1', requesterUid: 'u9', name: 'Cody', seatId: 's2', status: 'pending' as const, createdAt: 1 };
 
 function snap(over: { host?: boolean; stage?: 'lobby' | 'playing' | 'ended'; reclaims?: GameSnapshot['reclaims'] } = {}): GameSnapshot {
@@ -64,10 +66,10 @@ describe('ReclaimPrompt', () => {
   it('appears on lobby, play and ended screens for the host', () => {
     const client = new FakeGameClient();
     const r = [reclaim];
-    const { unmount: u1 } = render(<LobbyScreen client={client} snapshot={snap({ reclaims: r })} gameId="g1" />);
+    const { unmount: u1 } = render(<LobbyScreen client={client} snapshot={snap({ reclaims: r })} gameId="g1" onLeave={noop} />);
     expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     u1();
-    const { unmount: u2 } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing', reclaims: r })} gameId="g1" />);
+    const { unmount: u2 } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing', reclaims: r })} gameId="g1" onLeave={noop} />);
     expect(screen.getByText("Someone wants to take Cody's seat")).toBeInTheDocument();
     u2();
     render(<MemoryRouter><EndedScreen client={client} snapshot={snap({ stage: 'ended', reclaims: r })} gameId="g1" /></MemoryRouter>);
@@ -83,23 +85,25 @@ describe('HostMenu', () => {
     return screen.getByRole('menu');
   };
 
-  it('dots button opens a popover with Make host and End game; first item takes focus', async () => {
-    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+  it('dots button opens a popover with Make host, End game and Leave game; first item takes focus', async () => {
+    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     const button = screen.getByRole('button', { name: 'Menu' });
     expect(button).toHaveAttribute('aria-haspopup', 'menu');
     expect(button).toHaveAttribute('aria-expanded', 'false');
     const menu = await openMenu();
     expect(button).toHaveAttribute('aria-expanded', 'true');
     const items = within(menu).getAllByRole('menuitem');
-    expect(items.map((i) => i.textContent)).toEqual(['Make host', 'End game']);
+    expect(items.map((i) => i.textContent)).toEqual(['Make host', 'End game', 'Leave game']);
     expect(items[0]).toHaveFocus();
   });
 
   it('arrow keys move between items; Escape closes and returns focus to the button', async () => {
-    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     const menu = await openMenu();
     await userEvent.keyboard('{ArrowDown}');
     expect(within(menu).getByRole('menuitem', { name: 'End game' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(within(menu).getByRole('menuitem', { name: 'Leave game' })).toHaveFocus();
     await userEvent.keyboard('{ArrowDown}');
     expect(within(menu).getByRole('menuitem', { name: 'Make host' })).toHaveFocus();
     await userEvent.keyboard('{Escape}');
@@ -108,29 +112,48 @@ describe('HostMenu', () => {
   });
 
   it('closes on an outside tap', async () => {
-    render(<div><p>outside</p><HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd /></div>);
+    render(<div><p>outside</p><HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} /></div>);
     await openMenu();
     await userEvent.click(screen.getByText('outside'));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   it('Make host is disabled with no other players, with no extra copy', async () => {
-    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={twoSeats(snap({ stage: 'playing' }))} canEnd />);
+    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={twoSeats(snap({ stage: 'playing' }))} canEnd onLeave={noop} />);
     const menu = await openMenu();
     expect(within(menu).getByRole('menuitem', { name: 'Make host' })).toBeDisabled();
     expect(within(menu).getByRole('menuitem', { name: 'End game' })).toHaveFocus();
-    expect(menu).toHaveTextContent(/^Make hostEnd game$/);
+    expect(menu).toHaveTextContent(/^Make hostEnd gameLeave game$/);
   });
 
-  it('without canEnd the menu offers Make host only', async () => {
-    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap()} canEnd={false} />);
+  it('without canEnd the host menu offers Make host and Leave game', async () => {
+    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap()} canEnd={false} onLeave={noop} />);
     const menu = await openMenu();
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Make host']);
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Make host', 'Leave game']);
+  });
+
+  it('a guest gets the menu with Leave game only', async () => {
+    render(<HostMenu client={new FakeGameClient()} gameId="g1" snapshot={snap({ host: false, stage: 'playing' })} canEnd onLeave={noop} />);
+    const menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
+    expect(within(menu).getByRole('menuitem', { name: 'Leave game' })).toHaveFocus();
+    expect(within(menu).queryByRole('separator')).toBeNull();
+  });
+
+  it('Leave game closes the menu and calls onLeave, with no confirm and no server call', async () => {
+    const client = new FakeGameClient();
+    const onLeave = vi.fn();
+    render(<HostMenu client={client} gameId="g1" snapshot={snap({ host: false })} canEnd onLeave={onLeave} />);
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Leave game' }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(client.calls).toEqual([]);
   });
 
   it('Make host: radio list of the other players, confirm disabled until one is chosen, then transfers', async () => {
     const client = new FakeGameClient();
-    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     const menu = await openMenu();
     await userEvent.click(within(menu).getByRole('menuitem', { name: 'Make host' }));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
@@ -152,7 +175,7 @@ describe('HostMenu', () => {
 
   it('Make host Cancel closes without a call and returns focus to the dots button', async () => {
     const client = new FakeGameClient();
-    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Make host' }));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -163,7 +186,7 @@ describe('HostMenu', () => {
   it('shows the mapped error when the transfer fails', async () => {
     const client = new FakeGameClient();
     client.transferHost = () => Promise.reject(appError('not-host'));
-    render(<HostMenu client={client} gameId="g1" snapshot={snap()} canEnd={false} />);
+    render(<HostMenu client={client} gameId="g1" snapshot={snap()} canEnd={false} onLeave={noop} />);
     await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Make host' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Pat' }));
     await userEvent.click(screen.getByRole('button', { name: 'Make Pat host' }));
@@ -173,7 +196,7 @@ describe('HostMenu', () => {
 
   it('End game: README copy; Cancel makes no call, End game calls end', async () => {
     const client = new FakeGameClient();
-    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'End game' }));
     let dialog = screen.getByRole('dialog', { name: 'End the game?' });
     expect(dialog).toHaveTextContent('Marking stops for everyone and the final leaderboard goes up.');
@@ -188,74 +211,98 @@ describe('HostMenu', () => {
   it('End game shows the mapped error and stays open on failure', async () => {
     const client = new FakeGameClient();
     client.end = () => Promise.reject(appError('wrong-stage'));
-    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'End game' }));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'End game' }));
     expect(await screen.findByRole('alert')).toHaveTextContent("That isn't available right now");
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('host-only controls disappear for the old host after a transfer', () => {
+  it('host-only controls disappear for the old host after a transfer; the menu keeps Leave game', async () => {
     const client = new FakeGameClient();
-    const { rerender } = render(<LobbyScreen client={client} snapshot={snap()} gameId="g1" />);
-    expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
+    const { rerender } = render(<LobbyScreen client={client} snapshot={snap()} gameId="g1" onLeave={noop} />);
     expect(screen.getByRole('button', { name: 'Launch' })).toBeInTheDocument();
-    rerender(<LobbyScreen client={client} snapshot={snap({ host: false })} gameId="g1" />);
-    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    rerender(<LobbyScreen client={client} snapshot={snap({ host: false })} gameId="g1" onLeave={noop} />);
     expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
+    const menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
   });
 
-  it('after a successful transfer the menu unmounts and focus lands on the page, not <body>', async () => {
+  it('after a successful transfer the menu drops its host items and focus returns to the dots button, not <body>', async () => {
     const client = new FakeGameClient();
     let current = snap({ stage: 'playing' });
-    const { rerender } = render(<PlayScreen client={client} snapshot={current} gameId="g1" />);
+    const { rerender } = render(<PlayScreen client={client} snapshot={current} gameId="g1" onLeave={noop} />);
     client.transferHost = async () => {
       current = snap({ stage: 'playing', host: false });
-      rerender(<PlayScreen client={client} snapshot={current} gameId="g1" />);
+      rerender(<PlayScreen client={client} snapshot={current} gameId="g1" onLeave={noop} />);
     };
     await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Make host' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Cody' }));
     await userEvent.click(screen.getByRole('button', { name: 'Make Cody host' }));
-    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.body).not.toHaveFocus();
-    expect(screen.getByTestId('stage-playing')).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Menu' })).toHaveFocus();
+    const menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
   });
 
-  it('lobby: no dots button when the host is alone; the board keeps a disabled Make host', async () => {
-    const { unmount } = render(<LobbyScreen client={new FakeGameClient()} snapshot={twoSeats(snap())} gameId="g1" />);
-    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+  it('host alone: lobby and board both keep a disabled Make host beside End game and Leave game', async () => {
+    const { unmount } = render(<LobbyScreen client={new FakeGameClient()} snapshot={twoSeats(snap())} gameId="g1" onLeave={noop} />);
+    let menu = await openMenu();
+    expect(within(menu).getByRole('menuitem', { name: 'Make host' })).toBeDisabled();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Make host', 'End game', 'Leave game']);
     unmount();
-    render(<PlayScreen client={new FakeGameClient()} snapshot={twoSeats(snap({ stage: 'playing' }))} gameId="g1" />);
-    const menu = await openMenu();
+    render(<PlayScreen client={new FakeGameClient()} snapshot={twoSeats(snap({ stage: 'playing' }))} gameId="g1" onLeave={noop} />);
+    menu = await openMenu();
     expect(within(menu).getByRole('menuitem', { name: 'Make host' })).toBeDisabled();
   });
 
   it('Make host forgets a pick whose player left', async () => {
     const client = new FakeGameClient();
-    const { rerender } = render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd />);
+    const { rerender } = render(<HostMenu client={client} gameId="g1" snapshot={snap({ stage: 'playing' })} canEnd onLeave={noop} />);
     await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Make host' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Pat' }));
     expect(screen.getByRole('button', { name: 'Make Pat host' })).toBeEnabled();
     const s = snap({ stage: 'playing' });
-    rerender(<HostMenu client={client} gameId="g1" snapshot={{ ...s, seats: s.seats.filter((x) => x.seatId !== 's3') }} canEnd />);
+    rerender(<HostMenu client={client} gameId="g1" snapshot={{ ...s, seats: s.seats.filter((x) => x.seatId !== 's3') }} canEnd onLeave={noop} />);
     expect(screen.queryByRole('radio', { name: 'Pat' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('radio').every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
     expect(screen.getByRole('button', { name: 'Make host' })).toBeDisabled();
   });
 
-  it('lobby menu offers Make host only (the server ends playing games only)', async () => {
-    render(<LobbyScreen client={new FakeGameClient()} snapshot={snap()} gameId="g1" />);
-    const menu = await openMenu();
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Make host']);
+  it('lobby: the host menu offers Make host, End game and Leave game; End game ends from the lobby', async () => {
+    const client = new FakeGameClient();
+    const onLeave = vi.fn();
+    render(<LobbyScreen client={client} snapshot={snap()} gameId="g1" onLeave={onLeave} />);
+    let menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Make host', 'End game', 'Leave game']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'End game' }));
+    const dialog = screen.getByRole('dialog', { name: 'End the game?' });
+    expect(dialog).not.toHaveTextContent('Marking stops');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'End game' }));
+    expect(client.calls).toContainEqual(['end', 'g1']);
+    menu = await openMenu();
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Leave game' }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
   });
 
-  it('is on the play screen for the host only', () => {
+  it('lobby: a guest gets the menu with Leave game only', async () => {
+    const onLeave = vi.fn();
+    render(<LobbyScreen client={new FakeGameClient()} snapshot={snap({ host: false })} gameId="g1" onLeave={onLeave} />);
+    const menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Leave game' }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
+  it('play screen: every seat has the menu; End game is the host\'s only', async () => {
     const client = new FakeGameClient();
-    const { rerender } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing' })} gameId="g1" />);
+    const { rerender } = render(<PlayScreen client={client} snapshot={snap({ stage: 'playing' })} gameId="g1" onLeave={noop} />);
     expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
-    rerender(<PlayScreen client={client} snapshot={snap({ stage: 'playing', host: false })} gameId="g1" />);
-    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'End game' })).not.toBeInTheDocument();
+    rerender(<PlayScreen client={client} snapshot={snap({ stage: 'playing', host: false })} gameId="g1" onLeave={noop} />);
+    const menu = await openMenu();
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Leave game']);
+    expect(screen.queryByRole('menuitem', { name: 'End game' })).not.toBeInTheDocument();
   });
 });

@@ -5,9 +5,12 @@ import type { GameClient } from '../../game/GameClient';
 import { Dialog } from '../play/Dialog';
 import styles from './host.module.css';
 
-/** Host confirm for ending the game; calls `client.end` and closes on success. */
-export function EndGameDialog({ client, gameId, onClose, returnFocus }: {
-  client: GameClient; gameId: string; onClose: () => void; returnFocus?: RefObject<HTMLElement | null>;
+/**
+ * Host confirm for ending the game; calls `client.end` and closes on success.
+ * `inLobby` drops the marking/leaderboard consequence line, which only describes a game in play.
+ */
+export function EndGameDialog({ client, gameId, onClose, returnFocus, inLobby = false }: {
+  client: GameClient; gameId: string; onClose: () => void; returnFocus?: RefObject<HTMLElement | null>; inLobby?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +30,7 @@ export function EndGameDialog({ client, gameId, onClose, returnFocus }: {
 
   return (
     <Dialog title="End the game?" onClose={onClose} returnFocus={returnFocus}>
-      <p className={styles.body}>Marking stops for everyone and the final leaderboard goes up.</p>
+      {!inLobby && <p className={styles.body}>Marking stops for everyone and the final leaderboard goes up.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className={styles.dialogActions}>
         <RisoButton kind="ghost" fullWidth onClick={onClose}>Cancel</RisoButton>

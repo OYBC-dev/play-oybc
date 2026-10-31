@@ -5,6 +5,8 @@ import { appError, FakeGameClient } from '../../game/fakeGameClient';
 import { LobbyScreen } from './LobbyScreen';
 import { nonsenseFor } from './nonsense';
 
+const noop = () => {};
+
 function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolSize?: number; alone?: boolean; empty?: boolean } = {}): GameSnapshot {
   const host = over.host ?? true;
   const view = over.empty ? [] : [
@@ -30,7 +32,7 @@ function snap(over: { host?: boolean; shortfalls?: Record<string, number>; poolS
 
 function setup(s: GameSnapshot) {
   const client = new FakeGameClient();
-  const utils = render(<LobbyScreen client={client} snapshot={s} gameId="g1" />);
+  const utils = render(<LobbyScreen client={client} snapshot={s} gameId="g1" onLeave={noop} />);
   return { client, ...utils };
 }
 
@@ -120,7 +122,7 @@ describe('LobbyScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Delete task: Someone carves the pumpkin' }));
     await act(async () => resolve());
     expect(screen.queryByText('Someone carves the pumpkin')).toBeNull();
-    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: s.view.slice(1) }} gameId="g1" />);
+    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: s.view.slice(1) }} gameId="g1" onLeave={noop} />);
     expect(screen.queryByText('Someone carves the pumpkin')).toBeNull();
   });
 
@@ -141,7 +143,7 @@ describe('LobbyScreen', () => {
     expect(within(row).getByText('You')).toBeInTheDocument();
     await act(async () => resolve());
     expect(screen.getByText('Fresh task')).toBeInTheDocument();
-    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: [...s.view, { taskId: sentId, authorName: 'Me', text: 'Fresh task', mine: true }] }} gameId="g1" />);
+    rerender(<LobbyScreen client={client} snapshot={{ ...s, view: [...s.view, { taskId: sentId, authorName: 'Me', text: 'Fresh task', mine: true }] }} gameId="g1" onLeave={noop} />);
     expect(screen.getAllByText('Fresh task')).toHaveLength(1);
     expect(screen.getByText('Fresh task').closest('li')).not.toHaveAttribute('data-pending');
   });
@@ -228,13 +230,13 @@ describe('LobbyScreen', () => {
     expect(screen.queryByRole('list', { name: 'Players' })).toBeNull();
   });
 
-  it('header carries the host dots menu for the host only', () => {
+  it('header carries the dots menu for every seat', () => {
     const { unmount } = setup(snap());
     const header = screen.getByRole('banner');
     expect(within(header).getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-haspopup', 'menu');
     unmount();
     setup(snap({ host: false }));
-    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Menu' })).toHaveAttribute('aria-haspopup', 'menu');
   });
 
   it('empty lobby: only the host, a waiting pill and no tasks yet', () => {

@@ -96,6 +96,11 @@ export function getRoom(opts: RoomOptions): RoomConnection {
   return room;
 }
 
+/** Closes the live room for `code`, if any, and drops it from the registry; never opens one. */
+export function releaseRoom(code: string): void {
+  rooms.get(code)?.close();
+}
+
 /**
  * One reconnecting WebSocket to one game room. It says `hello` on every (re)connect with the last known
  * `gameId`, merges `state` frames section by section (dropping any whose `rev` is not newer than the last

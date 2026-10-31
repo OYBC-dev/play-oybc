@@ -17,6 +17,7 @@ export const firebaseGameClient: GameClient = {
   end: async (gameId) => { await api.endGame({ gameId }); },
   resolveReclaim: async (gameId, reclaimId, approve) => { await api.resolveReclaim({ gameId, reclaimId, approve }); },
   transferHost: async (gameId, toSeatId) => { await api.transferHost({ gameId, toSeatId }); },
+  leave: () => { /* listeners detach on unmount; nothing else to release */ },
 
   subscribe(gameId, seatId, onChange, onError) {
     const unsubs: Array<() => void> = [];
