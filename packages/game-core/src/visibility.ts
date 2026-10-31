@@ -20,6 +20,8 @@ export interface MentionContext {
 export interface TaskScan {
   /** Seats the task refers to: stored at authoring, matched by name now, or nearly named (`isNearName`). */
   referenced: ReadonlySet<string>;
+  /** The seats the task names exactly (stored at authoring or matched by name now); what identifies a seat. */
+  named: ReadonlySet<string>;
   /** Whether the text names someone no current seat matches. */
   unbound: boolean;
 }
@@ -31,17 +33,18 @@ export interface TaskScan {
  * nearly names ("@Cody" keeps the task from "Cody B").
  */
 export function scanTask(task: PoolTask, seats: readonly Seat[]): TaskScan {
-  const referenced = new Set(task.mentions.seatIds);
+  const named = new Set(task.mentions.seatIds);
+  const referenced = new Set(named);
   let unbound = false;
   for (const t of scanMentions(task.text, seats)) {
-    if (t.kind === 'seat') referenced.add(t.seat.seatId);
+    if (t.kind === 'seat') { named.add(t.seat.seatId); referenced.add(t.seat.seatId); }
     else if (t.kind === 'unknown') {
       unbound = true;
       const key = nameKey(t.token.slice(1));
       for (const s of seats) if (isNearName(key, nameKey(s.name))) referenced.add(s.seatId);
     }
   }
-  return { referenced, unbound };
+  return { referenced, named, unbound };
 }
 
 /** The seats a task refers to right now (see {@link scanTask}). */
@@ -54,14 +57,14 @@ export function hasUnboundName(task: PoolTask, seats: readonly Seat[]): boolean 
   return scanTask(task, seats).unbound;
 }
 
-/** The context for `tasks` and `seats`: each task scanned once; identified = every seat some task refers to. */
+/** The context for `tasks` and `seats`: each task scanned once; identified = every seat some task names exactly. */
 export function mentionContext(tasks: readonly PoolTask[], seats: readonly Seat[]): MentionContext {
   const identified = new Set<string>();
   const scans = new Map<string, TaskScan>();
   for (const task of tasks) {
     const scan = scanTask(task, seats);
     scans.set(task.id, scan);
-    for (const id of scan.referenced) identified.add(id);
+    for (const id of scan.named) identified.add(id);
   }
   return { seats, identified, scans };
 }

@@ -35,14 +35,14 @@ export function firstWord(key: string): string {
 
 /**
  * Whether an unbound name key plausibly names the seat with `seatKey`: the same
- * key, the seat's first name, or a prefix of it / extended by it (3+ chars either
- * way), so "@Cody", "@Cod" and "@Codys" all reach "Cody B". Used to keep a task
- * from a seat the text nearly names and to refuse such a mention while that seat is here.
+ * key, the seat's first name, a 3+ char prefix of it, or that first name plus an
+ * "s", so "@Cody", "@Cod" and "@Codys" all reach "Cody B" while "@Samantha" does
+ * not reach "Sam". Used to keep a task from a seat the text nearly names and to
+ * refuse such a mention while that seat is here.
  */
 export function isNearName(key: string, seatKey: string): boolean {
   if (key === seatKey) return true;
   const first = firstWord(seatKey);
-  if (key === first) return true;
-  if (key.length < 3 || first.length < 3) return false;
-  return first.startsWith(key) || key.startsWith(first);
+  if (key === first || key === first + 's') return true;
+  return key.length >= 3 && first.startsWith(key);
 }
