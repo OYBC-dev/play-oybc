@@ -4,7 +4,7 @@ import { GameState, type BoardRow, type GameRow, type TaskRow } from '../src/roo
 import { MemoryPersistence, SqlPersistence } from '../src/room/persistence';
 
 const game = (over: Partial<GameRow> = {}): GameRow => ({
-  gameId: 'g1', code: 'ABCD', stage: 'lobby', hostSeatId: 'A', createdAt: 1, bingoCount: 0, reviewGate: false, rev: 0, lastMutationAt: 0, ...over,
+  gameId: 'g1', code: 'ABCD', stage: 'lobby', hostSeatId: 'A', createdAt: 1, bingoCount: 0, reviewGate: false, freeSpace: false, rev: 0, lastMutationAt: 0, ...over,
 });
 const task = (over: Partial<TaskRow> = {}): TaskRow => ({
   taskId: 't1', text: 'hello', authorSeatId: 'A', mentions: { seatIds: ['B'], someone: false, anyone: false }, createdAt: 5, ...over,
@@ -118,6 +118,38 @@ describe('GameState', () => {
       expect('launchedAt' in plain).toBe(false);
       expect('endedAt' in plain).toBe(false);
       expect(plain.reviewGate).toBe(false);
+      expect(plain.freeSpace).toBe(false);
+      s.putGame(game({ freeSpace: true }));
+      expect(new GameState(new SqlPersistence(state.storage.sql)).game!.freeSpace).toBe(true);
     });
+  });
+
+  it('SqlPersistence adds freeSpace to a game table created before it existed', async () => {
+    const stub = env.GAME_ROOM.get(env.GAME_ROOM.idFromName('T2c'));
+    await runInDurableObject(stub, (_i, state) => {
+      const sql = state.storage.sql;
+      // The pre-feature DDL, verbatim (the room's own constructor already made the new shape: replace it).
+      sql.exec('DROP TABLE IF EXISTS game');
+      sql.exec(`CREATE TABLE game (id INTEGER PRIMARY KEY CHECK (id = 1), gameId TEXT NOT NULL, code TEXT NOT NULL, stage TEXT NOT NULL,
+        hostSeatId TEXT NOT NULL, createdAt INTEGER NOT NULL, launchedAt INTEGER, endedAt INTEGER, bingoCount INTEGER NOT NULL,
+        reviewGate INTEGER NOT NULL, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`);
+      sql.exec(`INSERT INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, rev, lastMutationAt)
+        VALUES (1, 'old', 'OLDGM', 'playing', 'A', 1, 2, NULL, 0, 0, 7, 3)`);
+      const p = new SqlPersistence(sql);
+      const loaded = p.load().game!;
+      expect(loaded).toMatchObject({ gameId: 'old', stage: 'playing', rev: 7, freeSpace: false });
+      p.putGame({ ...loaded, freeSpace: true });
+      expect(p.load().game!.freeSpace).toBe(true);
+      // A second construction over the migrated table is a no-op.
+      expect(new SqlPersistence(sql).load().game!.freeSpace).toBe(true);
+    });
+  });
+
+  it('MemoryPersistence loads a game row without freeSpace as off', () => {
+    const p = new MemoryPersistence();
+    const { freeSpace: _f, ...legacy } = game();
+    p.putGame(legacy as GameRow);
+    expect(p.load().game!.freeSpace).toBe(false);
+    expect(new GameState(p).game!.freeSpace).toBe(false);
   });
 });

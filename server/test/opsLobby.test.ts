@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { canSeeText, type PoolTask } from 'game-core';
+import { canSeeText, resolveMentionRefs, type PoolTask } from 'game-core';
 import { AppError } from '../src/errors';
 import { MemoryPersistence } from '../src/room/persistence';
-import { addTask, claimGame, deleteTask, join, type OpCtx } from '../src/room/ops';
+import { addTask, claimGame, deleteTask, join, setOptions, type OpCtx } from '../src/room/ops';
 import { buildSections } from '../src/room/sections';
 import { GameState } from '../src/room/state';
 
@@ -124,9 +124,22 @@ describe('join', () => {
     const board = state.boards.get(seatId)!;
     expect(board.cells).toHaveLength(25);
     expect(board.marks).toHaveLength(25);
+    expect(board.cells[12]).toMatchObject({ kind: 'task' });
+    expect(board.marks.filter(Boolean)).toHaveLength(0);
+    expect(out.push.all).toEqual(['game', 'seats', 'view', 'standings']);
+    expect(out.push.perSeat).toEqual({ [seatId]: ['board'] });
+  });
+  it('a playing-stage join with free space gets the free centre pre-marked', () => {
+    const { state, s1 } = setup();
+    for (let i = 0; i < 30; i++) {
+      state.putTask({ taskId: `p${i}`, text: `task ${i}`, authorSeatId: s1, mentions: { seatIds: [], someone: false, anyone: false }, createdAt: i });
+    }
+    state.putGame({ ...state.game!, stage: 'playing', freeSpace: true });
+    const seatId = (join(state, ctxFor('u4'), { name: 'Dana' }).result as { seatId: string }).seatId;
+    const board = state.boards.get(seatId)!;
+    expect(board.cells[12]).toEqual({ kind: 'free' });
     expect(board.marks[12]).toBe(true);
     expect(board.marks.filter(Boolean)).toHaveLength(1);
-    expect(out.push.perSeat).toEqual({ [seatId]: ['board'] });
   });
   it('joining a playing game with a thin pool is not-ready and seats nobody', () => {
     const { state } = setup();
@@ -165,15 +178,15 @@ describe('addTask', () => {
     const taskId = add(state, 'u2', '@Stephen falls asleep');
     expect(state.tasks.get(taskId)!.mentions.seatIds).toEqual([s1]);
     expect(view(state, s1)[0].text).toBeNull();
-    expect(view(state, s2)[0].text).toBe('@Stephen falls asleep');
-    expect(view(state, s3)[0].text).toBe('@Stephen falls asleep');
+    expect(view(state, s2)[0]).toMatchObject({ text: 'Stephen falls asleep', refs: [[0, 7]] });
+    expect(view(state, s3)[0]).toMatchObject({ text: 'Stephen falls asleep', refs: [[0, 7]] });
   });
   it('@someone is visible only to its author', () => {
     const { state, s1, s2, s3 } = setup();
     add(state, 'u3', '@someone takes a shot');
     expect(view(state, s1)[0].text).toBeNull();
     expect(view(state, s2)[0].text).toBeNull();
-    expect(view(state, s3)[0].text).toBe('@someone takes a shot');
+    expect(view(state, s3)[0]).toMatchObject({ text: 'Someone takes a shot', refs: [[0, 7]] });
   });
   it('carries the unresolved token on unknown-mention', () => {
     const { state } = setup();
@@ -204,8 +217,8 @@ describe('addTask', () => {
   it('keeps shortfalls current and never stores zeros', () => {
     const { state, s1, s2, s3 } = setup();
     const sf = () => buildSections(state, s1, ['game']).game!.shortfalls;
-    expect(sf()).toEqual({ [s1]: 24, [s2]: 24, [s3]: 24 });
-    for (let i = 0; i < 23; i++) add(state, 'u1', `plain ${i}`);
+    expect(sf()).toEqual({ [s1]: 25, [s2]: 25, [s3]: 25 });
+    for (let i = 0; i < 24; i++) add(state, 'u1', `plain ${i}`);
     add(state, 'u3', '@Cody wins');
     expect(sf()).toEqual({ [s2]: 1 });
     add(state, 'u1', 'one more');
@@ -268,6 +281,40 @@ describe('taskId validation', () => {
   });
 });
 
+describe('setOptions', () => {
+  it('a new game has free space off', () => {
+    const { state, s1 } = setup();
+    expect(state.game!.freeSpace).toBe(false);
+    expect(buildSections(state, s1, ['game']).game).toMatchObject({ freeSpace: false, tasksPerBoard: 25 });
+  });
+  it('host in the lobby turns free space on and pushes game to all', () => {
+    const { state, s1 } = setup();
+    const out = setOptions(state, ctxFor('u1'), { freeSpace: true });
+    expect(state.game!.freeSpace).toBe(true);
+    expect(out.push).toEqual({ all: ['game'] });
+    expect(buildSections(state, s1, ['game']).game).toMatchObject({ freeSpace: true, tasksPerBoard: 24 });
+    setOptions(state, ctxFor('u1'), { freeSpace: false });
+    expect(state.game!.freeSpace).toBe(false);
+  });
+  it('a guest is not-host', () => {
+    const { state } = setup();
+    expect(codeOf(() => setOptions(state, ctxFor('u2'), { freeSpace: true }))).toBe('not-host');
+    expect(state.game!.freeSpace).toBe(false);
+  });
+  it('while playing is wrong-stage', () => {
+    const { state } = setup();
+    state.putGame({ ...state.game!, stage: 'playing' });
+    expect(codeOf(() => setOptions(state, ctxFor('u1'), { freeSpace: true }))).toBe('wrong-stage');
+  });
+  it('a non-boolean is invalid-argument', () => {
+    const { state } = setup();
+    for (const freeSpace of ['x', 1, null, undefined]) {
+      expect(codeOf(() => setOptions(state, ctxFor('u1'), { freeSpace: freeSpace as unknown as boolean }))).toBe('invalid-argument');
+    }
+    expect(state.game!.freeSpace).toBe(false);
+  });
+});
+
 describe('stage', () => {
   it('rejects add and delete outside the lobby', () => {
     const { state } = setup();
@@ -294,7 +341,7 @@ describe('leak check', () => {
       for (const e of entries) {
         const t = tasks.get(e.taskId)!;
         expect(e.text === null).toBe(!canSeeText(t, seat));
-        if (e.text !== null) expect(e.text).toBe(t.text);
+        if (e.text !== null) expect(e.text).toBe(resolveMentionRefs(t.text, state.seatList(), 'Someone').text);
       }
     }
   });

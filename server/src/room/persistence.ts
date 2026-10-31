@@ -34,7 +34,8 @@ export class MemoryPersistence implements Persistence {
   load(): Loaded {
     const c = <T>(v: T): T => structuredClone(v);
     return {
-      game: c(this.game), seats: c([...this.seats.values()]), members: [...this.members], tasks: c([...this.tasks.values()]),
+      // A row written before `freeSpace` existed loads with it off, as `SqlPersistence` does.
+      game: this.game && { ...c(this.game), freeSpace: this.game.freeSpace ?? false }, seats: c([...this.seats.values()]), members: [...this.members], tasks: c([...this.tasks.values()]),
       boards: c([...this.boards.values()]), bingos: c(this.bingos), reclaims: c([...this.reclaims.values()]),
     };
   }
@@ -65,7 +66,7 @@ export class SqlPersistence implements Persistence {
     const ddl = [
       `CREATE TABLE IF NOT EXISTS game (id INTEGER PRIMARY KEY CHECK (id = 1), gameId TEXT NOT NULL, code TEXT NOT NULL, stage TEXT NOT NULL,
         hostSeatId TEXT NOT NULL, createdAt INTEGER NOT NULL, launchedAt INTEGER, endedAt INTEGER, bingoCount INTEGER NOT NULL,
-        reviewGate INTEGER NOT NULL, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`,
+        reviewGate INTEGER NOT NULL, freeSpace INTEGER NOT NULL DEFAULT 0, rev INTEGER NOT NULL, lastMutationAt INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS seats (seatId TEXT PRIMARY KEY, name TEXT NOT NULL, nameKey TEXT NOT NULL, joinedAt INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS members (uid TEXT PRIMARY KEY, seatId TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS tasks (taskId TEXT PRIMARY KEY, text TEXT NOT NULL, authorSeatId TEXT NOT NULL, mentions TEXT NOT NULL, createdAt INTEGER NOT NULL)`,
@@ -76,6 +77,9 @@ export class SqlPersistence implements Persistence {
         status TEXT NOT NULL, createdAt INTEGER NOT NULL, resolvedAt INTEGER)`,
     ];
     for (const q of ddl) sql.exec(q);
+    // Rooms created before the free-space option have a `game` table without the column; add it (off).
+    const cols = sql.exec<{ name: string }>('PRAGMA table_info(game)').toArray().map((c) => c.name);
+    if (!cols.includes('freeSpace')) sql.exec('ALTER TABLE game ADD COLUMN freeSpace INTEGER NOT NULL DEFAULT 0');
   }
 
   load(): Loaded {
@@ -87,7 +91,7 @@ export class SqlPersistence implements Persistence {
             gameId: g.gameId as string, code: g.code as string, stage: g.stage as GameRow['stage'], hostSeatId: g.hostSeatId as string,
             createdAt: g.createdAt as number, ...(g.launchedAt !== null && { launchedAt: g.launchedAt as number }),
             ...(g.endedAt !== null && { endedAt: g.endedAt as number }), bingoCount: g.bingoCount as number,
-            reviewGate: g.reviewGate === 1, rev: g.rev as number, lastMutationAt: g.lastMutationAt as number,
+            reviewGate: g.reviewGate === 1, freeSpace: g.freeSpace === 1, rev: g.rev as number, lastMutationAt: g.lastMutationAt as number,
           }
         : null,
       seats: all('SELECT * FROM seats') as unknown as SeatRow[],
@@ -107,10 +111,10 @@ export class SqlPersistence implements Persistence {
 
   putGame(g: GameRow): void {
     this.sql.exec(
-      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, rev, lastMutationAt)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO game (id, gameId, code, stage, hostSeatId, createdAt, launchedAt, endedAt, bingoCount, reviewGate, freeSpace, rev, lastMutationAt)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       g.gameId, g.code, g.stage, g.hostSeatId, g.createdAt, g.launchedAt ?? null, g.endedAt ?? null, g.bingoCount,
-      g.reviewGate ? 1 : 0, g.rev, g.lastMutationAt,
+      g.reviewGate ? 1 : 0, g.freeSpace ? 1 : 0, g.rev, g.lastMutationAt,
     );
   }
   putSeat(s: SeatRow): void {

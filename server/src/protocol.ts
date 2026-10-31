@@ -1,12 +1,17 @@
-import type { BingoDoc, BoardDoc, GameDoc, PoolViewEntry, ReclaimDoc, SeatDoc, Stage } from 'game-core';
-export type Section = 'game' | 'seats' | 'view' | 'board' | 'bingos' | 'reclaims';
-export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost';
+import type { BingoDoc, BoardDoc, GameDoc, PoolViewEntry, ReclaimDoc, SeatDoc, Stage, Standing } from 'game-core';
+export type Section = 'game' | 'seats' | 'view' | 'board' | 'bingos' | 'standings' | 'reclaims';
+export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions';
 export type ClientMsg =
   | { t: 'hello'; token: string; gameId?: string }
   | { t: 'act'; id: string; op: Op; args: Record<string, unknown> };
+/**
+ * The `game` section on the wire: game-core's `GameDoc` plus the room's options and per-seat pool counts.
+ * `tasksPerBoard` is 24 with free space, else 25; `dealable` is seatId → tasks guaranteed dealable to that seat.
+ */
+export type WireGameDoc = GameDoc & { freeSpace: boolean; tasksPerBoard: number; dealable: Record<string, number> };
 export interface StateMsg {
-  t: 'state'; rev: number; game?: GameDoc; seats?: Array<SeatDoc & { seatId: string }>; view?: PoolViewEntry[];
-  board?: BoardDoc | null; bingos?: BingoDoc[]; reclaims?: Array<ReclaimDoc & { id: string }>;
+  t: 'state'; rev: number; game?: WireGameDoc; seats?: Array<SeatDoc & { seatId: string }>; view?: PoolViewEntry[];
+  board?: BoardDoc | null; bingos?: BingoDoc[]; standings?: Standing[]; reclaims?: Array<ReclaimDoc & { id: string }>;
 }
 export type AckMsg = { t: 'ack'; id: string; ok: true; result: unknown } | { t: 'ack'; id: string; ok: false; code: string; details?: Record<string, unknown> };
 export type ServerMsg =

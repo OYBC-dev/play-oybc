@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from '../src/errors';
 import { MemoryPersistence } from '../src/room/persistence';
 import {
-  OPS, addTask, adminSeats, adminTransferHost, claimGame, end, join, launch, mark, resolveReclaim, transferHost, type OpCtx,
+  OPS, addTask, adminSeats, adminTransferHost, claimGame, end, join, launch, mark, resolveReclaim, setOptions, transferHost, type OpCtx,
 } from '../src/room/ops';
 import { ALL_SECTIONS, buildSections } from '../src/room/sections';
+import type { BoardRow } from '../src/room/state';
 import { GameState } from '../src/room/state';
 
 const NOW = 1_700_000_000_000;
@@ -21,18 +22,19 @@ const codeOf = (fn: () => unknown): string | undefined => {
   return undefined;
 };
 
-/** Host u1 (Stephen) + u2 (Cody) (+ u3 Seth) with 30 plain tasks; not yet launched. */
-function lobby(withThird = false) {
+/** Host u1 (Stephen) + u2 (Cody) (+ u3 Seth) with 30 plain tasks; not yet launched. Free space on unless told otherwise. */
+function lobby(withThird = false, freeSpace = true) {
   const state = fresh();
   const g = claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' }).result;
+  if (freeSpace) setOptions(state, ctxFor('u1'), { freeSpace: true });
   const c = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
   const ids: Record<string, string> = { u1: g.seatId, u2: c.seatId };
   if (withThird) ids.u3 = (join(state, ctxFor('u3'), { name: 'Seth' }).result as { seatId: string }).seatId;
   for (let i = 0; i < 30; i++) addTask(state, ctxFor('u1'), { taskId: `t${i}`, text: `plain ${i}` });
   return { state, ids, code: g.code };
 }
-function playing(withThird = false) {
-  const l = lobby(withThird);
+function playing(withThird = false, freeSpace = true) {
+  const l = lobby(withThird, freeSpace);
   launch(l.state, ctxFor('u1'), {});
   return l;
 }
@@ -60,7 +62,7 @@ describe('launch', () => {
     const c = join(state, ctxFor('u2'), { name: 'Cody' }).result as { seatId: string };
     const e = errOf(() => launch(state, ctxFor('u1'), {}));
     expect(e.code).toBe('not-ready');
-    expect(e.details).toEqual({ shortfalls: { [g.seatId]: 24, [c.seatId]: 24 } });
+    expect(e.details).toEqual({ shortfalls: { [g.seatId]: 25, [c.seatId]: 25 } });
   });
   it('deals every seat a board and enters playing', () => {
     const { state, ids } = lobby(true);
@@ -78,7 +80,7 @@ describe('launch', () => {
       expect(b.completedLines).toEqual([]);
       expect(b.announcedLines).toEqual([]);
     }
-    expect(out.push.all).toEqual(['game']);
+    expect(out.push.all).toEqual(['game', 'standings']);
     expect(out.push.perSeat).toEqual({ [ids.u1]: ['board'], [ids.u2]: ['board'], [ids.u3]: ['board'] });
   });
   it('rejects a second launch and addTask after launch', () => {
@@ -99,14 +101,14 @@ describe('mark', () => {
     expect(b).toMatchObject({ seq: 1, seatId: ids.u2, name: 'Cody', line: 'row_0', playerBingoNumber: 1, status: 'announced', at: NOW });
     expect(state.game!.bingoCount).toBe(1);
     expect(state.boards.get(ids.u2)!.announcedLines).toEqual(['row_0']);
-    expect(out.push.all).toEqual(['bingos', 'game']);
+    expect(out.push.all).toEqual(['bingos', 'game', 'standings']);
     expect(out.push.perSeat).toEqual({ [ids.u2]: ['board'] });
     expect(buildSections(state, ids.u1, ['bingos']).bingos).toHaveLength(1);
   });
-  it('a plain mark pushes only the caller\'s board', () => {
+  it('a plain mark pushes the caller\'s board and standings to all', () => {
     const { state, ids } = playing();
     const out = doMark(state, 'u2', 3);
-    expect(out.push).toEqual({ all: [], perSeat: { [ids.u2]: ['board'] } });
+    expect(out.push).toEqual({ all: ['standings'], perSeat: { [ids.u2]: ['board'] } });
   });
   it('unmark and re-mark does not re-announce', () => {
     const { state } = playing();
@@ -202,6 +204,105 @@ describe('mark', () => {
   });
 });
 
+/** A seeded linear-congruential rng in [0, 1). */
+const seeded = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+const taskIdsOf = (b: BoardRow): string[] => b.cells.flatMap((c) => (c.kind === 'task' ? [c.taskId] : []));
+
+describe('free space', () => {
+  it('launch with free space off deals 25 task cells and leaves the centre unmarked', () => {
+    const { state, ids } = playing(true, false);
+    for (const seat of Object.values(ids)) {
+      const b = state.boards.get(seat)!;
+      expect(b.cells.filter((c) => c.kind === 'task')).toHaveLength(25);
+      expect(b.marks[12]).toBe(false);
+      expect(markedCount(state, seat)).toBe(0);
+    }
+  });
+  it('launch with free space on keeps the free, pre-marked centre', () => {
+    const { state, ids } = playing(true, true);
+    for (const seat of Object.values(ids)) {
+      const b = state.boards.get(seat)!;
+      expect(b.cells.filter((c) => c.kind === 'task')).toHaveLength(24);
+      expect(b.cells[12]).toEqual({ kind: 'free' });
+      expect(b.marks[12]).toBe(true);
+    }
+  });
+  it('without free space a mark on 12 marks it, counts toward lines and pushes standings to all', () => {
+    const { state, ids } = playing(false, false);
+    const out = doMark(state, 'u2', 12);
+    expect(state.boards.get(ids.u2)!.marks[12]).toBe(true);
+    expect(out.push).toEqual({ all: ['standings'], perSeat: { [ids.u2]: ['board'] } });
+    expect(buildSections(state, ids.u2, ['standings']).standings!.find((x) => x.seatId === ids.u2)!.marked).toBe(1);
+    for (const i of [10, 11, 13]) doMark(state, 'u2', i);
+    expect(doMark(state, 'u2', 14).result.newBingoSeqs).toEqual([1]);
+    expect(state.boards.get(ids.u2)!.announcedLines).toEqual(['row_2']);
+    doMark(state, 'u2', 12);
+    expect(state.boards.get(ids.u2)!.marks[12]).toBe(false);
+  });
+});
+
+describe('@anyone at launch', () => {
+  it('two @anyone tasks across three seats each land on at most one board', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const { state, ids } = lobby(true, true);
+      addTask(state, ctxFor('u2'), { taskId: 'any1', text: '@anyone dances' });
+      addTask(state, ctxFor('u3'), { taskId: 'any2', text: '@anyone sings' });
+      launch(state, { ...ctxFor('u1'), rng: seeded(seed) }, {});
+      for (const id of ['any1', 'any2']) {
+        const holders = Object.values(ids).filter((seat) => taskIdsOf(state.boards.get(seat)!).includes(id));
+        expect(holders.length).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+});
+
+describe('join while playing', () => {
+  /** Host alone with `n` plain tasks, free space off, launched. */
+  function soloLaunched(n: number) {
+    const state = fresh();
+    const g = claimGame(state, ctxFor('u1'), { gameId: 'g1', code: 'ABCDE', name: 'Stephen' }).result;
+    for (let i = 0; i < n; i++) addTask(state, ctxFor('u1'), { taskId: `t${i}`, text: `plain ${i}` });
+    launch(state, ctxFor('u1'), {});
+    return { state, host: g.seatId };
+  }
+  it('a late joiner gets no task already on another board', () => {
+    // 50 tasks, the host holds 25: only the other 25 may be dealt, and the same rng would otherwise repeat the host's deal.
+    const { state, host } = soloLaunched(50);
+    const out = join(state, ctxFor('u2'), { name: 'Cody' });
+    const seat = (out.result as { seatId: string }).seatId;
+    const hostIds = new Set(taskIdsOf(state.boards.get(host)!));
+    const mine = taskIdsOf(state.boards.get(seat)!);
+    expect(mine).toHaveLength(25);
+    expect(mine.filter((id) => hostIds.has(id))).toEqual([]);
+    expect(state.boards.get(seat)!.marks.filter(Boolean)).toHaveLength(0);
+    expect(out.push.all).toContain('standings');
+  });
+  it('a late join with too few undealt tasks is not-ready', () => {
+    const { state } = soloLaunched(49);
+    expect(codeOf(() => join(state, ctxFor('u2'), { name: 'Cody' }))).toBe('not-ready');
+    expect(state.seatOf('u2')).toBeNull();
+  });
+});
+
+describe('standings section', () => {
+  it('ranks by bingos, carries marks, best line and first bingo seq', () => {
+    const { state, ids } = playing();
+    expect(buildSections(state, ids.u1, ['standings']).standings!.map((x) => x.bingos)).toEqual([0, 0]);
+    for (const i of [0, 1, 2, 3, 4]) doMark(state, 'u2', i);
+    doMark(state, 'u1', 0);
+    doMark(state, 'u1', 6);
+    const rows = buildSections(state, ids.u1, ['standings']).standings!;
+    expect(rows).toEqual([
+      { seatId: ids.u2, name: 'Cody', bingos: 1, marked: 5, bestLine: 2, firstBingoSeq: 1 },
+      { seatId: ids.u1, name: 'Stephen', bingos: 0, marked: 2, bestLine: 3, firstBingoSeq: null },
+    ]);
+  });
+  it('is empty in the lobby', () => {
+    const { state, ids } = lobby();
+    expect(buildSections(state, ids.u1, ['standings']).standings).toEqual([]);
+  });
+});
+
 describe('end', () => {
   it('rejects non-host, ends for host while playing, rejects an ended game', () => {
     const { state } = playing();
@@ -209,7 +310,7 @@ describe('end', () => {
     const out = end(state, ctxFor('u1', NOW + 9), {});
     expect(state.game!.stage).toBe('ended');
     expect(state.game!.endedAt).toBe(NOW + 9);
-    expect(out.push.all).toEqual(['game']);
+    expect(out.push.all).toEqual(['game', 'standings']);
     expect(codeOf(() => end(state, ctxFor('u1'), {}))).toBe('wrong-stage');
   });
   it('ends from the lobby: no boards, no bingos, launch refused afterwards', () => {
@@ -217,7 +318,7 @@ describe('end', () => {
     expect(codeOf(() => end(state, ctxFor('u2'), {}))).toBe('not-host');
     const out = end(state, ctxFor('u1', NOW + 5), {});
     expect(state.game).toMatchObject({ stage: 'ended', endedAt: NOW + 5, bingoCount: 0 });
-    expect(out.push.all).toEqual(['game']);
+    expect(out.push.all).toEqual(['game', 'standings']);
     expect(state.boards.size).toBe(0);
     expect(bingos(state)).toEqual([]);
     expect(codeOf(() => end(state, ctxFor('u1'), {}))).toBe('wrong-stage');
@@ -393,6 +494,6 @@ describe('admin', () => {
 
 describe('OPS', () => {
   it('maps every protocol op to its handler', () => {
-    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'deleteTask', 'end', 'join', 'launch', 'mark', 'resolveReclaim', 'transferHost']);
+    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'deleteTask', 'end', 'join', 'launch', 'mark', 'resolveReclaim', 'setOptions', 'transferHost']);
   });
 });

@@ -1,14 +1,32 @@
-import { buildPoolView, shortfalls } from 'game-core';
+import { buildPoolView, dealableCounts, shortfalls, standings, tasksPerBoard, type Standing } from 'game-core';
 import type { Section, StateMsg } from '../protocol';
 import type { GameState } from './state';
 
 /** Every snapshot section, in wire order. */
-export const ALL_SECTIONS: readonly Section[] = ['game', 'seats', 'view', 'board', 'bingos', 'reclaims'];
+export const ALL_SECTIONS: readonly Section[] = ['game', 'seats', 'view', 'board', 'bingos', 'standings', 'reclaims'];
+
+/**
+ * The leaderboard over every dealt board (empty before launch): each seat's announced lines and its first
+ * announced bingo's `seq`, ranked by game-core's `standings` under the game's free-space option.
+ */
+export function buildStandings(state: GameState): Standing[] {
+  const firstSeq = new Map<string, number>();
+  for (const b of state.bingos) {
+    if (b.status !== 'announced') continue;
+    const prior = firstSeq.get(b.seatId);
+    if (prior === undefined || b.seq < prior) firstSeq.set(b.seatId, b.seq);
+  }
+  const boards = [...state.boards.values()].map((b) => ({
+    seatId: b.seatId, marks: b.marks, announcedLines: b.announcedLines, firstBingoSeq: firstSeq.get(b.seatId) ?? null,
+  }));
+  return standings(boards, state.seatList(), { freeSpace: state.game?.freeSpace ?? false });
+}
 
 /**
  * Builds the requested sections of a state push as one seat sees them.
  * Reclaims are host-only; `seatId` null (a spectator) gets an empty view, no board and no reclaims.
- * Sections the game cannot yet supply (no game row) are omitted for `game`.
+ * Sections the game cannot yet supply (no game row) are omitted for `game`. The `game` section carries the
+ * free-space option, `tasksPerBoard`, and per-seat `shortfalls` / `dealable` computed under that option.
  */
 export function buildSections(state: GameState, seatId: string | null, sections: readonly Section[]): Partial<StateMsg> {
   const out: Partial<StateMsg> = {};
@@ -18,9 +36,18 @@ export function buildSections(state: GameState, seatId: string | null, sections:
         const g = state.game;
         if (!g) break;
         const { gameId: _gameId, rev: _rev, lastMutationAt: _last, ...rest } = g;
-        out.game = { ...rest, shortfalls: shortfalls(state.poolTasks(), state.seatList()) };
+        const opts = { freeSpace: g.freeSpace };
+        const tasks = state.poolTasks();
+        const seats = state.seatList();
+        out.game = {
+          ...rest, tasksPerBoard: tasksPerBoard(g.freeSpace),
+          shortfalls: shortfalls(tasks, seats, opts), dealable: dealableCounts(tasks, seats, opts),
+        };
         break;
       }
+      case 'standings':
+        out.standings = buildStandings(state);
+        break;
       case 'seats':
         out.seats = [...state.seats.values()]
           .sort((a, b) => a.joinedAt - b.joinedAt || a.seatId.localeCompare(b.seatId))

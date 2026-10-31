@@ -26,9 +26,9 @@ async function threeSeats() {
   return { ...g, a, b, c, bobSeat, catSeat };
 }
 
-/** Adds 24 plain tasks as `host` and launches. */
+/** Adds 25 plain tasks as `host` and launches (free space is off by default). */
 async function launch(host: WsClient): Promise<void> {
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 25; i++) {
     const r = await host.act('addTask', { taskId: `t${i}`, text: `task number ${i}` });
     if (!r.ok) throw new Error(JSON.stringify(r));
   }
@@ -45,7 +45,7 @@ describe('GameRoom', () => {
     const w = await a.hello(tokenFor('ua'), g.gameId);
     expect(w).toMatchObject({ t: 'welcome', uid: 'ua', gameId: g.gameId, seatId: g.seatId, stage: 'lobby' });
     const s = await a.waitFor<StateMsg>(isState);
-    expect(Object.keys(s).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 't', 'view']);
+    expect(Object.keys(s).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 'standings', 't', 'view']);
     expect(s.rev).toBe((w as { rev: number }).rev);
     expect(s.game).toMatchObject({ code: g.code, stage: 'lobby', hostSeatId: g.seatId });
     expect(s.seats).toEqual([expect.objectContaining({ seatId: g.seatId, name: 'Ann' })]);
@@ -87,9 +87,9 @@ describe('GameRoom', () => {
     const sb = await b.waitFor<StateMsg>(isState, fb);
     const sc = await c.waitFor<StateMsg>(isState, fc);
     for (const s of [sa, sb, sc]) expect(Object.keys(s).sort()).toEqual(['game', 'rev', 't', 'view']);
-    expect(sa.view![0]).toMatchObject({ taskId: 'k1', text: '@Bob buys a round' });
+    expect(sa.view![0]).toMatchObject({ taskId: 'k1', text: 'Bob buys a round', refs: [[0, 3]] });
     expect(sb.view![0]).toMatchObject({ taskId: 'k1', text: null });
-    expect(sc.view![0]).toMatchObject({ taskId: 'k1', text: '@Bob buys a round' });
+    expect(sc.view![0]).toMatchObject({ taskId: 'k1', text: 'Bob buys a round', refs: [[0, 3]] });
     expect(sa.rev).toBe(sb.rev);
   });
 
@@ -107,28 +107,33 @@ describe('GameRoom', () => {
     expect(lastState(b2)!.view![0].text).toBeNull();
   });
 
-  it('mark pushes board only to the marker; a bingo pushes bingos+game to all', async () => {
+  it('mark pushes board to the marker and standings to all; a bingo adds bingos+game', async () => {
     const { a, b, c } = await threeSeats();
     await launch(a);
     await Promise.all([a.sync(), b.sync(), c.sync()]);
     let [fa, fb, fc] = [a.frames.length, b.frames.length, c.frames.length];
     expect(await b.act('mark', { cellIndex: 0, marked: true })).toMatchObject({ ok: true, result: { newBingoSeqs: [] } });
     const sb = await b.waitFor<StateMsg>(isState, fb);
-    expect(Object.keys(sb).sort()).toEqual(['board', 'rev', 't']);
+    expect(Object.keys(sb).sort()).toEqual(['board', 'rev', 'standings', 't']);
     expect(sb.board!.marks[0]).toBe(true);
     await Promise.all([a.sync(), c.sync()]);
-    expect(a.since(fa).filter(isState)).toEqual([]);
-    expect(c.since(fc).filter(isState)).toEqual([]);
+    for (const [cl, from] of [[a, fa], [c, fc]] as const) {
+      const pushed = cl.since(from).filter(isState);
+      expect(pushed.map((x) => Object.keys(x).sort())).toEqual([['rev', 'standings', 't']]);
+      expect(pushed[0].standings!.find((r) => r.name === 'Bob')).toMatchObject({ marked: 1, bingos: 0 });
+    }
 
     for (const i of [1, 2, 3]) await b.act('mark', { cellIndex: i, marked: true });
+    await Promise.all([a.sync(), b.sync(), c.sync()]);
     [fa, fb, fc] = [a.frames.length, b.frames.length, c.frames.length];
     expect(await b.act('mark', { cellIndex: 4, marked: true })).toMatchObject({ ok: true, result: { newBingoSeqs: [1] } });
     const bingoB = await b.waitFor<StateMsg>((f) => isState(f) && !!f.bingos, fb);
     const sa = await a.waitFor<StateMsg>(isState, fa);
     const sc = await c.waitFor<StateMsg>(isState, fc);
-    expect(Object.keys(bingoB).sort()).toEqual(['bingos', 'board', 'game', 'rev', 't']);
+    expect(Object.keys(bingoB).sort()).toEqual(['bingos', 'board', 'game', 'rev', 'standings', 't']);
     for (const s of [sa, sc]) {
-      expect(Object.keys(s).sort()).toEqual(['bingos', 'game', 'rev', 't']);
+      expect(Object.keys(s).sort()).toEqual(['bingos', 'game', 'rev', 'standings', 't']);
+      expect(s.standings![0]).toMatchObject({ name: 'Bob', bingos: 1, firstBingoSeq: 1 });
       expect(s.bingos).toEqual([expect.objectContaining({ seq: 1, name: 'Bob', line: 'row_0' })]);
       expect(s.game!.bingoCount).toBe(1);
     }
@@ -166,7 +171,7 @@ describe('GameRoom', () => {
     }
     expect(await d.waitFor((f) => f.t === 'reclaim', fd)).toEqual({ t: 'reclaim', id: reclaimId, status: 'approved' });
     const full = await d.waitFor<StateMsg>(isState, fd);
-    expect(Object.keys(full).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 't', 'view']);
+    expect(Object.keys(full).sort()).toEqual(['bingos', 'board', 'game', 'reclaims', 'rev', 'seats', 'standings', 't', 'view']);
     expect(full.view![0]).toMatchObject({ taskId: 'k1', text: 'from the phone' });
 
     // hello again on the same socket is whoAmI: it now names the reclaimed seat, and (seated) replays no reclaim
