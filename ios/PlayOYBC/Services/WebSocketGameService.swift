@@ -205,6 +205,10 @@ final class WebSocketGameService: GameService, @unchecked Sendable {
         try await actVoid(gameId, "retireName", ["key": key])
     }
 
+    func leaveGame(gameId: String) async throws {
+        try await actVoid(gameId, "leave", [:])
+    }
+
     /// `bindName` args: `seatId` goes out as an explicit JSON `null` for "nobody yet".
     static func bindNameArgs(key: String, seatId: String?) -> [String: Any] {
         ["key": key, "seatId": seatId.map { $0 as Any } ?? NSNull()]

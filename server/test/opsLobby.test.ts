@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canSeeText, mentionContext, resolveMentionRefs, type PoolTask } from 'game-core';
 import { AppError } from '../src/errors';
 import { MemoryPersistence } from '../src/room/persistence';
-import { addTask, bindName, claimGame, deleteTask, join, retireName, setOptions, type OpCtx } from '../src/room/ops';
+import { addTask, bindName, claimGame, deleteTask, join, leave, retireName, setOptions, type OpCtx } from '../src/room/ops';
 import { buildSections } from '../src/room/sections';
 import { GameState } from '../src/room/state';
 
@@ -481,6 +481,48 @@ describe('stage', () => {
     state.putGame({ ...state.game!, stage: 'playing' });
     expect(codeOf(() => add(state, 'u2', 'again'))).toBe('wrong-stage');
     expect(codeOf(() => deleteTask(state, ctxFor('u2'), { taskId }))).toBe('wrong-stage');
+  });
+});
+
+describe('leave', () => {
+  it('a guest in the lobby gives the seat up: seat and membership go, their tasks stay under their name, their mentions return to the roster', () => {
+    const { state, s1, s2, s3 } = setup();
+    const mine = add(state, 'u2', '@Seth sings');
+    const about = add(state, 'u3', '@Cody dances');
+    // Unknown "C-Dog" bound to Cody by the host, and a pending reclaim on Cody's seat.
+    add(state, 'u1', '@C-Dog naps');
+    bindName(state, ctxFor('u1'), { key: 'c-dog', seatId: s2 });
+    const pending = join(state, ctxFor('u9'), { name: 'Cody', reclaim: true }).result;
+    if (pending.status !== 'reclaim-pending') throw new Error('expected a reclaim');
+
+    const out = leave(state, ctxFor('u2'), {});
+    expect(out.push.all).toEqual(['game', 'seats', 'view', 'roster']);
+    expect(out.push.reclaimNotify).toEqual([{ uid: 'u9', id: pending.reclaimId, status: 'denied' }]);
+    expect(state.seats.has(s2)).toBe(false);
+    expect(state.seatOf('u2')).toBeNull();
+    expect(state.reclaims.get(pending.reclaimId)?.status).toBe('denied');
+    expect(state.names.get('c-dog')).toEqual({ seatId: null, retired: false });
+    // Cody's task stays, still credited to Cody; Seth is still kept from it.
+    expect(state.tasks.get(mine)?.authorName).toBe('Cody');
+    expect(view(state, s1).find((e) => e.taskId === mine)).toMatchObject({ authorName: 'Cody', text: 'Seth sings' });
+    expect(view(state, s3).find((e) => e.taskId === mine)?.text).toBeNull();
+    // "@Cody dances" now names nobody here: back on the roster, hidden from the unidentified until bound or launched.
+    const roster = buildSections(state, s1, ['roster']).roster!;
+    expect(roster.map((r) => r.display)).toEqual(['Cody', 'C-Dog']);
+    expect(view(state, s1).find((e) => e.taskId === about)?.text).toBeNull();
+    // The departed uid joins again as a newcomer; a reload sees the same.
+    const again = join(state, ctxFor('u2'), { name: 'Cody' }).result;
+    expect(again.status).toBe('joined');
+    expect(new GameState(state['p'] as never).tasks.get(mine)?.authorName).toBe('Cody');
+  });
+
+  it('the host, a non-member and anyone in play may not', () => {
+    const { state, s2 } = setup();
+    expect(codeOf(() => leave(state, ctxFor('u1'), {}))).toBe('permission-denied');
+    expect(codeOf(() => leave(state, ctxFor('nobody'), {}))).toBe('permission-denied');
+    state.putGame({ ...state.game!, stage: 'playing' });
+    expect(codeOf(() => leave(state, ctxFor('u2'), {}))).toBe('wrong-stage');
+    expect(state.seats.has(s2)).toBe(true);
   });
 });
 

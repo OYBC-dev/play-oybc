@@ -7,7 +7,7 @@ import type { GameSnapshot } from './GameClient';
  */
 
 /** Operations a seat can run over `act`. */
-export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions'
+export type Op = 'join' | 'leave' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions'
   | 'bindName' | 'retireName';
 
 /** The server's answer to `hello`. `seatId` is null when this uid holds no seat yet. */

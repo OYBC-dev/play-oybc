@@ -14,10 +14,16 @@ export function GamePage({ gameId, seatId }: { gameId: string; seatId: string })
   const { snapshot, error, retry } = useGame(client, gameId, seatId);
   const wasSeated = useRef(false);
   const navigate = useNavigate();
+  // A guest in the lobby gives the seat up on the server first (a failure still lets go locally); the host, and
+  // anyone once the game is playing, keep their seat and only let go on this device.
+  const givesUpSeat = snapshot !== null && snapshot.game.stage === 'lobby' && snapshot.mySeatId !== snapshot.game.hostSeatId;
   const onLeave = useCallback(() => {
-    client.leave(gameId);
-    navigate('/');
-  }, [client, gameId, navigate]);
+    const gaveUp = givesUpSeat ? client.leaveGame(gameId).catch(() => undefined) : Promise.resolve();
+    void gaveUp.then(() => {
+      client.leave(gameId);
+      navigate('/');
+    });
+  }, [client, gameId, givesUpSeat, navigate]);
   if (snapshot) wasSeated.current = true;
   if (error) {
     const denied = (error as { code?: unknown }).code === 'permission-denied';

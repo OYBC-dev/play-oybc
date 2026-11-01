@@ -40,6 +40,10 @@ protocol GameService {
     /// Host, any stage but ended: drops roster name `key` (its tasks lose the `@` on that name).
     /// - Throws: `name-not-found`, `not-host`, `game-ended`, `invalid-argument`.
     func retireName(gameId: String, key: String) async throws
+    /// Lobby, non-host: gives the seat up on the server (the tasks they wrote stay). The host, and any
+    /// seat once play starts, never sends it: the seat stays and rejoining by code resumes it.
+    /// - Throws: `wrong-stage` outside the lobby, `permission-denied` for the host or a non-member.
+    func leaveGame(gameId: String) async throws
     /// Sets the square to `marked` (idempotent on retry).
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes
     func end(gameId: String) async throws

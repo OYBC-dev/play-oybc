@@ -40,18 +40,26 @@ struct GameView: View {
         } else if let snap = vm.snapshot {
             switch snap.game.stage {
             case .lobby:
-                LobbyView(service: service, snapshot: snap, gameId: vm.gameId, onLeave: onHome)
+                LobbyView(service: service, snapshot: snap, gameId: vm.gameId, onLeave: leave)
             case .playing:
                 PlayView(service: service, snapshot: snap, gameId: vm.gameId,
                          banners: vm.banners, pendingCells: vm.pendingCells, slowCells: vm.slowCells,
                          toggleError: vm.error.map(ErrorMessages.message(for:)),
                          onToggle: { i in _Concurrency.Task { await vm.toggle(cell: i) } },
-                         onDismissBanner: { vm.dismissBanner() }, onLeave: onHome)
+                         onDismissBanner: { vm.dismissBanner() }, onLeave: leave)
             case .ended:
                 EndedView(snapshot: snap, onHome: onHome)
             }
         } else {
             RisoPage { MutedText("Loading") }
+        }
+    }
+
+    /// "Leave game": gives the seat up on the server when the view model says to, then goes Home.
+    private func leave() {
+        _Concurrency.Task {
+            await vm.leave()
+            onHome()
         }
     }
 }

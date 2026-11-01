@@ -96,6 +96,11 @@ export interface GameClient {
   resolveReclaim(gameId: string, reclaimId: string, approve: boolean): Promise<void>;
   transferHost(gameId: string, toSeatId: string): Promise<void>;
   watchReclaim(gameId: string, reclaimId: string, onStatus: (s: ReclaimDoc['status']) => void, onError?: (e: Error) => void): () => void;
-  /** Lets go of the game on this device (its connection closes); the seat stays, so rejoining by code resumes it. */
+  /**
+   * Lobby, non-host: gives the seat up on the server. The seat leaves the game (players list, readiness, any name
+   * the host bound to it); the tasks it wrote stay. The host, and anyone once the game is playing, never call this.
+   */
+  leaveGame(gameId: string): Promise<void>;
+  /** Lets go of the game on this device (its connection closes); a seat not given up stays, so rejoining by code resumes it. */
   leave(gameId: string): void;
 }

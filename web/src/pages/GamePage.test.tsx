@@ -27,26 +27,54 @@ function setup(client: FakeGameClient) {
   );
 }
 
+/** Renders the page at /g/ABCDE as `seatId` with a Home route, emits `snap`, and taps Menu → Leave game. */
+async function leaveVia(client: FakeGameClient, seatId: string, snap: GameSnapshot, stage: string) {
+  render(
+    <ClientProvider value={client}>
+      <MemoryRouter initialEntries={['/g/ABCDE']}>
+        <Routes>
+          <Route path="/" element={<p>home page</p>} />
+          <Route path="/g/:code" element={<GamePage gameId="g1" seatId={seatId} />} />
+        </Routes>
+      </MemoryRouter>
+    </ClientProvider>,
+  );
+  act(() => client.emit(snap));
+  expect(await screen.findByTestId(stage)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Leave game' }));
+  expect(await screen.findByText('home page')).toBeInTheDocument();
+  expect(screen.queryByTestId(stage)).toBeNull();
+}
+
 describe('GamePage', () => {
-  it('Leave game releases the game on the client and goes Home', async () => {
+  it('the host leaving the lobby keeps the seat: releases the game on the client and goes Home', async () => {
     const client = new FakeGameClient();
-    render(
-      <ClientProvider value={client}>
-        <MemoryRouter initialEntries={['/g/ABCDE']}>
-          <Routes>
-            <Route path="/" element={<p>home page</p>} />
-            <Route path="/g/:code" element={<GamePage gameId="g1" seatId="s1" />} />
-          </Routes>
-        </MemoryRouter>
-      </ClientProvider>,
-    );
-    act(() => client.emit(snapshot));
-    expect(await screen.findByTestId('stage-lobby')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Leave game' }));
+    await leaveVia(client, 's1', snapshot, 'stage-lobby');
     expect(client.calls).toContainEqual(['leave', 'g1']);
-    expect(await screen.findByText('home page')).toBeInTheDocument();
-    expect(screen.queryByTestId('stage-lobby')).toBeNull();
+    expect(client.calls.some((c) => c[0] === 'leaveGame')).toBe(false);
+  });
+
+  it('a guest leaving the lobby gives the seat up on the server first, then goes Home', async () => {
+    const client = new FakeGameClient();
+    const guest: GameSnapshot = { ...snapshot, mySeatId: 's2', seats: [...snapshot.seats, { seatId: 's2', name: 'Sam', nameKey: 'sam', joinedAt: 1 }] };
+    await leaveVia(client, 's2', guest, 'stage-lobby');
+    const names = client.calls.map((c) => c[0]);
+    expect(names.indexOf('leaveGame')).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf('leaveGame')).toBeLessThan(names.indexOf('leave'));
+    expect(client.calls).toContainEqual(['leaveGame', 'g1']);
+  });
+
+  it('a guest leaving a game in play keeps the seat', async () => {
+    const client = new FakeGameClient();
+    const playing: GameSnapshot = {
+      ...snapshot, mySeatId: 's2', game: { ...snapshot.game, stage: 'playing' },
+      seats: [...snapshot.seats, { seatId: 's2', name: 'Sam', nameKey: 'sam', joinedAt: 1 }],
+      board: { seatId: 's2', cells: [], marks: [], completedLines: [], announcedLines: [] } as never,
+    };
+    await leaveVia(client, 's2', playing, 'stage-playing');
+    expect(client.calls).toContainEqual(['leave', 'g1']);
+    expect(client.calls.some((c) => c[0] === 'leaveGame')).toBe(false);
   });
 
   it('tells a previously seated player they were replaced, with a Home link', async () => {

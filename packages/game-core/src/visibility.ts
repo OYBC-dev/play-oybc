@@ -122,7 +122,7 @@ export function buildPoolView(
   return [...tasks]
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((t): PoolViewEntry => {
-      const base = { taskId: t.id, authorName: names.get(t.authorSeatId) ?? '' };
+      const base = { taskId: t.id, authorName: names.get(t.authorSeatId) ?? t.authorName ?? '' };
       const mine = t.authorSeatId === viewerSeatId;
       if (!canSeeText(t, viewerSeatId, ctx)) return { ...base, text: null, mine };
       const { text, refs } = resolveMentionRefs(t.text, seats, POOL_SOMEONE_NAME, ctx.names);

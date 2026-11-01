@@ -13,8 +13,8 @@ export interface NameState { seatId: string | null; retired: boolean }
 export type NameStates = ReadonlyMap<string, NameState>;
 /** A name tasks refer to that no seat carries as its own; `seatId` is the host's binding (null = nobody yet). */
 export interface RosterName { key: string; display: string; seatId: string | null }
-/** A task in the shared pool. */
-export interface PoolTask { id: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number }
+/** A task in the shared pool. `authorName` is set once the author's seat is gone (they left the lobby), so the pool still names them. */
+export interface PoolTask { id: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number; authorName?: string }
 /**
  * What a given viewer sees of a pool task: `text` is the display text (mentions
  * resolved, `@someone` shown as "Someone"), or null when hidden. `refs` are the

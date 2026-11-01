@@ -12,7 +12,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
     var whoAmIError: Error?
     var createResult: Result<CreateGameRes, Error> = .success(CreateGameRes(gameId: "g1", code: "ABCDE", seatId: "s1"))
     var joinResult: Result<JoinGameRes, Error> = .success(.joined(gameId: "g1", seatId: "s2"))
-    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, bindName, retireName, end, resolveReclaim, transferHost).
+    /// Thrown by every void call (addTask, deleteTask, launch, setOptions, bindName, retireName, leaveGame, end, resolveReclaim, transferHost).
     var callError: Error?
     /// When set, bindName / retireName suspend until `releaseRoster()`.
     var gateRoster = false
@@ -126,6 +126,7 @@ final class FakeGameService: GameService, @unchecked Sendable {
         try await gatedVoid("bindName:\(key):\(seatId ?? "nil")")
     }
     func retireName(gameId: String, key: String) async throws { try await gatedVoid("retireName:\(key)") }
+    func leaveGame(gameId: String) async throws { try void("leaveGame:\(gameId)") }
     func toggleMark(gameId: String, cellIndex: Int, marked: Bool) async throws -> ToggleMarkRes {
         let gated = lock.withLock { toggledCells.append(cellIndex); toggledValues.append(marked); return gateToggle }
         if gated {

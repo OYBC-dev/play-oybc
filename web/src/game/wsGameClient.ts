@@ -108,6 +108,7 @@ export function createWsGameClient(url: string, deps: WsClientDeps = {}): GameCl
     async end(gameId) { await act(gameId, 'end', {}); },
     async resolveReclaim(gameId, reclaimId, approve) { await act(gameId, 'resolveReclaim', { reclaimId, approve }); },
     async transferHost(gameId, toSeatId) { await act(gameId, 'transferHost', { toSeatId }); },
+    async leaveGame(gameId) { await act(gameId, 'leave', {}); },
 
     watchReclaim(gameId, reclaimId, onStatus, onError) {
       const code = codeFor(gameId);

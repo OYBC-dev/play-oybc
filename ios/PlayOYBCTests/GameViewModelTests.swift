@@ -49,6 +49,48 @@ final class GameViewModelTests: XCTestCase {
         XCTAssertEqual(vm.snapshot?.game.code, "ABCDE")
     }
 
+    /// A view model seated as `mySeatId` in a game hosted by s1, at `stage`.
+    private func seated(_ fake: FakeGameService, mySeatId: String, stage: Stage) async -> GameViewModel {
+        let vm = GameViewModel(service: fake, gameId: "g1", seatId: mySeatId)
+        vm.start()
+        await settle()
+        var s = snapshot()
+        s.game.stage = stage
+        s.mySeatId = mySeatId
+        fake.emit(s)
+        await settle()
+        return vm
+    }
+
+    func testLeaveFromLobbyAsNonHostGivesTheSeatUp() async {
+        let fake = FakeGameService()
+        let vm = await seated(fake, mySeatId: "s2", stage: .lobby)
+        await vm.leave()
+        XCTAssertEqual(fake.calls.filter { $0.hasPrefix("leaveGame") }, ["leaveGame:g1"])
+    }
+
+    func testLeaveFromLobbyAsNonHostSwallowsAFailure() async {
+        let fake = FakeGameService()
+        fake.callError = FakeGameService.FakeError.failed
+        let vm = await seated(fake, mySeatId: "s2", stage: .lobby)
+        await vm.leave()
+        XCTAssertEqual(fake.calls.filter { $0.hasPrefix("leaveGame") }, ["leaveGame:g1"])
+    }
+
+    func testLeaveFromLobbyAsHostSendsNothing() async {
+        let fake = FakeGameService()
+        let vm = await seated(fake, mySeatId: "s1", stage: .lobby)
+        await vm.leave()
+        XCTAssertFalse(fake.calls.contains { $0.hasPrefix("leaveGame") })
+    }
+
+    func testLeaveDuringPlayAsNonHostSendsNothing() async {
+        let fake = FakeGameService()
+        let vm = await seated(fake, mySeatId: "s2", stage: .playing)
+        await vm.leave()
+        XCTAssertFalse(fake.calls.contains { $0.hasPrefix("leaveGame") })
+    }
+
     func testOptimisticMarkHeldUntilSnapshotWhichWins() async {
         let fake = FakeGameService()
         fake.gateToggle = true

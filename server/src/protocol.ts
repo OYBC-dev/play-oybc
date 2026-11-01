@@ -1,6 +1,6 @@
 import type { BingoDoc, BoardDoc, GameDoc, PoolViewEntry, ReclaimDoc, RosterName, SeatDoc, Stage, Standing } from 'game-core';
 export type Section = 'game' | 'seats' | 'view' | 'board' | 'bingos' | 'standings' | 'reclaims' | 'roster';
-export type Op = 'join' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions' | 'bindName' | 'retireName';
+export type Op = 'join' | 'leave' | 'addTask' | 'deleteTask' | 'launch' | 'mark' | 'end' | 'resolveReclaim' | 'transferHost' | 'setOptions' | 'bindName' | 'retireName';
 export type ClientMsg =
   | { t: 'hello'; token: string; gameId?: string }
   | { t: 'act'; id: string; op: Op; args: Record<string, unknown> };
