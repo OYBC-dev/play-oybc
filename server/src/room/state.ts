@@ -12,7 +12,8 @@ export interface GameRow {
   gameName?: string;
 }
 export interface SeatRow { seatId: string; name: string; nameKey: string; joinedAt: number }
-export interface TaskRow { taskId: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number }
+/** A pool task; `authorName` is stamped when its author leaves the lobby (their seat is gone, the task stays under their name). */
+export interface TaskRow { taskId: string; text: string; authorSeatId: string; mentions: TaskMentions; createdAt: number; authorName?: string }
 export interface BoardRow { seatId: string; cells: BoardCell[]; marks: boolean[]; completedLines: string[]; announcedLines: string[] }
 export interface BingoRow extends BingoDoc { id: string }
 export interface ReclaimRow extends ReclaimDoc { id: string }
@@ -65,6 +66,7 @@ export class GameState {
     this.game = next;
   }
   putSeat(s: SeatRow): void { this.p.putSeat(s); this.seats.set(s.seatId, s); this.bump(); }
+  deleteSeat(seatId: string): void { this.p.deleteSeat(seatId); this.seats.delete(seatId); this.bump(); }
   /** Membership is not visible state: does not bump `rev`. */
   putMember(uid: string, seatId: string): void { this.p.putMember(uid, seatId); this.members.set(uid, seatId); }
   /** Membership is not visible state: does not bump `rev`. */
@@ -98,6 +100,7 @@ export class GameState {
   poolTasks(): PoolTask[] {
     return [...this.tasks.values()].map((t) => ({
       id: t.taskId, text: t.text, authorSeatId: t.authorSeatId, mentions: t.mentions, createdAt: t.createdAt,
+      ...(t.authorName !== undefined && { authorName: t.authorName }),
     }));
   }
   /** The seat a uid holds, or null. */

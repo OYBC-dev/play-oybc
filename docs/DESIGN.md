@@ -169,6 +169,10 @@ Three forms, typed inline in task text:
 - **Host hand-off:** the host can pass the host role to any player (who then has every
   host power, including approving reclaims). Covers a dying host phone. *(Owner
   decision.)*
+- **Leave game:** in the lobby a guest's Leave gives the seat up on the server (out of the
+  players list and readiness; tasks they wrote stay, mentions of them go back on the roster);
+  they rejoin by code as a newcomer. The host, and anyone once the game is playing, keep their
+  seat and only let go on the device. See `docs/ROSTER.md` §9.
 
 ### 4.6 Stretch: host review gate
 When on (per-game host toggle, default off), a new bingo goes to the host as **pending**

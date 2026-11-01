@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+import os
+
+private let leaveLog = Logger(subsystem: "com.oybc.PlayOYBC", category: "game")
 
 /// Persisted resume pointer: UserDefaults key `lastGame` = `{ code }`.
 struct ResumeStore {
@@ -64,6 +67,18 @@ final class GameViewModel: ObservableObject {
     deinit {
         streamTask?.cancel()
         bannerTask?.cancel()
+    }
+
+    /// "Leave game": a non-host seat in the lobby gives its seat up on the server, so it drops out of
+    /// Players, readiness and the deal. The host and any seat in play send nothing (the seat stays and
+    /// rejoining by code resumes it). A failed call is logged and swallowed; the caller still goes Home.
+    func leave() async {
+        guard let snap = serverSnapshot, snap.game.stage == .lobby, snap.mySeatId != snap.game.hostSeatId else { return }
+        do {
+            try await service.leaveGame(gameId: gameId)
+        } catch {
+            leaveLog.error("leave failed: \(AppError.from(error).code, privacy: .public)")
+        }
     }
 
     /// Starts consuming the service's snapshot stream.

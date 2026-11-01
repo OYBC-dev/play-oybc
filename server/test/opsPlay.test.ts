@@ -521,6 +521,6 @@ describe('admin', () => {
 
 describe('OPS', () => {
   it('maps every protocol op to its handler', () => {
-    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'bindName', 'deleteTask', 'end', 'join', 'launch', 'mark', 'resolveReclaim', 'retireName', 'setOptions', 'transferHost']);
+    expect(Object.keys(OPS).sort()).toEqual(['addTask', 'bindName', 'deleteTask', 'end', 'join', 'launch', 'leave', 'mark', 'resolveReclaim', 'retireName', 'setOptions', 'transferHost']);
   });
 });

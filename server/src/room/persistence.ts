@@ -14,6 +14,7 @@ export interface Persistence {
   load(): Loaded;
   putGame(g: GameRow): void;
   putSeat(s: SeatRow): void;
+  deleteSeat(seatId: string): void;
   putMember(uid: string, seatId: string): void;
   deleteMember(uid: string): void;
   putTask(t: TaskRow): void;
@@ -47,6 +48,7 @@ export class MemoryPersistence implements Persistence {
   }
   putGame(g: GameRow): void { this.game = structuredClone(g); }
   putSeat(s: SeatRow): void { this.seats.set(s.seatId, structuredClone(s)); }
+  deleteSeat(seatId: string): void { this.seats.delete(seatId); }
   putMember(uid: string, seatId: string): void { this.members.set(uid, seatId); }
   deleteMember(uid: string): void { this.members.delete(uid); }
   putTask(t: TaskRow): void { this.tasks.set(t.taskId, structuredClone(t)); }
@@ -77,7 +79,8 @@ export class SqlPersistence implements Persistence {
         gameName TEXT)`,
       `CREATE TABLE IF NOT EXISTS seats (seatId TEXT PRIMARY KEY, name TEXT NOT NULL, nameKey TEXT NOT NULL, joinedAt INTEGER NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS members (uid TEXT PRIMARY KEY, seatId TEXT NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS tasks (taskId TEXT PRIMARY KEY, text TEXT NOT NULL, authorSeatId TEXT NOT NULL, mentions TEXT NOT NULL, createdAt INTEGER NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS tasks (taskId TEXT PRIMARY KEY, text TEXT NOT NULL, authorSeatId TEXT NOT NULL, mentions TEXT NOT NULL, createdAt INTEGER NOT NULL,
+        authorName TEXT)`,
       `CREATE TABLE IF NOT EXISTS boards (seatId TEXT PRIMARY KEY, cells TEXT NOT NULL, marks TEXT NOT NULL, completedLines TEXT NOT NULL, announcedLines TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS bingos (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, seatId TEXT NOT NULL, name TEXT NOT NULL, line TEXT NOT NULL,
         playerBingoNumber INTEGER NOT NULL, at INTEGER NOT NULL, status TEXT NOT NULL)`,
@@ -94,6 +97,9 @@ export class SqlPersistence implements Persistence {
       sql.exec("UPDATE game SET freeSpace = 1 WHERE stage != 'lobby'");
     }
     if (!cols.includes('gameName')) sql.exec('ALTER TABLE game ADD COLUMN gameName TEXT');
+    // Rooms created before `leave` have a `tasks` table without the departed author's name; add it.
+    const taskCols = sql.exec<{ name: string }>('PRAGMA table_info(tasks)').toArray().map((c) => c.name);
+    if (!taskCols.includes('authorName')) sql.exec('ALTER TABLE tasks ADD COLUMN authorName TEXT');
   }
 
   load(): Loaded {
@@ -111,7 +117,10 @@ export class SqlPersistence implements Persistence {
         : null,
       seats: all('SELECT * FROM seats') as unknown as SeatRow[],
       members: all('SELECT * FROM members').map((m): [string, string] => [m.uid as string, m.seatId as string]),
-      tasks: all('SELECT * FROM tasks').map((t) => ({ ...t, mentions: JSON.parse(t.mentions as string) }) as unknown as TaskRow),
+      tasks: all('SELECT * FROM tasks').map((t) => {
+        const { authorName, ...rest } = t;
+        return { ...rest, mentions: JSON.parse(t.mentions as string), ...(typeof authorName === 'string' && { authorName }) } as unknown as TaskRow;
+      }),
       boards: all('SELECT * FROM boards').map((b) => ({
         seatId: b.seatId as string, cells: JSON.parse(b.cells as string), marks: JSON.parse(b.marks as string),
         completedLines: JSON.parse(b.completedLines as string), announcedLines: JSON.parse(b.announcedLines as string),
@@ -136,14 +145,15 @@ export class SqlPersistence implements Persistence {
   putSeat(s: SeatRow): void {
     this.sql.exec('INSERT OR REPLACE INTO seats (seatId, name, nameKey, joinedAt) VALUES (?, ?, ?, ?)', s.seatId, s.name, s.nameKey, s.joinedAt);
   }
+  deleteSeat(seatId: string): void { this.sql.exec('DELETE FROM seats WHERE seatId = ?', seatId); }
   putMember(uid: string, seatId: string): void {
     this.sql.exec('INSERT OR REPLACE INTO members (uid, seatId) VALUES (?, ?)', uid, seatId);
   }
   deleteMember(uid: string): void { this.sql.exec('DELETE FROM members WHERE uid = ?', uid); }
   putTask(t: TaskRow): void {
     this.sql.exec(
-      'INSERT OR REPLACE INTO tasks (taskId, text, authorSeatId, mentions, createdAt) VALUES (?, ?, ?, ?, ?)',
-      t.taskId, t.text, t.authorSeatId, JSON.stringify(t.mentions), t.createdAt,
+      'INSERT OR REPLACE INTO tasks (taskId, text, authorSeatId, mentions, createdAt, authorName) VALUES (?, ?, ?, ?, ?, ?)',
+      t.taskId, t.text, t.authorSeatId, JSON.stringify(t.mentions), t.createdAt, t.authorName ?? null,
     );
   }
   deleteTask(taskId: string): void { this.sql.exec('DELETE FROM tasks WHERE taskId = ?', taskId); }

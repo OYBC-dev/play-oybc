@@ -413,6 +413,34 @@ export function retireName(state: GameState, ctx: OpCtx, args: { key?: unknown }
   return { result: {}, push: { all: ['game', 'view', 'roster'] } };
 }
 
+/**
+ * Lobby, any seat but the host's: gives the seat up. The seat and its membership go (the uid may join again as a
+ * newcomer), a name the host bound to it unbinds, pending reclaims on it are denied, and the tasks it wrote stay
+ * in the pool under the departed name. A mention of the departed player re-scans as an unknown name: it is back
+ * on the roster for the host to bind or retire, and launch releases it like any unbound name. The host's seat and
+ * a seat in play stay (the client only lets go locally; rejoining by code resumes them).
+ * @throws AppError `game-not-found`, `permission-denied` (non-member or the host), `wrong-stage` outside the lobby.
+ */
+export function leave(state: GameState, ctx: OpCtx, _args: Record<string, never>): OpOut<Record<string, never>> {
+  const game = requireGame(state);
+  const seatId = requireMember(state, ctx.uid);
+  requireLobby(game);
+  if (seatId === game.hostSeatId) throw new AppError('permission-denied');
+  const seat = state.seats.get(seatId);
+  if (!seat) throw new AppError('permission-denied');
+  for (const t of state.tasks.values()) if (t.authorSeatId === seatId) state.putTask({ ...t, authorName: seat.name });
+  for (const [key, st] of state.names) if (st.seatId === seatId) state.putNameState(key, { seatId: null, retired: st.retired });
+  const reclaimNotify: NonNullable<Push['reclaimNotify']> = [];
+  for (const r of state.reclaims.values()) {
+    if (r.seatId !== seatId || r.status !== 'pending') continue;
+    state.putReclaim({ ...r, status: 'denied', resolvedAt: ctx.now });
+    reclaimNotify.push({ uid: r.requesterUid, id: r.id, status: 'denied' });
+  }
+  for (const [uid, s] of [...state.members]) if (s === seatId) state.deleteMember(uid);
+  state.deleteSeat(seatId);
+  return { result: {}, push: { all: ['game', 'seats', 'view', 'roster'], perSeat: { [game.hostSeatId]: ['reclaims'] }, reclaimNotify } };
+}
+
 export const OPS: Record<Op, (state: GameState, ctx: OpCtx, args: any) => OpOut<unknown>> = {
-  join, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions, bindName, retireName,
+  join, leave, addTask, deleteTask, launch, mark, end, resolveReclaim, transferHost, setOptions, bindName, retireName,
 };

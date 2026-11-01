@@ -102,6 +102,10 @@ final class FirebaseGameService: GameService {
     func retireName(gameId: String, key: String) async throws {
         throw AppError(code: "unimplemented", token: nil, underlying: nil)
     }
+    /// The Firebase backend has no leave op; the seat stays.
+    func leaveGame(gameId: String) async throws {
+        throw AppError(code: "unimplemented", token: nil, underlying: nil)
+    }
     func transferHost(gameId: String, toSeatId: String) async throws {
         try await callVoid("transferHost", TransferHostReq(gameId: gameId, toSeatId: toSeatId))
     }

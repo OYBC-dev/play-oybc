@@ -89,9 +89,14 @@ describe('GameState', () => {
       s.putBoard(board());
       s.appendBingo({ id: 'b1', seq: 1, seatId: 'A', name: 'Ann', line: 'r0', playerBingoNumber: 1, at: 1, status: 'announced' });
       s.putReclaim({ id: 'r1', requesterUid: 'u2', name: 'Ann', seatId: 'A', status: 'pending', createdAt: 1 });
+      s.putSeat({ seatId: 'B', name: 'Bo', nameKey: 'bo', joinedAt: 2 });
+      s.deleteSeat('B');
+      s.putTask(task({ taskId: 't2', authorName: 'Bo' }));
       const again = new GameState(new SqlPersistence(state.storage.sql));
       expect(again.boards.get('A')).toEqual(board());
       expect(again.tasks.get('t1')).toEqual(task());
+      expect(again.tasks.get('t2')).toEqual(task({ taskId: 't2', authorName: 'Bo' }));
+      expect([...again.seats.keys()]).toEqual(['A']);
       expect(again.members.get('u1')).toBe('A');
       expect(again.bingos).toHaveLength(1);
       expect(again.reclaims.get('r1')?.status).toBe('pending');
