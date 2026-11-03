@@ -1,13 +1,19 @@
 #!/bin/sh
-# DIAGNOSTIC (temporary): what does the Xcode Cloud TEST machine's checkout look like?
-# The first "PR Tests" run reported every snapshot baseline as missing on disk while
-# the same files pass on OYBC's Xcode Cloud runs and on the GitHub macOS runner.
+# DIAGNOSTIC v2 (temporary): map the TEST machine's copy of the repository.
+# Run 18 showed: no .git on the test machine, CI_PRIMARY_REPOSITORY_PATH unset,
+# and ios/PlayOYBCSnapshotTests/__Snapshots__ absent until the tests wrote it.
 set -u
-echo "action=${CI_XCODEBUILD_ACTION:-?} repo=${CI_PRIMARY_REPOSITORY_PATH:-?} branch=${CI_BRANCH:-?} commit=${CI_COMMIT:-?} pr=${CI_PULL_REQUEST_NUMBER:-?}"
-env | grep -E '^CI_(GIT|PULL|TAG|BRANCH|COMMIT|WORKFLOW|XCODE_SCHEME|PRODUCT|TEST)' | sort || true
-R="${CI_PRIMARY_REPOSITORY_PATH:-/Volumes/workspace/repository}"
-echo "--- git state"; git -C "$R" rev-parse HEAD 2>&1 || true; git -C "$R" status --short 2>&1 | head -20 || true
-echo "--- tracked baselines per git:"; git -C "$R" ls-files 'ios/PlayOYBCSnapshotTests/__Snapshots__' 2>&1 | wc -l
-echo "--- on disk:"; ls -la "$R/ios/PlayOYBCSnapshotTests/__Snapshots__/ScreenSnapshotTests" 2>&1 | head -8
-echo "--- any testHome.light.png under /Volumes/workspace:"; find /Volumes/workspace -name 'testHome.light.png' -not -path '*/DerivedData/*' 2>/dev/null | head -5
+R=/Volumes/workspace/repository
+echo "action=${CI_XCODEBUILD_ACTION:-?} repo_env=${CI_PRIMARY_REPOSITORY_PATH:-unset}"
+echo "--- top level"; ls -la "$R" 2>&1 | head -40
+echo "--- du per top-level dir"; du -sh "$R"/*/ 2>/dev/null | sort -h
+echo "--- file count"; find "$R" -type f 2>/dev/null | wc -l
+echo "--- ios/"; ls -la "$R/ios" 2>&1
+echo "--- ios/PlayOYBCSnapshotTests"; ls -la "$R/ios/PlayOYBCSnapshotTests" 2>&1
+echo "--- ios/PlayOYBC (plist present?)"; ls "$R/ios/PlayOYBC" 2>&1 | head -30
+echo "--- generated project present?"; ls "$R/ios/PlayOYBC.xcodeproj" 2>&1
+echo "--- any png anywhere in repo copy (first 10)"; find "$R" -name '*.png' 2>/dev/null | head -10
+echo "--- png count"; find "$R" -name '*.png' 2>/dev/null | wc -l
+echo "--- other large/binary files in copy"; find "$R" -type f -size +100k 2>/dev/null | head -20
+echo "--- workspace root"; ls -la /Volumes/workspace 2>&1 | head -30
 exit 0
