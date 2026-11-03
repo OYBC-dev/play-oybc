@@ -75,6 +75,16 @@ targets:
       - path: PlayOYBCSnapshotTests
         excludes:
           - "**/__Snapshots__/**"
+      # The baseline PNGs also ride inside the test bundle, as one folder reference
+      # (not individual files), because Xcode Cloud runs tests on a machine that has NO
+      # copy of the repository: only ci_scripts/ is transferred (verified 2026-11-02,
+      # Play build 18). ScreenSnapshotTests reads them from the bundle when the
+      # source-relative __Snapshots__ directory is absent. Locally and on the GitHub
+      # runner the checkout is on disk and the source directory keeps being used, so
+      # recording still works there.
+      - path: PlayOYBCSnapshotTests/__Snapshots__
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: PlayOYBC
       - package: SnapshotTesting
@@ -102,8 +112,7 @@ schemes:
   # CI scheme (2026-10-28, oybc#688): ONE build, BOTH test targets — the Xcode
   # Cloud "PR Tests" workflow's Test action and the GitHub `ios-hosted` job run
   # this, where two `xcodebuild test` calls used to compile the app twice.
-  # Local ⌘U keeps using PlayOYBC / PlayOYBCSnapshotTests. The ASC "PR Tests"
-  # workflow exists since 2026-11-02 (PR → dev, Files and Folders `ios/`).
+  # Local ⌘U keeps using PlayOYBC / PlayOYBCSnapshotTests.
   PlayOYBCCI:
     build:
       targets:

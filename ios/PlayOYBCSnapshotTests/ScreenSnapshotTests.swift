@@ -9,6 +9,26 @@ final class ScreenSnapshotTests: XCTestCase {
     private let recordMode: SnapshotTestingConfiguration.Record? = .missing
     private typealias F = SnapshotFixtures
 
+    /// Where the baselines are read from. The source-relative `__Snapshots__/ScreenSnapshotTests`
+    /// next to this file wins whenever it exists (local runs, the GitHub macOS runner), so
+    /// re-recording keeps writing into the repo. Xcode Cloud runs tests on a machine that has no
+    /// copy of the repository (only `ci_scripts/` is transferred), so there the same tree is read
+    /// from the test bundle, where `project.yml` copies `__Snapshots__` as a folder reference.
+    /// With neither present the source path is returned so a missing baseline still fails
+    /// loudly ("No reference was found on disk") instead of silently passing.
+    private static let snapshotDirectory: String = {
+        let className = "ScreenSnapshotTests"
+        let source = URL(fileURLWithPath: "\(#filePath)").deletingLastPathComponent()
+            .appendingPathComponent("__Snapshots__").appendingPathComponent(className).path
+        if FileManager.default.fileExists(atPath: source) { return source }
+        if let bundled = Bundle(for: ScreenSnapshotTests.self).resourceURL?
+            .appendingPathComponent("__Snapshots__").appendingPathComponent(className).path,
+           FileManager.default.fileExists(atPath: bundled) {
+            return bundled
+        }
+        return source
+    }()
+
     override func setUp() {
         super.setUp()
         // The task explainer opens on a device's first lobby; every lobby frame here is a later visit.
@@ -24,10 +44,12 @@ final class ScreenSnapshotTests: XCTestCase {
         let perceptualPrecision: Float = drawHierarchy ? 0.98 : 1
         for (name, style, scheme) in [("light", UIUserInterfaceStyle.light, ColorScheme.light), ("dark", .dark, .dark)] {
             let v = view.environment(\.colorScheme, scheme)
-            assertSnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, precision: precision,
-                                             perceptualPrecision: perceptualPrecision, layout: .fixed(width: 393, height: height),
-                                             traits: UITraitCollection(userInterfaceStyle: style)),
-                           named: name, record: recordMode, file: file, testName: testName, line: line)
+            let failure = verifySnapshot(of: v, as: .image(drawHierarchyInKeyWindow: drawHierarchy, precision: precision,
+                                                           perceptualPrecision: perceptualPrecision, layout: .fixed(width: 393, height: height),
+                                                           traits: UITraitCollection(userInterfaceStyle: style)),
+                                         named: name, record: recordMode, snapshotDirectory: Self.snapshotDirectory,
+                                         file: file, testName: testName, line: line)
+            if let failure { XCTFail(failure, file: file, line: line) }
         }
     }
 
